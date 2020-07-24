@@ -41,7 +41,8 @@ class KittiConfig:
     ##################
 
     # dataset base directory
-    base_dir = '/mnt/ssd1/research/dataset/KITTI/dataset'
+    # base_dir = '/mnt/ssd1/research/dataset/KITTI/dataset'
+    base_dir = '/home/david/Data/kitti'
 
     # training set seq
     train_seq = ['{:02d}'.format(i) for i in range(11) if (i != 8 and i != 9)]
