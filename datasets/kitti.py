@@ -22,21 +22,19 @@
 #       \**********************************/
 #
 
-# Common libs
-import time
+# sys imports
 import os
-import numpy as np
-import pickle
-import torch
-import yaml
-from multiprocessing import Lock
-
-# OS functions
+import time
 from os import listdir
 from os.path import exists, join, isdir
 
-# Dataset parent class
+# third-party imports
+import numpy as np
+import torch
 from torch.utils.data import Dataset
+
+# project imports
+from utils.helper_func import pc2img
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -95,6 +93,7 @@ class KittiDataset(Dataset):
         self.poses = []
         self.all_inds = None
         self.val_confs = []
+        self.seq_len = [len(_) for _ in self.frames]
 
         # Load everything
         self.load_calib_poses()
@@ -130,7 +129,11 @@ class KittiDataset(Dataset):
         points1 = points1.reshape((-1, 4))
         points2 = points2.reshape((-1, 4))
 
-        return i, T_12, T_21
+        # convert to image
+        vertex1 = pc2img(points1, self.config, debug=False)
+        vertex2 = pc2img(points2, self.config, debug=False)
+
+        return vertex1, vertex2, T_12, T_21
 
     def load_calib_poses(self):
         """
@@ -163,8 +166,8 @@ class KittiDataset(Dataset):
         # Prepare the indices of all frames
         ###################################
 
-        seq_inds = np.hstack([np.ones(len(_) - 1, dtype=np.int32) * i for i, _ in enumerate(self.frames)])
-        frame_inds = np.hstack([np.arange(len(_) - 1, dtype=np.int32) for _ in self.frames])
+        seq_inds = np.hstack([np.ones(len(_), dtype=np.int32) * i for i, _ in enumerate(self.frames)])
+        frame_inds = np.hstack([np.arange(len(_), dtype=np.int32) for _ in self.frames])
         self.all_inds = np.vstack((seq_inds, frame_inds)).T
 
         return
