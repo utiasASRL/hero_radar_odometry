@@ -115,16 +115,16 @@ class KittiDataset(Dataset):
 
         # Path of points and labels
         seq_path = join(self.path, 'sequences', self.sequences[s_ind])
-        velo_file1 = join(seq_path, 'velodyne', self.frames[s_ind][f_ind] + '.bin')
+        velo_file = join(seq_path, 'velodyne', self.frames[s_ind][f_ind] + '.bin')
 
         # Read points
-        points1 = np.fromfile(velo_file1, dtype=np.float32)
-        points1 = points1.reshape((-1, 4))
+        points = np.fromfile(velo_file, dtype=np.float32)
+        points = points.reshape((-1, 4))
 
         # convert to image
-        vertex1 = pc2img(points1, self.config, debug=False)
+        vertex = pc2img(points, self.config, debug=False)
 
-        return vertex1, s_ind, f_ind, T_iv
+        return {'vertex': vertex, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
 
     def load_calib_poses(self):
         """
