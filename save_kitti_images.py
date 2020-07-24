@@ -86,3 +86,7 @@ for sample_i in sample_idx:
         os.makedirs(save_dir)
     plt.imsave('{}/range_{}.png'.format(save_dir, sample_i), range_img)
     plt.imsave('{}/intensity_{}.png'.format(save_dir, sample_i), intensity_img)
+
+print("====================")
+print("===WRITE COMPLETE===")
+print("====================")
