@@ -54,6 +54,7 @@ def pc2img(pc, config, rand_T=None, debug=False):
 
     # compute u,v
     u = np.int32((0.5 * (azi_max - azi_min) - azimuth[ids]) // azi_res)
+    u[u == horizontal_pix] = 0
     v = np.int32((ele_max - elevation[ids]) // ele_res)
 
     # assign to image
@@ -105,6 +106,7 @@ def pc2img_slow(pc, config, rand_T=None):
 
     # compute u,v
     u = np.int32((0.5 * (azi_max - azi_min) - azimuth[ids]) // azi_res)
+    u[u == horizontal_pix] = 0
     v = np.int32((ele_max - elevation[ids]) // ele_res)
 
     # compute range
