@@ -31,7 +31,7 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 
-class Config:
+class KittiConfig:
     """
     Class containing the parameters you want to modify for this dataset
     """
@@ -42,6 +42,11 @@ class Config:
 
     # dataset base directory
     base_dir = '/mnt/ssd1/research/dataset/KITTI/dataset'
+
+    # training set seq
+    train_seq = ['{:02d}'.format(i) for i in range(11) if (i != 8 and i != 9)]
+    val_seq = ['{:02d}'.format(i) for i in range(11) if i == 8]
+    test_seq = ['{:02d}'.format(i) for i in range(11, 22) if i == 9]
 
     # azimuth resolution in deg
     azi_res = 0.5
