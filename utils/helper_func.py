@@ -7,7 +7,14 @@ import numpy as np
 
 # project imports
 
-def pc2img(pc, config):
+def pc2img(pc, config, debug=False):
+    '''
+    Convert a point cloud to a LiDAR vertex image
+    :param pc: point cloud Nx4
+    :param config:
+    :param debug: visualize the range image for debugging purpose. Default is False
+    :return: vertex image and (range image)
+    '''
     # load image configs
     azi_res = config.azi_res
     azi_min = config.azi_min
@@ -47,6 +54,8 @@ def pc2img(pc, config):
     vertex_img[v, u, 2] = pc_xyz[ids][:,2]
 
     # create range image
-    vertex_range = np.sqrt(np.sum(vertex_img ** 2, axis=2))
+    if debug:
+        vertex_range = np.sqrt(np.sum(vertex_img ** 2, axis=2))
+        return vertex_img, vertex_range
 
-    return vertex_img, vertex_range
+    return vertex_img

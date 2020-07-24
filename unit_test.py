@@ -40,7 +40,7 @@ if __name__ == '__main__':
         sample_velo = dataset.get_velo(sample_idx[0])
 
         # convert to image
-        velo_img, velo_range = pc2img(sample_velo, config)
+        velo_img, velo_range = pc2img(sample_velo, config, debug=True)
 
         # write to disk for verification
         save_dir = '/home/haowei/MEGA/Research/src/GridConv/results/7-24/v0'
