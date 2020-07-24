@@ -111,29 +111,20 @@ class KittiDataset(Dataset):
         s_ind, f_ind = self.all_inds[i]
 
         # Get center of the first frame in world coordinates
-        T_i1 = self.poses[s_ind][f_ind]
-        T_i2 = self.poses[s_ind][f_ind + 1]
-
-        # TODO write a function to get the pose and invert transform properly
-        T_12 = np.linalg.inv(T_i1) @ T_i2
-        T_21 = np.linalg.inv(T_12)
+        T_iv = self.poses[s_ind][f_ind]
 
         # Path of points and labels
         seq_path = join(self.path, 'sequences', self.sequences[s_ind])
         velo_file1 = join(seq_path, 'velodyne', self.frames[s_ind][f_ind] + '.bin')
-        velo_file2 = join(seq_path, 'velodyne', self.frames[s_ind][f_ind + 1] + '.bin')
 
         # Read points
         points1 = np.fromfile(velo_file1, dtype=np.float32)
-        points2 = np.fromfile(velo_file2, dtype=np.float32)
         points1 = points1.reshape((-1, 4))
-        points2 = points2.reshape((-1, 4))
 
         # convert to image
         vertex1 = pc2img(points1, self.config, debug=False)
-        vertex2 = pc2img(points2, self.config, debug=False)
 
-        return vertex1, vertex2, T_12, T_21
+        return vertex1, s_ind, f_ind, T_iv
 
     def load_calib_poses(self):
         """
