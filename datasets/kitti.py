@@ -122,9 +122,21 @@ class KittiDataset(Dataset):
         points = points.reshape((-1, 4))
 
         # convert to image
-        vertex = pc2img(points, self.config, debug=False)
+        image = pc2img(points, self.config, debug=False)
 
-        return {'vertex': vertex, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
+        # feature output
+        # 0: intensity + range
+        # 1: xyz
+        # 2: intensity + xyz
+        # 3: all
+        # if self.config.in_feat_setting == 0:
+        #     vertex = vertex[3:, :, :]
+        # elif self.config.in_feat_setting == 1:
+        #     vertex = vertex[:3, :, :]
+        # elif self.config.in_feat_setting == 2:
+        #     vertex = vertex[:4, :, :]
+
+        return {'image': image.astype(np.float32), 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv.astype(np.float32)}
 
     def load_calib_poses(self):
         """

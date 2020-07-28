@@ -26,8 +26,8 @@ def pc2img(pc, config, rand_T=None, debug=False):
     # image sizes
     horizontal_pix = np.int32((azi_max - azi_min) / azi_res)
     vertical_pix = np.int32((ele_max - ele_min) / ele_res)
-    num_channel = 3
-    vertex_img = np.zeros((vertical_pix, horizontal_pix, num_channel))
+    num_channel = 5
+    vertex_img = np.zeros((num_channel, vertical_pix, horizontal_pix))
 
     if rand_T is not None:
         assert rand_T.shape == (4, 4), "Transformation matrix must be 4x4!"
@@ -39,9 +39,12 @@ def pc2img(pc, config, rand_T=None, debug=False):
 
     # sort the points based on range
     pc_xyz = pc[:,:3]
-    r = np.sqrt(np.sum(pc_xyz ** 2, axis=1))
-    order = np.argsort(r)
+    intensity = pc[:,3]
+    range = np.sqrt(np.sum(pc_xyz ** 2, axis=1))
+    order = np.argsort(range)
     pc_xyz = pc_xyz[order[::-1]]
+    range = range[order[::-1]]
+    intensity = intensity[order[::-1]]
 
     # compute azimuth and elevation
     azimuth = np.rad2deg(np.arctan2(pc_xyz[:,1], pc_xyz[:,0]))
@@ -50,7 +53,8 @@ def pc2img(pc, config, rand_T=None, debug=False):
     elevation = np.rad2deg(np.arctan2(pc_xyz[:,2], xy))
 
     # reject points outside the field of view
-    ids = (azimuth >= azi_min) * (azimuth <= azi_max) * (elevation >= ele_min) * (elevation <= ele_max)
+    # ids = (azimuth >= azi_min) * (azimuth <= azi_max) * (elevation >= ele_min) * (elevation <= ele_max)
+    ids = (azimuth > azi_min) * (azimuth < azi_max) * (elevation > ele_min) * (elevation < ele_max)
 
     # compute u,v
     u = np.int32((0.5 * (azi_max - azi_min) - azimuth[ids]) // azi_res)
@@ -58,9 +62,11 @@ def pc2img(pc, config, rand_T=None, debug=False):
     v = np.int32((ele_max - elevation[ids]) // ele_res)
 
     # assign to image
-    vertex_img[v, u, 0] = pc_xyz[ids][:,0]
-    vertex_img[v, u, 1] = pc_xyz[ids][:,1]
-    vertex_img[v, u, 2] = pc_xyz[ids][:,2]
+    vertex_img[0, v, u] = pc_xyz[ids][:,0]  # x
+    vertex_img[1, v, u] = pc_xyz[ids][:,1]  # y
+    vertex_img[2, v, u] = pc_xyz[ids][:,2]  # z
+    vertex_img[3, v, u] = range[ids]  # intensity
+    vertex_img[4, v, u] = intensity[ids]  # range
 
     # create range image
     if debug:

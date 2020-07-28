@@ -4,32 +4,36 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import os
 import sys
-import h5py
+# import h5py
 import glob
 import itertools
 import pykitti
 import torch
 import argparse
 
-parser = argparse.ArgumentParser(description='Point Cloud Registration')
-parser.add_argument('--save_dir', type=str, default='.', metavar='N',
-                    help='Save to current directory by default')
-parser.add_argument('--sequence_number', type=str, default='00', metavar='N',
-                    help="Sequence number. String, e.g '00'")
-parser.add_argument('--num_frames', type=int, default=10, metavar='N',
-                    help='Number of frames to write. Integer value: e.g 10')
+# parser = argparse.ArgumentParser(description='Point Cloud Registration')
+# parser.add_argument('--save_dir', type=str, default='.', metavar='N',
+#                     help='Save to current directory by default')
+# parser.add_argument('--sequence_number', type=str, default='00', metavar='N',
+#                     help="Sequence number. String, e.g '00'")
+# parser.add_argument('--num_frames', type=int, default=10, metavar='N',
+#                     help='Number of frames to write. Integer value: e.g 10')
+#
+# args = parser.parse_args()
+save_dir = '/home/david/Data/kitti/images'
+sequence_number = '01'
+# num_frames = 100
 
-args = parser.parse_args()
+# base_dir = '/mnt/ssd1/research/dataset/KITTI/dataset'
+base_dir = '/home/david/Data/kitti'
 
-base_dir = '/mnt/ssd1/research/dataset/KITTI/dataset'
+# save_dir = args.save_dir
 
-save_dir = args.save_dir
-
-dataset = pykitti.odometry(base_dir, args.sequence_number)
+dataset = pykitti.odometry(base_dir, sequence_number)
 
 # take point cloud
 num_poses = len(dataset.poses)
-sample_n = args.num_frames
+sample_n = num_poses
 assert sample_n <= num_poses, "Sequence does NOT have enough frames!"
 sample_idx = np.arange(sample_n)
 
@@ -44,11 +48,15 @@ horizontal_pix = np.int32((azi_max - azi_min) / azi_res)
 vertical_pix = np.int32((ele_max - ele_min) / ele_res)
 num_channel = 3
 vertex_img = np.zeros((vertical_pix, horizontal_pix, num_channel))
-range_img = np.zeros((vertical_pix, horizontal_pix))
-intensity_img = np.zeros((vertical_pix, horizontal_pix))
+# range_img = np.zeros((vertical_pix, horizontal_pix))
+# intensity_img = np.zeros((vertical_pix, horizontal_pix))
 
 # inspect vertex map
 for sample_i in sample_idx:
+    # reset range and intensity images
+    range_img = np.zeros((vertical_pix, horizontal_pix))
+    intensity_img = np.zeros((vertical_pix, horizontal_pix))
+
     sample_velo = dataset.get_velo(sample_i)
 
     sample_velo_xyz = sample_velo[:,:3]
