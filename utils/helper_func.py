@@ -7,35 +7,9 @@ import numpy as np
 
 # project imports
 
-def pc2img(pc, config, rand_T=None, debug=False):
-    '''
-    Convert a point cloud to a LiDAR vertex image
-    :param pc: point cloud Nx4
-    :param config:
-    :param debug: visualize the range image for debugging purpose. Default is False
-    :return: vertex image and (range image)
-    '''
-    # load image configs
-    azi_res = config.azi_res
-    azi_min = config.azi_min
-    azi_max = config.azi_max
-    ele_res = config.ele_res
-    ele_min = config.ele_min
-    ele_max = config.ele_max
-
-    # image sizes
-    horizontal_pix = np.int32((azi_max - azi_min) / azi_res)
-    vertical_pix = np.int32((ele_max - ele_min) / ele_res)
-    num_channel = 3
-    vertex_img = np.zeros((vertical_pix, horizontal_pix, num_channel))
-
-    if rand_T is not None:
-        assert rand_T.shape == (4, 4), "Transformation matrix must be 4x4!"
-
-        num_pts = pc.shape[0]
-        pc_aug = np.hstack((pc[:,:3], np.ones((num_pts, 1))))
-        pc_aug = (rand_T @ pc_aug.T).T
-        pc[:,:3] = pc_aug[:,:3]
+def pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
+           ele_res, ele_min, ele_max, input_channel,
+           horizontal_pix, vertical_pix):
 
     # sort the points based on range
     pc_xyz = pc[:,:3]
@@ -56,18 +30,68 @@ def pc2img(pc, config, rand_T=None, debug=False):
     u = np.int32((0.5 * (azi_max - azi_min) - azimuth[ids]) // azi_res)
     u[u == horizontal_pix] = 0
     v = np.int32((ele_max - elevation[ids]) // ele_res)
+    v[v == vertical_pix] = 0
 
-    # assign to image
-    vertex_img[v, u, 0] = pc_xyz[ids][:,0]
-    vertex_img[v, u, 1] = pc_xyz[ids][:,1]
-    vertex_img[v, u, 2] = pc_xyz[ids][:,2]
+    # assign to geometry image
+    geometry_img[0, v, u] = pc_xyz[ids][:,0]
+    geometry_img[1, v, u] = pc_xyz[ids][:,1]
+    geometry_img[2, v, u] = pc_xyz[ids][:,2]
 
-    # create range image
-    if debug:
-        vertex_range = np.sqrt(np.sum(vertex_img ** 2, axis=2))
-        return vertex_img, vertex_range
+    # parse input channels
+    input_images = []
+    if "vertex" in input_channel:
+        vertex_img = geometry_img.copy()
+        input_images.append(vertex_img)
+    if "intensity" in input_channel:
+        intensity_img = np.zeros((1, vertical_pix, horizontal_pix), dtype=np.float32)
+        pc_i = pc[:,3:]
+        pc_i = pc_i[order[::-1]]
+        intensity_img[0, v, u] = pc_i[ids][:,0]
+        input_images.append(intensity_img)
+    if "range" in input_channel:
+        range_img = np.sqrt(np.sum(geometry_img ** 2, axis=0, keepdims=True))
+        input_images.append(range_img)
 
-    return vertex_img
+    input_img = np.vstack(input_images)
+
+    return geometry_img, input_img
+
+def load_lidar_image(pc, config, rand_T=None, debug=False):
+    '''
+    Convert a point cloud to a LiDAR vertex image
+    :param pc: point cloud Nx4
+    :param config:
+    :param debug: visualize the range image for debugging purpose. Default is False
+    :return: vertex image and (range image)
+    '''
+    # load image configs
+    azi_res = config["dataset"]["images"]["azi_res"]
+    azi_min = config["dataset"]["images"]["azi_min"]
+    azi_max = config["dataset"]["images"]["azi_max"]
+    ele_res = config["dataset"]["images"]["ele_res"]
+    ele_min = config["dataset"]["images"]["ele_min"]
+    ele_max = config["dataset"]["images"]["ele_max"]
+    input_channel = config["dataset"]["images"]["input_channel"]
+
+    # image sizes
+    horizontal_pix = np.int32((azi_max - azi_min) / azi_res)
+    vertical_pix = np.int32((ele_max - ele_min) / ele_res)
+    geometry_img = np.zeros((3, vertical_pix, horizontal_pix), dtype=np.float32)
+
+    if rand_T is not None:
+        assert rand_T.shape == (4, 4), "Transformation matrix must be 4x4!"
+
+        num_pts = pc.shape[0]
+        pc_aug = np.hstack((pc[:,:3], np.ones((num_pts, 1))))
+        pc_aug = (rand_T @ pc_aug.T).T
+        pc[:,:3] = pc_aug[:,:3]
+
+    geometry_img, input_img = pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
+                                     ele_res, ele_min, ele_max, input_channel,
+                                     horizontal_pix, vertical_pix)
+
+    return geometry_img, input_img
+
 
 def pc2img_slow(pc, config, rand_T=None):
     # load image configs
