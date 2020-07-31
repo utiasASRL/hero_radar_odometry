@@ -34,7 +34,7 @@ import torch
 from torch.utils.data import Dataset
 
 # project imports
-from utils.helper_func import pc2img
+from utils.helper_func import load_lidar_image
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,18 +54,18 @@ class KittiDataset(Dataset):
         ##########################
 
         # Dataset folder
-        self.path = config.base_dir
+        self.path = config["dataset"]["data_dir"]
 
         # Training or test set
         self.set = set
 
         # Get a list of sequences
         if self.set == 'training':
-            self.sequences = config.train_seq
+            self.sequences = config["dataset"]["seq"]["train"]
         elif self.set == 'validation':
-            self.sequences = config.val_seq
+            self.sequences = config["dataset"]["seq"]["val"]
         elif self.set == 'test':
-            self.sequences = config.test_seq
+            self.sequences = config["dataset"]["seq"]["test"]
         else:
             raise ValueError('Unknown set for SemanticKitti data: ', self.set)
 
@@ -79,6 +79,10 @@ class KittiDataset(Dataset):
         ##################
         # Other parameters
         ##################
+
+        # Store height and width of image # TODO make this a variable but not fixed
+        self.height = config["dataset"]["images"]["height"]
+        self.width = config["dataset"]["images"]["width"]
 
         # Parameters from config
         self.config = config
@@ -122,7 +126,10 @@ class KittiDataset(Dataset):
         points = points.reshape((-1, 4))
 
         # convert to image
-        vertex = pc2img(points, self.config, debug=False)
+        vertex = load_lidar_image(points, self.config, debug=False, inc_i=self.config["dataset"]["images"]["include_i"])
+
+        # store height and width
+        self.height, self.width, _ = vertex.shape
 
         return {'vertex': vertex, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
 

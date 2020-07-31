@@ -9,7 +9,7 @@ from PIL import Image
 
 # project imports
 from utils.config import KittiConfig
-from utils.helper_func import pc2img, pc2img_slow
+from utils.helper_func import load_lidar_image, pc2img_slow
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         sample_velo = dataset.get_velo(sample_idx[0])
 
         # convert to image
-        velo_img, velo_range = pc2img(sample_velo, config, debug=True)
+        velo_img, velo_range = load_lidar_image(sample_velo, config, debug=True)
 
         # write to disk for verification
         save_dir = '/home/haowei/MEGA/Research/src/GridConv/results/7-24/v0'
@@ -103,8 +103,8 @@ if __name__ == '__main__':
 
 
         # convert to image
-        velo_img_orig, _ = pc2img(sample_velo.copy(), config, rand_T=None, debug=True)
-        velo_img, velo_range = pc2img(sample_velo.copy(), config, rand_T=rand_T, debug=True)
+        velo_img_orig, _ = load_lidar_image(sample_velo.copy(), config, rand_T=None, debug=True)
+        velo_img, velo_range = load_lidar_image(sample_velo.copy(), config, rand_T=rand_T, debug=True)
         velo_img_slow = pc2img_slow(sample_velo.copy(), config, rand_T=rand_T)
 
         # verify these two produce same results
