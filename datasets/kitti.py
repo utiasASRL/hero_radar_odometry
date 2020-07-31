@@ -126,12 +126,12 @@ class KittiDataset(Dataset):
         points = points.reshape((-1, 4))
 
         # convert to image
-        vertex = load_lidar_image(points, self.config, debug=False, inc_i=self.config["dataset"]["images"]["include_i"])
+        geometry_img, input_img = load_lidar_image(points, self.config, debug=False)
 
         # store height and width
-        self.height, self.width, _ = vertex.shape
+        self.height, self.width, _ = geometry_img.shape
 
-        return {'vertex': vertex, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
+        return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
 
     def load_calib_poses(self):
         """
