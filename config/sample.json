@@ -1,5 +1,6 @@
 {
-  "name": "session_name",
+  "session_name": "session_name",
+  "previous_session": "",
 
   "network": {
     "arch": "TODO"
@@ -38,6 +39,9 @@
 
   "trainer": {
     "max_epochs": 100,
-    "patience": 7
+    "validate": {
+      "on": true,
+      "patience": 7
+    }
   }
 }
