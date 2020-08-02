@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import numpy as np
 
@@ -11,6 +12,13 @@ class Trainer():
     def __init__(self, model, train_loader, valid_loader, config):
         # network
         self.model = model
+
+        # move the network to GPU
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda:0")
+        else:
+            self.device = torch.device("cpu")
+        self.model.to(self.device)
 
         # optimizer
         if config['optimizer']['type'] == 'Adam':
@@ -47,12 +55,20 @@ class Trainer():
         self.model.train()
 
         # TODO: add anomoly detection
+        t = [time.time()]
+        last_display = time.time()
         with torch.enable_grad():
             for i_batch, batch_sample in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
 
                 # TODO: forward prop
-                loss = 0
+                loss = self.model(batch_sample)
+                t += [time.time()]
+
+                # Console display (only one per second)
+                if (t[-1] - last_display) > 1.0:
+                    last_display = t[-1]
+                    self.model.print_loss(loss)
 
                 # TODO: backwards prop
 
@@ -78,7 +94,7 @@ class Trainer():
         Full training loop
         """
         # validation and early stopping
-        if self.config['validate']['on']:
+        if self.config['trainer']['validate']['on']:
             train_loss = early_stopping = EarlyStopping(patience=self.config['trainer']['validate']['patience'],
                                                         val_loss_min=self.min_val_loss)
 
