@@ -1,0 +1,47 @@
+{
+  "session_name": "session_name",
+  "previous_session": "",
+
+  "network": {
+    "arch": "TODO"
+  },
+
+  "optimizer": {
+    "type": "Adam",
+    "lr": 0.0001,
+    "weight_decay": 0
+  },
+
+  "dataset": {
+    "data_dir": "/home/david/Data/kitti",
+    "seq": {
+      "train": ["00", "01", "02", "03", "04", "05", "06", "07"],
+      "val": ["08"],
+      "test": ["09", "10"]
+    },
+    "images": {
+      "height": 64,
+      "width": 720,
+      "azi_res": 0.5,
+      "azi_min": -180.0,
+      "azi_max": 180.0,
+      "ele_res": 0.5,
+      "ele_min": -25.0,
+      "ele_max": 3.0
+    }
+  },
+
+  "data_loader": {
+    "batch_size": 2,
+    "window_size": 3,
+    "num_workers": 4
+  },
+
+  "trainer": {
+    "max_epochs": 100,
+    "validate": {
+      "on": true,
+      "patience": 7
+    }
+  }
+}
