@@ -333,3 +333,14 @@ def zn_desc(desc):
     '''
     desc = (desc - torch.mean(desc, dim=1, keepdim=True)) / torch.std(desc, dim=1, keepdim=True)
     return desc
+
+def T_inv(transformation_mat):
+    batch_size = transformation_mat.size(0)
+    identity = torch.eye(4)
+    identity = identity.reshape((1, 4, 4))
+    T_inv = identity.repeat(batch_size, 1, 1).cuda()
+    C = transformation_mat[:,:3,:3]
+    t = transformation_mat[:,:3,3:]
+    T_inv[:,:3,:3] = C.transpose(2,1)
+    T_inv[:,:3,3:] = -C.transpose(2,1) @ t
+    return T_inv

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from utils.trainer import Trainer
 from datasets.custom_sampler import *
 from datasets.kitti import *
+from networks.svd_pose_model import SVDPoseModel
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -22,34 +23,35 @@ if __name__ == '__main__':
 
     # dataloader setup
     train_dataset = KittiDataset(config, set='training')
-    train_sampler = RandomWindowBatchSampler(batch_size=config["data_loader"]["batch_size"],
-                                             window_size=config["data_loader"]["window_size"],
+    train_sampler = RandomWindowBatchSampler(batch_size=config["train_loader"]["batch_size"],
+                                             window_size=config["train_loader"]["window_size"],
                                              seq_len=train_dataset.seq_len,
                                              drop_last=True)
     train_loader = DataLoader(train_dataset,
                               batch_sampler=train_sampler,
-                              num_workers=config["data_loader"]["num_workers"],
+                              num_workers=config["train_loader"]["num_workers"],
                               pin_memory=True)
 
     valid_dataset = KittiDataset(config, set='validation')
-    valid_sampler = RandomWindowBatchSampler(batch_size=config["data_loader"]["batch_size"],
-                                             window_size=config["data_loader"]["window_size"],
+    valid_sampler = RandomWindowBatchSampler(batch_size=config["train_loader"]["batch_size"],
+                                             window_size=config["train_loader"]["window_size"],
                                              seq_len=valid_dataset.seq_len,
                                              drop_last=True)
     valid_loader = DataLoader(train_dataset,
                               batch_sampler=valid_sampler,
-                              num_workers=config["data_loader"]["num_workers"],
+                              num_workers=config["train_loader"]["num_workers"],
                               pin_memory=True)
 
-    # network setup (dummy network for now)
-    model = nn.Sequential(
-            nn.Conv2d(1,20,5),
-            nn.ReLU(),
-            nn.Conv2d(20,64,5),
-            nn.ReLU())
+    # network setup
+    model = SVDPoseModel(config,
+                         config['train_loader']['window_size'],
+                         config['train_loader']['batch_size'])
 
     # trainer
     trainer = Trainer(model, train_loader, valid_loader, config)
+
+    # train
+    trainer.train()
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)

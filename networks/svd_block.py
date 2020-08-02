@@ -60,6 +60,6 @@ class SVDBlock(nn.Module):
         S = torch.stack(S, dim=0)
         R = torch.stack(R, dim=0)
 
-        t = -R @ (keypoints_centroid - R.transpose(2,1) @ pseudo_centered)
+        t = -R @ (keypoints_centroid - R.transpose(2,1) @ pseudo_centroid)
         t = t.squeeze()
         return R, t

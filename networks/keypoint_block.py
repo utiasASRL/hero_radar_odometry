@@ -6,22 +6,22 @@ class KeypointBlock(nn.Module):
     """
     KeypointBlock processes keypoints and associated features
     """
-    def __init__(self, config):
+    def __init__(self, config, window_size, batch_size):
         super(KeypointBlock, self).__init__()
         self.config = config
 
         # KeypointBlock parameters
-        self.patch_height = config['keypoint_block']['patch_height']
-        self.patch_width = config['keypoint_block']['patch_width']
-        self.temperature = config['keypoint_block']['softmax_temp']
+        self.patch_height = config['networks']['keypoint_block']['patch_height']
+        self.patch_width = config['networks']['keypoint_block']['patch_width']
+        self.temperature = config['networks']['keypoint_block']['softmax_temp']
 
         # data loader parameters
-        self.window_size = config['data_loader']['window_size']   # should always be 2
-        self.batch_size = config['data_loader']['batch_size']
+        self.window_size = window_size   # should always be 2
+        self.batch_size = batch_size
 
         # image parameters
-        self.height = config['images']['height']
-        self.width = config['images']['width']
+        self.height = config['dataset']['images']['height']
+        self.width = config['dataset']['images']['width']
 
         # 2D coordinates
         v_coords, u_coords = torch.meshgrid([torch.arange(0, self.height),

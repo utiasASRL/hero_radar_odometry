@@ -17,8 +17,15 @@ class UNetBlock(nn.Module):
     def __init__(self, config):
         super(UNetBlock, self).__init__()
         # TODO relying on hard-coded config params
-        self.n_channels = config["networks"]["unet"]["n_channels"]
-        self.n_classes = config["networks"]["unet"]["n_classes"] # this specifies num_classes for output
+
+        # n_channels
+        self.n_channels = 0
+        self.input_channel = config["dataset"]["images"]["input_channel"]
+        self.n_channels += 3 if 'vertex' in self.input_channel else 0
+        self.n_channels += 1 if 'intensity' in self.input_channel else 0
+        self.n_channels += 1 if 'range' in self.input_channel else 0
+
+        self.n_weight_score = config["networks"]["unet"]["n_weight_score"] # this specifies num_classes for output
         self.bilinear = config["networks"]["unet"]["bilinear"]
         self.first_feature_dimension = config["networks"]["unet"]["first_feature_dimension"]
         self.depth = config["networks"]["unet"]["depth"]
@@ -48,7 +55,7 @@ class UNetBlock(nn.Module):
         self.up2_pts = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
         self.up3_pts = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
         self.up4_pts = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
-        self.outc_pts = OutConv(self.first_feature_dimension, self.n_classes)
+        self.outc_pts = OutConv(self.first_feature_dimension, 1)
 
         # up 2
         # self.up2 = nn.ModuleList()
@@ -62,7 +69,7 @@ class UNetBlock(nn.Module):
         self.up2_score = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
         self.up3_score = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
         self.up4_score = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
-        self.outc_score = OutConv(self.first_feature_dimension, self.n_classes)
+        self.outc_score = OutConv(self.first_feature_dimension, self.n_weight_score)
 
     def forward(self, x):
         batch_size, _, height, width = x.size()

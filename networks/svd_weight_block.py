@@ -29,7 +29,7 @@ class SVDWeightBlock(nn.Module):
         '''
 
         # supposedly desc_match_score range between -1 and 1
-        desc_match_score = torch.sum(keypoint_desc * pseudo_desc, dim=1) # Bx1xN = BxCxN * BxCxN
+        desc_match_score = torch.sum(keypoint_desc * pseudo_desc, dim=1, keepdim=True) # Bx1xN = BxCxN * BxCxN
         weights = 0.5 * (desc_match_score + 1) # range between 0 and 1
 
         # add the weight score for each individual points
