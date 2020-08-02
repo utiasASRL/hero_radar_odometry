@@ -5,7 +5,7 @@ class EarlyStopping:
     """Based on https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
        Early stops the training if validation loss doesn't improve after a given patience.
     """
-    def __init__(self, patience=7, verbose=True, best_score=None, val_loss_min=np.Inf):
+    def __init__(self, patience=7, verbose=True, val_loss_min=np.Inf):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
@@ -16,18 +16,12 @@ class EarlyStopping:
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
-        self.best_score = best_score
         self.val_loss_min = val_loss_min
         self.epoch_min = 0
 
     def check_stop(self, val_loss, model, optimizer, model_file_name, epoch):
 
-        score = -val_loss
-
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model, optimizer, model_file_name, epoch)
-        elif score < self.best_score:
+        if val_loss > self.val_loss_min:
             self.counter += 1
             print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
             print(f'Current val loss: {val_loss:.10f}, min val loss: {self.val_loss_min:.10f}\n')
@@ -35,7 +29,7 @@ class EarlyStopping:
                 print('Early stopping: model saved at epoch {}'.format(self.epoch_min))
                 return True, self.counter == 0, self.val_loss_min
         else:
-            self.best_score = score
+            self.val_loss_min = val_loss
             self.save_checkpoint(val_loss, model, optimizer, model_file_name, epoch)
             self.counter = 0
 
