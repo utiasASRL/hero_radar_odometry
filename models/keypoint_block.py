@@ -82,15 +82,15 @@ class KeypointBlock(nn.Module):
         keypoint_coords = keypoint_coords.transpose(1, 2) # B x 3 x num_patches
 
         # compute keypoint descriptors
-        keypoint_descriptors = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear')
-        keypoint_descriptors = keypoint_descriptors.reshape(N, descriptors.size(1), keypoints_2D.size(1))
-        keypoint_descriptors = F.normalize(keypoint_descriptors, dim=1) # B x C x num_patches
+        keypoint_descs = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear')
+        keypoint_descs = keypoint_descs.reshape(N, descriptors.size(1), keypoints_2D.size(1))
+        keypoint_descs = F.normalize(keypoint_descs, dim=1) # B x C x num_patches
 
         # compute keypoint weight scores
         keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')
         keypoint_weights = keypoint_weights.reshape(N, 1, keypoints_2D.size(1)) # B x 1 x num_patches
 
-        return keypoint_coords, keypoint_descriptors, keypoint_weights
+        return keypoint_coords, keypoint_descs, keypoint_weights
 
     def normalize_coords(self, coords_2D, batch_size, width, height):
         """
