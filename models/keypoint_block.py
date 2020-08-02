@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class KeypointBlock(nn.Module):
+    """
+    KeypointBlock processes keypoints and associated features
+    """
     def __init__(self, config):
         super(KeypointBlock, self).__init__()
         self.config = config
@@ -29,6 +32,14 @@ class KeypointBlock(nn.Module):
         self.register_buffer('u_coords', u_coords)
 
     def forward(self, geometry_img, descriptors, detector_scores, weight_scores):
+        """
+        forward function for this block
+        :param geometry_img: batch image, contains 3D coordinates of each pixel as channel entries
+        :param descriptors: batch image, contains descriptors as channel entries
+        :param detector_scores: batch image, contains detector scores as channel entry
+        :param weight_scores, batch image, contains weight scores as channel entries
+        """
+
         # logits_pts, scores, features = self.net(vertex)
 
         N = self.window_size*self.batch_size
@@ -82,6 +93,13 @@ class KeypointBlock(nn.Module):
         return keypoint_coords, keypoint_descriptors, keypoint_weights
 
     def normalize_coords(self, coords_2D, batch_size, width, height):
+        """
+        Normalize 2D coordinates for use in grid_sample function
+        :param coords_2D: 2D coordinates to normalize
+        :param batch_size: size of batch
+        :param width: image width
+        :param height: image height
+        """
         # B x N x 2
         u_norm = (2 * coords_2D[:, :, 0].reshape(batch_size, -1) / (width - 1)) - 1
         v_norm = (2 * coords_2D[:, :, 1].reshape(batch_size, -1) / (height - 1)) - 1
