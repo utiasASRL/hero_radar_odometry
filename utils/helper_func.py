@@ -86,9 +86,13 @@ def load_lidar_image(pc, config, rand_T=None, debug=False):
         pc_aug = (rand_T @ pc_aug.T).T
         pc[:,:3] = pc_aug[:,:3]
 
-    geometry_img, input_img = pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
-                                     ele_res, ele_min, ele_max, input_channel,
-                                     horizontal_pix, vertical_pix)
+    if config["dataset"]["images"]["map_laser_to_row"]:
+        geometry_img, input_img = pc2img_laser_to_row(pc, geometry_img, azi_res, azi_min, azi_max,
+                                                      input_channel, horizontal_pix, vertical_pix)
+    else:
+        geometry_img, input_img = pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
+                                        ele_res, ele_min, ele_max, input_channel,
+                                        horizontal_pix, vertical_pix)
 
     return geometry_img, input_img
 
