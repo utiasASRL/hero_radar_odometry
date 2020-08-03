@@ -34,6 +34,8 @@ class Trainer():
         self.min_val_loss = np.Inf
         self.result_path = os.path.join('results', config['session_name'])
         self.checkpoint_path = os.path.join(self.result_path, 'chkp.tar')
+        if not os.path.exists(self.result_path):
+            os.makedirs(self.result_path)
 
         # load network parameters and optimizer if resuming from previous session
         if config['previous_session'] != "":
@@ -82,6 +84,7 @@ class Trainer():
                 # File print (every time)
                 sys.stdout = self.stdout_file
                 self.model.print_loss(loss)
+                self.stdout_file.flush()
 
         return loss
 
