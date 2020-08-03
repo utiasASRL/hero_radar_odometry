@@ -38,7 +38,7 @@
             "azi_res": 0.5,
             "azi_min": -180.0,
             "azi_max": 180.0,
-            "map_laser_to_row": true,
+            "map_laser_to_row": false,
             "ele_res": 0.5,
             "ele_min": -25.0,
             "ele_max": 3.0
