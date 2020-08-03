@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import torch
 import numpy as np
@@ -46,6 +47,11 @@ class Trainer():
         # config dictionary
         self.config = config
 
+        # logging
+        self.stdout_orig = sys.stdout
+        self.log_path = os.path.join(self.result_path, 'train.txt')
+        self.stdout_file = open(self.log_path, 'w')
+
     def train_epoch(self, epoch):
         """
         Training logic for an epoch
@@ -65,12 +71,17 @@ class Trainer():
                 loss = self.model(batch_sample)
                 t += [time.time()]
 
-                # Console display (only one per second)
+                # TODO: backwards prop
+
+                # Console print (only one per second)
                 if (t[-1] - last_display) > 1.0:
                     last_display = t[-1]
+                    sys.stdout = self.stdout_orig
                     self.model.print_loss(loss)
 
-                # TODO: backwards prop
+                # File print (every time)
+                sys.stdout = self.stdout_file
+                self.model.print_loss(loss)
 
         return loss
 
@@ -117,6 +128,10 @@ class Trainer():
                             'optimizer_state_dict': self.optimizer.state_dict(),
                             'loss': val_loss,
                             }, self.checkpoint_path)
+
+        # close log file
+        sys.stdout = self.stdout_orig
+        self.stdout_file.close()
 
     def resume_checkpoint(self, checkpoint_path):
         """
