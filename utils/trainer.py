@@ -120,7 +120,7 @@ class Trainer():
 
             self.train_epoch(epoch)
 
-            if self.config['validate']['on']:
+            if self.config['trainer']['validate']['on']:
                 # check for validation set and early stopping
                 val_loss = self.valid_epoch(epoch)
                 stop_flag, loss_decrease_flag, self.min_val_loss = early_stopping.check_stop(
