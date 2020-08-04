@@ -117,8 +117,8 @@ class F2FPoseModel(nn.Module):
     def weighted_mse_loss(self, data, target, weight):
         return 3.0*torch.mean(torch.exp(weight) * (data - target) ** 2)
 
-    def print_loss(self, loss):
-        message = 'LOSS={:.6f}'.format(loss)
+    def print_loss(self, epoch, iter, loss):
+        message = '{:d},{:d},{:.6f}'.format(epoch, iter, loss)
         print(message)
 
     def se3_inv(self, Tf):

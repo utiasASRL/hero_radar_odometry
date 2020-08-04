@@ -3,8 +3,8 @@
     "previous_session": "",
 
     "networks": {
-        "match_type": "zncc",
-        "dense_match": true,
+        "match_type": "dp",
+        "dense_match": false,
         "unet": {
             "n_weight_score": 1,
             "bilinear": true,
@@ -28,7 +28,7 @@
     },
 
     "dataset": {
-        "data_dir": "/home/david/Data/kitti",
+        "data_dir": "/data/SemanticKitti",
         "seq": {
             "train": ["00", "01", "02", "03", "04", "05", "06", "07"],
             "val": ["08"],
@@ -49,19 +49,19 @@
     },
 
     "train_loader": {
-        "batch_size": 3,
+        "batch_size": 8,
         "window_size": 2,
-        "num_workers": 0
+        "num_workers": 10
     },
 
     "test_loader": {
         "batch_size": 2,
         "window_size": 2,
-        "num_workers": 4
+        "num_workers": 2
     },
 
     "trainer": {
-        "max_epochs": 100,
+        "max_epochs": 200,
         "validate": {
             "on": true,
             "patience": 7

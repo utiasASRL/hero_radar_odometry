@@ -69,21 +69,25 @@ class Trainer():
             for i_batch, batch_sample in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
 
-                # TODO: forward prop
+                # forward prop
                 loss = self.model(batch_sample)
                 t += [time.time()]
 
-                # TODO: backwards prop
+                # backwards prop
+                loss.backward()
+
+                # update
+                self.optimizer.step()
 
                 # Console print (only one per second)
                 if (t[-1] - last_display) > 1.0:
                     last_display = t[-1]
                     sys.stdout = self.stdout_orig
-                    self.model.print_loss(loss)
+                    self.model.print_loss(epoch, i_batch, loss)
 
                 # File print (every time)
                 sys.stdout = self.stdout_file
-                self.model.print_loss(loss)
+                self.model.print_loss(epoch, i_batch, loss)
                 self.stdout_file.flush()
 
         return loss
