@@ -47,6 +47,9 @@ class F2FPoseModel(nn.Module):
         images = images.cuda()
         T_iv = T_iv.cuda()
 
+        # divide range by 100
+        images[1, :, :] = images[1, :, :]/100.0
+
         # Extract features, detector scores and weight scores
         detector_scores, weight_scores, descs = self.unet_block(images)
 

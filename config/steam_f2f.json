@@ -37,7 +37,7 @@
         "images": {
             "height": 64,
             "width": 720,
-            "input_channel": ["vertex", "intensity", "range"],
+            "input_channel": ["intensity", "range"],
             "azi_res": 0.5,
             "azi_min": -180.0,
             "azi_max": 180.0,
