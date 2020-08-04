@@ -133,7 +133,7 @@ class Trainer():
                 torch.save({'epoch': epoch,
                             'model_state_dict': self.model.state_dict(),
                             'optimizer_state_dict': self.optimizer.state_dict(),
-                            'loss': val_loss,
+                            'loss': train_loss,
                             }, self.checkpoint_path)
 
         # close log file

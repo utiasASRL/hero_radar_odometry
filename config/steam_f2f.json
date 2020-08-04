@@ -63,7 +63,7 @@
     "trainer": {
         "max_epochs": 200,
         "validate": {
-            "on": true,
+            "on": false,
             "patience": 7
         }
     }
