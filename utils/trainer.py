@@ -113,12 +113,12 @@ class Trainer():
         """
         # validation and early stopping
         if self.config['trainer']['validate']['on']:
-            train_loss = early_stopping = EarlyStopping(patience=self.config['trainer']['validate']['patience'],
+            early_stopping = EarlyStopping(patience=self.config['trainer']['validate']['patience'],
                                                         val_loss_min=self.min_val_loss)
 
         for epoch in range(self.start_epoch, self.config['trainer']['max_epochs']):
 
-            self.train_epoch(epoch)
+            train_loss = self.train_epoch(epoch)
 
             if self.config['trainer']['validate']['on']:
                 # check for validation set and early stopping
