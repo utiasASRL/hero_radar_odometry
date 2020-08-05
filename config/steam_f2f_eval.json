@@ -1,6 +1,6 @@
 {
     "session_name": "f2f_gt_1",
-    "previous_session": "",
+    "previous_session": "f2f_gt_consist",
 
     "networks": {
         "match_type": "dp",
@@ -28,7 +28,7 @@
     },
 
     "dataset": {
-        "data_dir": "/home/david/Data/kitti",
+        "data_dir": "/data/SemanticKitti",
         "seq": {
             "train": ["00"],
             "val": ["08"],
@@ -51,7 +51,7 @@
     "train_loader": {
         "batch_size": 1,
         "window_size": 2,
-        "num_workers": 4
+        "num_workers": 10
     },
 
     "test_loader": {
