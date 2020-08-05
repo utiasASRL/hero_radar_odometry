@@ -1,0 +1,70 @@
+{
+    "session_name": "f2f_gt_1",
+    "previous_session": "",
+
+    "networks": {
+        "match_type": "dp",
+        "dense_match": false,
+        "unet": {
+            "n_weight_score": 1,
+            "bilinear": true,
+            "first_feature_dimension": 8,
+            "depth": 4
+        },
+        "keypoint_block": {
+            "patch_height": 8,
+            "patch_width": 8,
+            "softmax_temp": 1.0
+        },
+        "keypoint_loss": {
+            "error_thresh": 4.0
+        }
+    },
+
+    "optimizer": {
+        "type": "Adam",
+        "lr": 0.0001,
+        "weight_decay": 0
+    },
+
+    "dataset": {
+        "data_dir": "/home/david/Data/kitti",
+        "seq": {
+            "train": ["00"],
+            "val": ["08"],
+            "test": ["09", "10"]
+        },
+        "images": {
+            "height": 64,
+            "width": 720,
+            "input_channel": ["intensity", "range"],
+            "azi_res": 0.5,
+            "azi_min": -180.0,
+            "azi_max": 180.0,
+            "map_laser_to_row": true,
+            "ele_res": 0.5,
+            "ele_min": -25.0,
+            "ele_max": 3.0
+        }
+    },
+
+    "train_loader": {
+        "batch_size": 1,
+        "window_size": 2,
+        "num_workers": 4
+    },
+
+    "test_loader": {
+        "batch_size": 2,
+        "window_size": 2,
+        "num_workers": 2
+    },
+
+    "trainer": {
+        "max_epochs": 200,
+        "validate": {
+            "on": false,
+            "patience": 7
+        }
+    }
+}

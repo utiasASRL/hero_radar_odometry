@@ -32,6 +32,7 @@ class F2FPoseModel(nn.Module):
 
         self.svd_block = SVDBlock(self.config)
 
+
     def forward(self, data):
         '''
         Estimate transform between two frames
@@ -130,3 +131,35 @@ class F2FPoseModel(nn.Module):
         Tinv[:3, 3:] = -Tf[:3, :3].T@Tf[:3, 3:]
         Tinv[3, 3] = 1
         return Tinv
+
+    def forward_encoder_decoder(self, images):
+        detector_scores, weight_scores, descs = self.unet_block(images)
+        return detector_scores, weight_scores, descs
+
+    def forward_keypoints(self, data):
+        # parse data
+        geometry_img, images, T_iv = data['geometry'], data['input'], data['T_iv']
+
+        # move to GPU
+        geometry_img = geometry_img.cuda()
+        images = images.cuda()
+        T_iv = T_iv.cuda()
+
+        # divide range by 100
+        images[1, :, :] = images[1, :, :]/100.0
+
+        # Extract features, detector scores and weight scores
+        detector_scores, weight_scores, descs = self.unet_block(images)
+
+        # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
+        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, descs, detector_scores, weight_scores)
+
+        # Match the points in src frame to points in target frame to generate pseudo points
+        # first input is src. Computes pseudo with target
+        pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+                                                                                 keypoint_coords[1::self.window_size],
+                                                                                 keypoint_weights[1::self.window_size],
+                                                                                 keypoint_descs[::self.window_size],
+                                                                                 keypoint_descs[1::self.window_size])
+
+        return keypoint_coords[::self.window_size], pseudo_coords, keypoint_weights[::self.window_size]
