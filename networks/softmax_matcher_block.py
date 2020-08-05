@@ -20,6 +20,7 @@ class SoftmaxMatcherBlock(nn.Module):
         # TODO take the dense match logic outside this block
         self.match_type = config["networks"]["match_type"] # zncc, l2, dp
         self.softmax_temperature = 0.02
+        self.match_vals = torch.tensor(0)
 
     def forward(self, src_coords, tgt_coords, tgt_weights, src_desc, tgt_desc):
         '''
@@ -47,12 +48,12 @@ class SoftmaxMatcherBlock(nn.Module):
 
         # match points based on match_type
         if self.match_type == 'zncc':
-            match_vals = torch.matmul(src_desc_norm.transpose(2, 1).contiguous(),
-                                      tgt_desc_norm) / float(src_desc_norm.size(1)) # B x N x M
-            soft_match_vals = F.softmax(match_vals / self.softmax_temperature, dim=2) # B x N x M
+            self.match_vals = torch.matmul(src_desc_norm.transpose(2, 1).contiguous(),
+                                           tgt_desc_norm) / float(src_desc_norm.size(1)) # B x N x M
+            soft_match_vals = F.softmax(self.match_vals / self.softmax_temperature, dim=2) # B x N x M
         elif self.match_type == 'dp':
-            match_vals = torch.matmul(src_desc_norm.transpose(2, 1).contiguous(), tgt_desc_norm) # B x N x M
-            soft_match_vals = F.softmax(match_vals / self.softmax_temperature, dim=2) # B x N x M
+            self.match_vals = torch.matmul(src_desc_norm.transpose(2, 1).contiguous(), tgt_desc_norm) # B x N x M
+            soft_match_vals = F.softmax(self.match_vals / self.softmax_temperature, dim=2) # B x N x M
         else:
             assert False, "Only support match type zncc now"
 

@@ -104,11 +104,26 @@ class F2FPoseModel(nn.Module):
             tgt_id = 2*batch_i + 1
             T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
 
+            # match consistency
+            w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids, :] # N x M
+            # w12 = torch.zeros((5, 4))
+            _, ind2to1 = torch.max(w12, dim=1)  # N
+            _, ind1to2 = torch.max(w12, dim=0)  # M
+            mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
+            mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
+            points1 = points1[mask_ind, :]
+            points2 = points2[mask_ind, :]
+            w = w[mask_ind, :]
+
             # error rejection
             points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
             error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
             ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
                                 as_tuple=False).squeeze()
+
+            if ids.nelement() <= 1:
+                print("WARNING: ELEMENTS LESS THAN 1")
+                continue
 
             loss += self.weighted_mse_loss(points1_in_2[ids, :],
                                            points2[ids, :],
