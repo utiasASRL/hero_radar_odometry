@@ -87,8 +87,13 @@ class Trainer():
 
                 # File print (every time)
                 sys.stdout = self.stdout_file
-                self.model.print_loss(epoch, i_batch, loss)
+                # self.model.print_loss(epoch, i_batch, loss)
                 self.stdout_file.flush()
+
+                with open(os.path.join(self.result_path, 'train_loss.txt'), "a") as file:
+                        message = '{:d},{:d}{:.6f}\n'
+                        file.write(message.format(epoch, i_batch, loss))
+
 
         return loss
 
@@ -102,8 +107,7 @@ class Trainer():
                 self.optimizer.zero_grad()
 
                 # TODO: forward prop
-                loss += 0    # summation!
-
+                loss += self.model(batch_sample)    # summation
 
         return loss
 
@@ -125,6 +129,10 @@ class Trainer():
                 val_loss = self.valid_epoch(epoch)
                 stop_flag, loss_decrease_flag, self.min_val_loss = early_stopping.check_stop(
                     val_loss, self.model, self.optimizer, self.checkpoint_path, epoch)
+
+                with open(os.path.join(self.result_path, 'valid_loss.txt'), "a") as file:
+                        message = '{:d},{:.6f}\n'
+                        file.write(message.format(epoch, val_loss))
 
                 if stop_flag:
                     break

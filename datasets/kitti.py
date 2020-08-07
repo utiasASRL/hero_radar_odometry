@@ -117,16 +117,31 @@ class KittiDataset(Dataset):
         # Get center of the first frame in world coordinates
         T_iv = self.poses[s_ind][f_ind]
 
-        # Path of points and labels
-        seq_path = join(self.path, 'sequences', self.sequences[s_ind])
-        velo_file = join(seq_path, 'velodyne', self.frames[s_ind][f_ind] + '.bin')
 
-        # Read points
-        points = np.fromfile(velo_file, dtype=np.float32)
-        points = points.reshape((-1, 4))
+        if self.config['dataset']['images']['preload']:
+            seq_path = join(self.path, 'preload', self.sequences[s_ind])
+            velo_file = join(seq_path, str(f_ind) + '.npy')
+            image = np.load(velo_file)
+            geometry_img = image[:3, :, :]
+            input_images = []
+            if "vertex" in self.config['dataset']['images']['input_channel']:
+                input_images.append(image[:3, :, :])
+            if "intensity" in self.config['dataset']['images']['input_channel']:
+                input_images.append(image[3:4, :, :])
+            if "range" in self.config['dataset']['images']['input_channel']:
+                input_images.append(image[4:5, :, :])
+            input_img = np.vstack(input_images)
+        else:
+            # Path of points and labels
+            seq_path = join(self.path, 'sequences', self.sequences[s_ind])
+            velo_file = join(seq_path, 'velodyne', self.frames[s_ind][f_ind] + '.bin')
 
-        # convert to image
-        geometry_img, input_img = load_lidar_image(points, self.config, debug=False)
+            # Read points
+            points = np.fromfile(velo_file, dtype=np.float32)
+            points = points.reshape((-1, 4))
+
+            # convert to image
+            geometry_img, input_img = load_lidar_image(points, self.config, debug=False)
 
         # store height and width
         self.height, self.width, _ = geometry_img.shape

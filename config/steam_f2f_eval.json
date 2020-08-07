@@ -28,7 +28,7 @@
     },
 
     "dataset": {
-        "data_dir": "/data/SemanticKitti",
+        "data_dir": "/home/david/Data/kitti",
         "seq": {
             "train": ["00"],
             "val": ["08"],
@@ -38,6 +38,7 @@
             "height": 64,
             "width": 720,
             "input_channel": ["intensity", "range"],
+            "preload": true,
             "azi_res": 0.5,
             "azi_min": -180.0,
             "azi_max": 180.0,

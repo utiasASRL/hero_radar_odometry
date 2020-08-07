@@ -1,5 +1,5 @@
 {
-    "session_name": "f2f_gt_consist",
+    "session_name": "f2f_gt_consist_3",
     "previous_session": "",
 
     "networks": {
@@ -38,6 +38,7 @@
             "height": 64,
             "width": 720,
             "input_channel": ["intensity", "range"],
+            "preload": true,
             "azi_res": 0.5,
             "azi_min": -180.0,
             "azi_max": 180.0,
