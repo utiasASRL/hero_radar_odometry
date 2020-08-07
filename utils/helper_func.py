@@ -4,8 +4,11 @@ import sys
 
 # third-party imports
 import numpy as np
+import torch
+import math
 
 # project imports
+from utils.utils import T_inv
 
 def pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
            ele_res, ele_min, ele_max, input_channel,
@@ -153,3 +156,35 @@ def pc2img_slow(pc, config, rand_T=None):
         else:
             ignore_num += 1
     return vertex_img
+
+def rad2deg(radian):
+    return radian / torch.Tensor([math.pi]).cuda() * 180.0
+
+def compute_2D_from_3D(points, config):
+    '''
+    Compute u, v 2D coordinates from 3D points
+    :param points: Bx3xN
+    :param config:
+    :return: Bx2xN
+    '''
+    # load image configs
+    azi_res = config["dataset"]["images"]["azi_res"]
+    azi_min = config["dataset"]["images"]["azi_min"]
+    azi_max = config["dataset"]["images"]["azi_max"]
+    ele_res = config["dataset"]["images"]["ele_res"]
+    ele_min = config["dataset"]["images"]["ele_min"]
+    ele_max = config["dataset"]["images"]["ele_max"]
+
+    # project to 2D
+    horizontal_pix = np.int32((azi_max - azi_min) / azi_res)
+    vertical_pix = np.int32((ele_max - ele_min) / ele_res)
+    azimuth = rad2deg(torch.atan2(points[:,1,:], points[:,0,:]))
+    xy = torch.sqrt(points[:,0,:] ** 2 + points[:,1,:] ** 2)
+    elevation = rad2deg(torch.atan2(points[:,2,:], xy))
+    u = ((0.5 * (azi_max - azi_min) - azimuth) / azi_res)
+    u[u == horizontal_pix] = 0
+    v = ((ele_max - elevation) / ele_res)
+    v[v == vertical_pix] = 0
+    points_2D = torch.cat((u.unsqueeze(-1), v.unsqueeze(-1)), dim=2)
+
+    return points_2D

@@ -74,16 +74,20 @@ class Trainer():
                 t += [time.time()]
 
                 # TODO: backwards prop
+                loss['LOSS'].backward()
+
+                # TODO: optimizer step
+                self.optimizer.step()
 
                 # Console print (only one per second)
                 if (t[-1] - last_display) > 1.0:
                     last_display = t[-1]
                     sys.stdout = self.stdout_orig
-                    self.model.print_loss(loss)
+                    self.model.print_loss(loss, epoch, i_batch)
 
                 # File print (every time)
                 sys.stdout = self.stdout_file
-                self.model.print_loss(loss)
+                self.model.print_loss(loss, epoch, i_batch)
                 self.stdout_file.flush()
 
         return loss
@@ -116,7 +120,7 @@ class Trainer():
 
             self.train_epoch(epoch)
 
-            if self.config['validate']['on']:
+            if self.config['trainer']['validate']['on']:
                 # check for validation set and early stopping
                 val_loss = self.valid_epoch(epoch)
                 stop_flag, loss_decrease_flag, self.min_val_loss = early_stopping.check_stop(
@@ -126,6 +130,7 @@ class Trainer():
                     break
             else:
                 # save out every epoch if no validation
+                val_loss = None
                 torch.save({'epoch': epoch,
                             'model_state_dict': self.model.state_dict(),
                             'optimizer_state_dict': self.optimizer.state_dict(),

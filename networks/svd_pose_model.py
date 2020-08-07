@@ -1,14 +1,17 @@
 import random
 import time
+import os
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
 from PIL import Image
+import numpy as np
 
 from utils.lie_algebra import se3_inv, se3_log, se3_exp
 from utils.utils import zn_desc, T_inv
+from utils.helper_func import compute_2D_from_3D
 from networks.unet_block import UNetBlock
 from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
@@ -54,7 +57,10 @@ class SVDPoseModel(nn.Module):
         detector_scores, weight_scores, descs = self.unet_block(images)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
-        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, descs, detector_scores, weight_scores)
+        keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img,
+                                                                                              descs,
+                                                                                              detector_scores,
+                                                                                              weight_scores)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
@@ -62,6 +68,10 @@ class SVDPoseModel(nn.Module):
                                                                                  keypoint_weights[1::self.window_size],
                                                                                  keypoint_descs[::self.window_size],
                                                                                  keypoint_descs[1::self.window_size])
+
+        # Compute 2D keypoints from 3D pseudo coordinates
+        pseudo_2D = compute_2D_from_3D(pseudo_coords, self.config)
+        # print(pseudo_2D.shape)
 
         # Normalize src desc based on match type
         if self.match_type == 'zncc':
@@ -95,14 +105,57 @@ class SVDPoseModel(nn.Module):
         loss_dict = {}
         loss = 0
 
+        ##########
         # SVD loss
+        ##########
         svd_loss = self.SVD_loss(R_src_tgt, R_pred, t_src_tgt, t_pred)
-        loss += svd_loss
+        # loss += svd_loss
+        loss_dict['SVD_LOSS'] = svd_loss
 
-        loss_dict['SVD_LOSS'] = svd_loss.item()
-        loss_dict['LOSS'] = loss.item()
+        ###############
+        # Keypoint loss
+        ###############
+        pseudo_gt_coords = torch.matmul(R_src_tgt, keypoint_coords[::self.window_size]) + t_src_tgt.unsqueeze(-1)
+
+        # remove keypoints that fall on gap pixels
+        no_gap = True
+        if no_gap:
+            valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
+        keypoint_loss = self.Keypoint_loss(pseudo_coords, pseudo_gt_coords, valid_idx=valid_idx)
+
+        result_path = 'results/' + self.config['session_name']
+        if not os.path.exists('{}/keypoint_coords.npy'.format(result_path)):
+            np.save('{}/T_i_src.npy'.format(result_path), T_i_src.detach().cpu().numpy())
+            np.save('{}/T_i_tgt.npy'.format(result_path), T_i_tgt.detach().cpu().numpy())
+            np.save('{}/keypoint_coords.npy'.format(result_path), keypoint_coords.detach().cpu().numpy())
+            np.save('{}/pseudo_gt_coords.npy'.format(result_path), pseudo_gt_coords.detach().cpu().numpy())
+            np.save('{}/pseudo_coords.npy'.format(result_path), pseudo_coords.detach().cpu().numpy())
+            np.save('{}/geometry_img.npy'.format(result_path), geometry_img.detach().cpu().numpy())
+            np.save('{}/images.npy'.format(result_path), images.detach().cpu().numpy())
+            np.save('{}/T_iv.npy'.format(result_path), T_iv.detach().cpu().numpy())
+            np.save('{}/valid_idx.npy'.format(result_path), valid_idx.detach().cpu().numpy())
+
+        loss += keypoint_loss
+        loss_dict['KEY_LOSS'] = keypoint_loss
+
+        loss_dict['LOSS'] = loss
 
         return loss_dict
+
+    def Keypoint_loss(self, src, target, valid_idx=None):
+        '''
+        Compute mean squared loss for keypoint pairs
+        :param src: source points Bx3xN
+        :param target: target points Bx3xN
+        :return:
+        '''
+        e = (src - target) # Bx3xN
+
+        if valid_idx is None:
+            return torch.mean(torch.sum(e ** 2, dim=1))
+        else:
+            return torch.mean(torch.sum(e ** 2, dim=1)[valid_idx])
+
 
     def SVD_loss(self, R, R_pred, t, t_pred, rel_w=10.0):
         '''
@@ -123,7 +176,10 @@ class SVDPoseModel(nn.Module):
         svd_loss = R_loss + t_loss
         return svd_loss
 
-    def print_loss(self, loss):
-        message = 'LOSS={:.6f} SL={:.6f}'.format(loss['LOSS'],
-                                               loss['SVD_LOSS'])
+    def print_loss(self, loss, epoch, iter):
+        message = 'e{:03d}-i{:04d} => LOSS={:.6f} SL={:.6f} KL={:.6f}'.format(epoch,
+                                                                              iter,
+                                                                              loss['LOSS'].item(),
+                                                                              loss['SVD_LOSS'].item(),
+                                                                              loss['KEY_LOSS'].item())
         print(message)

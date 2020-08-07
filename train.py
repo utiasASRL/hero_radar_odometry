@@ -15,11 +15,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/sample.json', type=str,
                       help='config file path (default: config/sample.json)')
+    parser.add_argument('--session_name', type=str, default='session', metavar='N',
+                        help='Session name')
 
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = json.load(f)
+
+    # set session name depending on input arg
+    config["session_name"] = args.session_name
 
     # dataloader setup
     train_dataset = KittiDataset(config, set='training')

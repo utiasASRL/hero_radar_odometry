@@ -31,7 +31,7 @@ class KeypointBlock(nn.Module):
         self.register_buffer('v_coords', v_coords)
         self.register_buffer('u_coords', u_coords)
 
-    def forward(self, geometry_img, descriptors, detector_scores, weight_scores):
+    def forward(self, geometry_img, descriptors, detector_scores, weight_scores, no_gap=True):
         """
         forward function for this block
         :param geometry_img: batch image, contains 3D coordinates of each pixel as channel entries
@@ -50,7 +50,11 @@ class KeypointBlock(nn.Module):
                             stride=(self.patch_height, self.patch_width))      # B x num_patch_elements x num_patches
         u_patches = F.unfold(self.u_coords.expand(N, 1, self.height, self.width),
                             kernel_size=(self.patch_height, self.patch_width),
-                            stride=(self.patch_height, self.patch_width))      # B x num_patch_elements x num_patches
+                            stride=(self.patch_height, self.patch_width))
+
+        if no_gap:
+            valid_idx = torch.sum(geometry_img ** 2, dim=1, keepdim=True) != 0
+            detector_scores[valid_idx] = -20
 
         detector_patches = F.unfold(detector_scores, kernel_size=(self.patch_height, self.patch_width),
                                     stride=(self.patch_height, self.patch_width))  # B x num_patch_elements x num_patches
@@ -90,7 +94,7 @@ class KeypointBlock(nn.Module):
         keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')
         keypoint_weights = keypoint_weights.reshape(N, 1, keypoints_2D.size(1)) # B x 1 x num_patches
 
-        return keypoint_coords, keypoint_descs, keypoint_weights
+        return keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights
 
     def normalize_coords(self, coords_2D, batch_size, width, height):
         """
