@@ -14,7 +14,9 @@
         "keypoint_block": {
             "patch_height": 8,
             "patch_width": 8,
-            "softmax_temp": 1.0
+            "softmax_temp": 1.0,
+            "grid_sample": true,
+            "align_corners": true
         },
         "keypoint_loss": {
             "error_thresh": 4.0

@@ -57,60 +57,63 @@ class KeypointBlock(nn.Module):
 
         softmax_attention = F.softmax(detector_patches/self.temperature, dim=1)  # B x num_patch_elements x num_patches
 
-        # expected_v = torch.sum(v_patches*softmax_attention, dim=1)  # B x num_patches
-        # expected_u = torch.sum(u_patches*softmax_attention, dim=1)
-        # keypoints_2D = torch.stack([expected_u, expected_v], dim=2)  # B x num_patches x 2
-        #
-        # # normalize 2d keypoints
-        # norm_keypoints2D = self.normalize_coords(keypoints_2D, N, self.width, self.height).unsqueeze(1)
-        #
-        # x_windows = F.unfold(geometry_img[:, 0:1, :, :],
-        #                      kernel_size=(self.patch_height, self.patch_width),
-        #                      stride=(self.patch_height, self.patch_width))
-        # y_windows = F.unfold(geometry_img[:, 1:2, :, :],
-        #                      kernel_size=(self.patch_height, self.patch_width),
-        #                      stride=(self.patch_height, self.patch_width))
-        # z_windows = F.unfold(geometry_img[:, 2:3, :, :],
-        #                      kernel_size=(self.patch_height, self.patch_width),
-        #                      stride=(self.patch_height, self.patch_width))
-        #
-        # # compute 3D coordinates
-        # expected_x = torch.sum(x_windows * softmax_attention, dim=1)    # B x num_patches
-        # expected_y = torch.sum(y_windows * softmax_attention, dim=1)    # B x num_patches
-        # expected_z = torch.sum(z_windows * softmax_attention, dim=1)    # B x num_patches
-        # keypoint_coords = torch.stack([expected_x, expected_y, expected_z], dim=2)  # B x num_patches x 3
-        # keypoint_coords = keypoint_coords.transpose(1, 2) # B x 3 x num_patches
-        #
-        # # compute keypoint descriptors
-        # keypoint_descs = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear')
-        # keypoint_descs = keypoint_descs.reshape(N, descriptors.size(1), keypoints_2D.size(1))
-        # keypoint_descs = F.normalize(keypoint_descs, dim=1) # B x C x num_patches
-        #
-        # # compute keypoint weight scores
-        # keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')
-        # keypoint_weights = keypoint_weights.reshape(N, 1, keypoints_2D.size(1)) # B x 1 x num_patches
+        if self.config['networks']['keypoint_block']['grid_sample']:
+            expected_v = torch.sum(v_patches*softmax_attention, dim=1)  # B x num_patches
+            expected_u = torch.sum(u_patches*softmax_attention, dim=1)
+            keypoints_2D = torch.stack([expected_u, expected_v], dim=2)  # B x num_patches x 2
 
-        # all at once
-        softmax_attention = softmax_attention.unsqueeze(1)
-        xyz_windows = F.unfold(geometry_img,
-                               kernel_size=(self.patch_height, self.patch_width),
-                               stride=(self.patch_height, self.patch_width))
-        xyz_windows = xyz_windows.view(N, geometry_img.size(1), self.patch_height*self.patch_width, xyz_windows.size(2))
-        # xyz_windows: N x C x num_ele_in_patch x num_patches
-        keypoint_coords = torch.sum(xyz_windows * softmax_attention, dim=2)    # B x 3 x num_patches
+            # normalize 2d keypoints
+            norm_keypoints2D = self.normalize_coords(keypoints_2D, N, self.width, self.height).unsqueeze(1)
 
-        desc_windows = F.unfold(descriptors,
-                                kernel_size=(self.patch_height, self.patch_width),
-                                stride=(self.patch_height, self.patch_width))
-        desc_windows = desc_windows.view(N, descriptors.size(1), self.patch_height*self.patch_width, desc_windows.size(2))
-        # N x C x num_ele_in_patch x num_patches
-        keypoint_descs = torch.sum(desc_windows * softmax_attention, dim=2)    # B x C x num_patches
+            x_windows = F.unfold(geometry_img[:, 0:1, :, :],
+                                 kernel_size=(self.patch_height, self.patch_width),
+                                 stride=(self.patch_height, self.patch_width))
+            y_windows = F.unfold(geometry_img[:, 1:2, :, :],
+                                 kernel_size=(self.patch_height, self.patch_width),
+                                 stride=(self.patch_height, self.patch_width))
+            z_windows = F.unfold(geometry_img[:, 2:3, :, :],
+                                 kernel_size=(self.patch_height, self.patch_width),
+                                 stride=(self.patch_height, self.patch_width))
 
-        weight_windows = F.unfold(weight_scores,
-                                  kernel_size=(self.patch_height, self.patch_width),
-                                  stride=(self.patch_height, self.patch_width))
-        weight_windows = weight_windows.view(N, weight_scores.size(1), self.patch_height*self.patch_width, weight_windows.size(2))
-        keypoint_weights = torch.sum(weight_windows * softmax_attention, dim=2)    # B x C x num_patches
+            # compute 3D coordinates
+            expected_x = torch.sum(x_windows * softmax_attention, dim=1)    # B x num_patches
+            expected_y = torch.sum(y_windows * softmax_attention, dim=1)    # B x num_patches
+            expected_z = torch.sum(z_windows * softmax_attention, dim=1)    # B x num_patches
+            keypoint_coords = torch.stack([expected_x, expected_y, expected_z], dim=2)  # B x num_patches x 3
+            keypoint_coords = keypoint_coords.transpose(1, 2) # B x 3 x num_patches
+
+            # compute keypoint descriptors
+            keypoint_descs = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear',
+                                           align_corners=self.config['networks']['keypoint_block']['align_corners'])
+            keypoint_descs = keypoint_descs.reshape(N, descriptors.size(1), keypoints_2D.size(1))
+            keypoint_descs = F.normalize(keypoint_descs, dim=1) # B x C x num_patches
+
+            # compute keypoint weight scores
+            keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear',
+                                             align_corners=self.config['networks']['keypoint_block']['align_corners'])
+            keypoint_weights = keypoint_weights.reshape(N, 1, keypoints_2D.size(1)) # B x 1 x num_patches
+        else:
+            # all at once
+            softmax_attention = softmax_attention.unsqueeze(1)
+            xyz_windows = F.unfold(geometry_img,
+                                   kernel_size=(self.patch_height, self.patch_width),
+                                   stride=(self.patch_height, self.patch_width))
+            xyz_windows = xyz_windows.view(N, geometry_img.size(1), self.patch_height*self.patch_width, xyz_windows.size(2))
+            # xyz_windows: N x C x num_ele_in_patch x num_patches
+            keypoint_coords = torch.sum(xyz_windows * softmax_attention, dim=2)    # B x 3 x num_patches
+
+            desc_windows = F.unfold(descriptors,
+                                    kernel_size=(self.patch_height, self.patch_width),
+                                    stride=(self.patch_height, self.patch_width))
+            desc_windows = desc_windows.view(N, descriptors.size(1), self.patch_height*self.patch_width, desc_windows.size(2))
+            # N x C x num_ele_in_patch x num_patches
+            keypoint_descs = torch.sum(desc_windows * softmax_attention, dim=2)    # B x C x num_patches
+
+            weight_windows = F.unfold(weight_scores,
+                                      kernel_size=(self.patch_height, self.patch_width),
+                                      stride=(self.patch_height, self.patch_width))
+            weight_windows = weight_windows.view(N, weight_scores.size(1), self.patch_height*self.patch_width, weight_windows.size(2))
+            keypoint_weights = torch.sum(weight_windows * softmax_attention, dim=2)    # B x C x num_patches
 
         return keypoint_coords, keypoint_descs, keypoint_weights
 
