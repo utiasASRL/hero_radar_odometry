@@ -55,7 +55,6 @@ if __name__ == '__main__':
 
     # load checkpoint
     previous_training_path = config['previous_session']
-    # chkp_path = os.path.join('results', previous_training_path, 'checkpoints')
     chosen_chkp = 'chkp.tar'
     chosen_chkp = os.path.join('results', previous_training_path, chosen_chkp)
     checkpoint = torch.load(chosen_chkp)

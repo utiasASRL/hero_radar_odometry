@@ -1,5 +1,5 @@
 {
-    "session_name": "f2f_gt_consist_3",
+    "session_name": "f2f_gt_int_0",
     "previous_session": "",
 
     "networks": {
@@ -37,7 +37,7 @@
         "images": {
             "height": 64,
             "width": 720,
-            "input_channel": ["intensity", "range"],
+            "input_channel": ["intensity"],
             "preload": true,
             "azi_res": 0.5,
             "azi_min": -180.0,
@@ -50,7 +50,7 @@
     },
 
     "train_loader": {
-        "batch_size": 10,
+        "batch_size": 64,
         "window_size": 2,
         "num_workers": 10
     },
@@ -64,7 +64,7 @@
     "trainer": {
         "max_epochs": 200,
         "validate": {
-            "on": false,
+            "on": true,
             "patience": 7
         }
     }

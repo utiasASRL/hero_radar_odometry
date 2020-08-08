@@ -91,7 +91,7 @@ class Trainer():
                 self.stdout_file.flush()
 
                 with open(os.path.join(self.result_path, 'train_loss.txt'), "a") as file:
-                        message = '{:d},{:d}{:.6f}\n'
+                        message = '{:d},{:d},{:.6f}\n'
                         file.write(message.format(epoch, i_batch, loss))
 
 

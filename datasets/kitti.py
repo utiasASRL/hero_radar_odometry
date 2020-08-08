@@ -129,7 +129,7 @@ class KittiDataset(Dataset):
             if "intensity" in self.config['dataset']['images']['input_channel']:
                 input_images.append(image[3:4, :, :])
             if "range" in self.config['dataset']['images']['input_channel']:
-                input_images.append(image[4:5, :, :])
+                input_images.append(image[4:5, :, :]/100.0)
             input_img = np.vstack(input_images)
         else:
             # Path of points and labels

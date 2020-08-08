@@ -1,6 +1,6 @@
 {
-    "session_name": "f2f_gt_1",
-    "previous_session": "f2f_gt_consist",
+    "session_name": "eval",
+    "previous_session": "f2f_gt_consist_4",
 
     "networks": {
         "match_type": "dp",

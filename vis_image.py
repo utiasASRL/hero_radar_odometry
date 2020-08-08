@@ -36,10 +36,14 @@ if __name__ == '__main__':
 
     # Initialize datasets
     train_dataset = KittiDataset(config, set='training')
-    train_sampler = RandomWindowBatchSampler(batch_size=1,
-                                             window_size=2,
-                                             seq_len=train_dataset.seq_len,
-                                             drop_last=True)
+    # train_sampler = RandomWindowBatchSampler(batch_size=1,
+    #                                          window_size=2,
+    #                                          seq_len=train_dataset.seq_len,
+    #                                          drop_last=True)
+    train_sampler = WindowBatchSampler(batch_size=1,
+                                       window_size=2,
+                                       seq_len=train_dataset.seq_len,
+                                       drop_last=True)
 
 
     # Initialize the dataloader
@@ -52,11 +56,15 @@ if __name__ == '__main__':
     device = torch.device("cuda:0")
 
     # load checkpoint
-    previous_training_path = 'f2f_gt_1'
-    # chkp_path = os.path.join('results', previous_training_path, 'checkpoints')
+    previous_training_path = config['previous_session']
     chosen_chkp = 'chkp.tar'
     chosen_chkp = os.path.join('results', previous_training_path, chosen_chkp)
     checkpoint = torch.load(chosen_chkp)
+
+    # set output path
+    output_path = os.path.join('plot', previous_training_path)
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
 
     # network
     net = F2FPoseModel(config,
@@ -84,25 +92,28 @@ if __name__ == '__main__':
         batch_id = 0
         # intensity/range image
         intensity_im = images[batch_id, 0, :, :].detach().cpu().numpy()
-        range_im = images[batch_id, 1, :, :].detach().cpu().numpy()/100.0
+        range_im = images[batch_id, 1, :, :].detach().cpu().numpy()
         ir_im = np.concatenate([intensity_im, range_im], axis=0)
-        plt.imsave('intensity_range{}.png'.format(batch_id), ir_im)
+        # plt.imsave('{}/intensity_range{}.png'.format(output_path, i_batch), ir_im)
 
         # intensity + score map
         # intensity_im = sample_batch['image'][batch_id, 4, :, :].detach().numpy()
         score_im = np.exp(weight_scores[batch_id, 0, :, :].detach().cpu().numpy())
+        mind = np.min(score_im)
+        maxd = np.max(score_im)
+        score_im = (score_im-mind)/(maxd-mind)
         # score_im = score_im/np.max(score_im)
         # out = np.concatenate([intensity_im, score_im], axis=0)
-        plt.imsave('weight{}.png'.format(batch_id), score_im)
+        # plt.imsave('{}/weight{}.png'.format(output_path,i_batch), score_im)
 
         # detector
         detect_im = detector_scores[batch_id, 0, :, :].detach().cpu().numpy()
         mind = np.min(detect_im)
         maxd = np.max(detect_im)
         detect_im = (detect_im-mind)/(maxd-mind)
-        out = np.concatenate([ir_im, detect_im], axis=0)
-        plt.imsave('detect{}.png'.format(batch_id), out)
-        a = 2
+        out = np.concatenate([ir_im, detect_im, score_im], axis=0)
+        plt.imsave('{}/detect_weight{}.png'.format(output_path,i_batch), out)
+        print(i_batch)
 
 
         # loss
