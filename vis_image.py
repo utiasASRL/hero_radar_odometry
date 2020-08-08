@@ -92,8 +92,9 @@ if __name__ == '__main__':
         batch_id = 0
         # intensity/range image
         intensity_im = images[batch_id, 0, :, :].detach().cpu().numpy()
-        range_im = images[batch_id, 1, :, :].detach().cpu().numpy()
-        ir_im = np.concatenate([intensity_im, range_im], axis=0)
+        # range_im = images[batch_id, 1, :, :].detach().cpu().numpy()
+        # ir_im = np.concatenate([intensity_im, range_im], axis=0)
+        ir_im = intensity_im
         # plt.imsave('{}/intensity_range{}.png'.format(output_path, i_batch), ir_im)
 
         # intensity + score map

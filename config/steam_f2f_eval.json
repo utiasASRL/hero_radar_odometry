@@ -1,6 +1,6 @@
 {
     "session_name": "eval",
-    "previous_session": "f2f_gt_consist_4",
+    "previous_session": "f2f_gt_int_0",
 
     "networks": {
         "match_type": "dp",
@@ -37,7 +37,7 @@
         "images": {
             "height": 64,
             "width": 720,
-            "input_channel": ["intensity", "range"],
+            "input_channel": ["intensity"],
             "preload": true,
             "azi_res": 0.5,
             "azi_min": -180.0,
