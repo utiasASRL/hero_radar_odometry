@@ -23,8 +23,12 @@ class F2FPoseModel(nn.Module):
         self.match_type = config["networks"]["match_type"] # zncc, l2, dp
 
         # network arch
-        # self.unet_block = UNetBlock(self.config)
-        self.unet_block = SuperpointBlock(self.config)
+        if self.config['networks']['base_net'] == 'unet':
+            self.unet_block = UNetBlock(self.config)
+        elif self.config['networks']['base_net'] == 'super':
+            self.unet_block = SuperpointBlock(self.config)
+        else:
+            assert False, "Base network should be unet or super"
 
         self.keypoint_block = KeypointBlock(self.config, window_size, batch_size)
 
@@ -100,6 +104,7 @@ class F2FPoseModel(nn.Module):
 
             # get weights
             w = weights[batch_i, :, nr_ids].transpose(0, 1)
+            Wmat, d = self.convertWeightMat(w)
 
             # get gt poses
             src_id = 2*batch_i
@@ -115,7 +120,9 @@ class F2FPoseModel(nn.Module):
             mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
             points1 = points1[mask_ind, :]
             points2 = points2[mask_ind, :]
-            w = w[mask_ind, :]
+            # w = w[mask_ind, :]
+            Wmat = Wmat[mask_ind, :, :]
+            d = d[mask_ind, :]
 
             # error rejection
             points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
@@ -129,14 +136,17 @@ class F2FPoseModel(nn.Module):
 
             loss += self.weighted_mse_loss(points1_in_2[ids, :],
                                            points2[ids, :],
-                                           w[ids, :])
+                                           Wmat[ids, :, :])
 
-            loss -= torch.mean(3*w[ids, :])
+            # loss -= torch.mean(3*w[ids, :])
+            loss -= torch.mean(torch.sum(d[ids, :], 1))
 
         return loss
 
     def weighted_mse_loss(self, data, target, weight):
-        return 3.0*torch.mean(torch.exp(weight) * (data - target) ** 2)
+        # return 3.0*torch.mean(torch.exp(weight) * (data - target) ** 2)
+        e = (data - target).unsqueeze(-1)
+        return torch.mean(e.transpose(1, 2)@weight@e)
 
     def print_loss(self, epoch, iter, loss):
         message = '{:d},{:d},{:.6f}'.format(epoch, iter, loss)
@@ -180,3 +190,30 @@ class F2FPoseModel(nn.Module):
                                                                                  keypoint_descs[1::self.window_size])
 
         return keypoint_coords[::self.window_size], pseudo_coords, keypoint_weights[::self.window_size]
+
+    def convertWeightMat(self, w):
+        if w.size(1) == 1:
+            # scalar weight
+            A = torch.zeros(w.size(0), 9, device=w.device)
+            A[:, (0, 4, 8)] = torch.exp(w)
+            A = A.reshape((-1, 3, 3))
+
+            d = torch.zeros(w.size(0), 3, device=w.device)
+            d += w
+        elif w.size(1) == 6:
+            # 3x3 matrix
+            L = torch.zeros(w.size(0), 9, device=w.device)
+            L[:, (0, 4, 8)] = 1
+            L[:, (3, 6, 7)] = w[:, :3]
+            L = L.reshape((-1, 3, 3))
+
+            D = torch.zeros(w.size(0), 9, device=w.device)
+            D[:, (0, 4, 8)] = torch.exp(w[:, 3:])
+            D = D.reshape((-1, 3, 3))
+
+            A = L@D@L.transpose(1, 2)
+            d = w[:, 3:]
+        else:
+            assert False, "Weight should be dim 1 or 6"
+
+        return A, d

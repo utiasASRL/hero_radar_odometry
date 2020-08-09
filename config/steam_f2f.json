@@ -1,12 +1,13 @@
 {
-    "session_name": "f2f_gt_int_1",
+    "session_name": "temp",
     "previous_session": "",
 
     "networks": {
         "match_type": "dp",
         "dense_match": false,
+        "base_net": "super",
         "unet": {
-            "n_weight_score": 1,
+            "n_weight_score": 6,
             "bilinear": true,
             "first_feature_dimension": 8,
             "depth": 4
@@ -15,7 +16,7 @@
             "patch_height": 8,
             "patch_width": 8,
             "softmax_temp": 1.0,
-            "grid_sample": true,
+            "grid_sample": false,
             "align_corners": true
         },
         "keypoint_loss": {
@@ -25,7 +26,7 @@
 
     "optimizer": {
         "type": "Adam",
-        "lr": 0.0001,
+        "lr": 0.001,
         "weight_decay": 0
     },
 
@@ -34,7 +35,7 @@
         "seq": {
             "train": ["00", "01", "02", "03", "04", "05", "06", "07"],
             "val": ["08"],
-            "test": ["09", "10"]
+            "test": ["00", "09", "10"]
         },
         "images": {
             "height": 64,
@@ -53,20 +54,20 @@
 
     "train_loader": {
         "batch_size": 64,
-        "window_size": 2,
+        "window_size": 5,
         "num_workers": 10
     },
 
     "test_loader": {
-        "batch_size": 2,
+        "batch_size": 1,
         "window_size": 2,
-        "num_workers": 2
+        "num_workers": 10
     },
 
     "trainer": {
         "max_epochs": 200,
         "validate": {
-            "on": true,
+            "on": false,
             "patience": 7
         }
     }

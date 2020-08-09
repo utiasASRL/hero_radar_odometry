@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
 
-from networks.layers import DoubleConv, OutConv, Down, Up
+from networks.layers import DoubleConv, OutConv, Down, Up, SingleConv
 # from visualization.plots import Plotting
 
 class SuperpointBlock(nn.Module):
@@ -25,21 +25,23 @@ class SuperpointBlock(nn.Module):
         self.n_channels += 1 if 'intensity' in self.input_channel else 0
         self.n_channels += 1 if 'range' in self.input_channel else 0
 
+        self.n_weight = config['networks']['unet']['n_weight_score']
+
         # encoder
         self.inc = DoubleConv(self.n_channels, 64)    # 512 x 384 (out size after layer)
-        self.down1 = Down(64, 64)                # B x 64 x 256 x 192
-        self.down2 = Down(64, 128)               # B x 128 x 128 x 96
-        self.down3 = Down(128, 128)              # B x 256 x 64 x 48 (H/8 x W/8)
+        self.down1 = Down(64, 128)                # B x 64 x 256 x 192
+        self.down2 = Down(128, 256)               # B x 128 x 128 x 96
+        self.down3 = Down(256, 512)              # B x 256 x 64 x 48 (H/8 x W/8)
 
         # decoders
-        self.decode_detector = DoubleConv(128, 256)
-        self.out_detector = OutConv(256, 64)
+        self.decode_detector = SingleConv(512, 512)
+        self.out_detector = OutConv(512, 64)
 
-        self.decode_weight = DoubleConv(128, 256)
-        self.out_weight = OutConv(256, 64)
+        self.decode_weight = SingleConv(512, 512)
+        self.out_weight = OutConv(512, 64*self.n_weight)
 
-        self.decode_desc = DoubleConv(128, 256)
-        self.out_desc = OutConv(256, 256)
+        self.decode_desc = SingleConv(512, 512)
+        self.out_desc = OutConv(512, 256)
 
     def forward(self, x):
         batch_size, _, height, width = x.size()

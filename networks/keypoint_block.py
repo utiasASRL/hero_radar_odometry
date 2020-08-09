@@ -91,7 +91,7 @@ class KeypointBlock(nn.Module):
             # compute keypoint weight scores
             keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear',
                                              align_corners=self.config['networks']['keypoint_block']['align_corners'])
-            keypoint_weights = keypoint_weights.reshape(N, 1, keypoints_2D.size(1)) # B x 1 x num_patches
+            keypoint_weights = keypoint_weights.reshape(N, weight_scores.size(1), keypoints_2D.size(1)) # B x 1 x num_patches
         else:
             # all at once
             softmax_attention = softmax_attention.unsqueeze(1)

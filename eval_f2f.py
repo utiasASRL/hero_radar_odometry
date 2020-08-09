@@ -28,7 +28,7 @@ import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/overfit16_soft_xyz.json', type=str,
+    parser.add_argument('--config', default='config/super00_ir_pair.json', type=str,
                       help='config file path (default: config/steam_f2f.json)')
 
     args = parser.parse_args()
@@ -88,6 +88,7 @@ if __name__ == '__main__':
 
         # get weights
         w = weights[0, :, nr_ids].transpose(0, 1)
+        Wmat, d = net.convertWeightMat(w)
 
         # match consistency
         w12 = net.softmax_matcher_block.match_vals[0, nr_ids, :] # N x M
@@ -98,15 +99,16 @@ if __name__ == '__main__':
         mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
         points1 = points1[mask_ind, :]
         points2 = points2[mask_ind, :]
-        w = w[mask_ind, :]
+        # w = w[mask_ind, :]
+        Wmat = Wmat[mask_ind, :, :]
 
         points2 = points2[:, :].detach().cpu().numpy()
         points1 = points1[:, :].detach().cpu().numpy()
 
-        D = torch.zeros(w.size(0), 9, device=w.device)
-        D[:, (0, 4, 8)] = torch.exp(w)
-        D = D.reshape((-1, 3, 3))
-        D = D.detach().cpu().numpy()
+        # D = torch.zeros(w.size(0), 9, device=w.device)
+        # D[:, (0, 4, 8)] = torch.exp(w)
+        # D = D.reshape((-1, 3, 3))
+        D = Wmat.detach().cpu().numpy()
 
         # steam
         T_21_temp = np.zeros((13, 4, 4), dtype=np.float32)

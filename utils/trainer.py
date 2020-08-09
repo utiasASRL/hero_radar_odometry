@@ -3,6 +3,7 @@ import sys
 import time
 import torch
 import numpy as np
+import json
 
 from utils.early_stopping import EarlyStopping
 
@@ -41,6 +42,11 @@ class Trainer():
         if config['previous_session'] != "":
             resume_path = "{}/{}/{}".format('results', config['previous_session'], 'chkp.tar')
             self.resume_checkpoint(resume_path)
+        else:
+            # save config to result path
+            config['previous_session'] = config['session_name']
+            with open("{}/config.json".format(self.result_path), "w") as json_outfile:
+                json.dump(config, json_outfile, indent=4)
 
         # data loaders
         self.train_loader = train_loader
