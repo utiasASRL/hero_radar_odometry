@@ -64,8 +64,8 @@ class RandomWindowPairBatchSampler(Sampler):
         for idx in self.sampler:
 
             # batch += [idx + k for k in range(self.window_size)]
-            batch += idx
-            batch += idx + int(torch.randint(1, self.window_size, (1,)))
+            batch += [idx]
+            batch += [idx + int(torch.randint(1, self.window_size, (1,)))]
             if len(batch) == self.batch_size*2:
                 yield batch
                 batch = []
