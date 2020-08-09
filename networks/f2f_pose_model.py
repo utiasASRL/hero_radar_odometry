@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from utils.utils import zn_desc, T_inv
 from networks.unet_block import UNetBlock
+from networks.superpoint_block import SuperpointBlock
 from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
 from networks.svd_block import SVDBlock
@@ -22,7 +23,8 @@ class F2FPoseModel(nn.Module):
         self.match_type = config["networks"]["match_type"] # zncc, l2, dp
 
         # network arch
-        self.unet_block = UNetBlock(self.config)
+        # self.unet_block = UNetBlock(self.config)
+        self.unet_block = SuperpointBlock(self.config)
 
         self.keypoint_block = KeypointBlock(self.config, window_size, batch_size)
 
