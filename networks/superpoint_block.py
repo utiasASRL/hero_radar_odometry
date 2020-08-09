@@ -55,7 +55,7 @@ class SuperpointBlock(nn.Module):
 
         desc = self.decode_desc(x4)                                            # B x 256 x H/8 x W/8
         desc = self.out_desc(desc)
-        desc = F.interpolate(desc, size=(height, width), mode='bicubic')      # B x 256 x H x W
+        desc = F.interpolate(desc, size=(height, width), mode='bicubic', align_corners=True)      # B x 256 x H x W
 
         weight = self.decode_weight(x4)              # B x 64 x H/8 x W/8
         weight = self.out_weight(weight)
