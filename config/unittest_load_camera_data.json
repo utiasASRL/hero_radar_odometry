@@ -1,0 +1,26 @@
+{
+    "session_name": "load_camera_data",
+    "previous_session": "",
+
+    "home_dir": "/home/mgr",
+
+    "dataset": {
+        "data_dir": "/home/mgr/data/kitti/dataset",
+        "seq": {
+            "train": ["00", "01", "02", "03", "04", "05", "06", "07", "10"],
+            "val": ["08"],
+            "test": ["09"]
+        },
+	"sensor": "camera",
+        "images": {
+            "height": 364,
+            "width": 1200
+        }
+    },
+
+    "train_loader": {
+        "batch_size": 3,
+        "window_size": 2,
+        "num_workers": 4
+    }
+}
