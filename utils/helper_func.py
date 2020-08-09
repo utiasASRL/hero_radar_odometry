@@ -180,13 +180,14 @@ def compute_disparity(left_img, right_img):
 
     return disp.reshape(1, height, width)
 
-def load_camera_image(left_img_file, right_img_file, height, width):
+def load_camera_data(left_img_file, right_img_file, height, width):
     
     left_img = Image.open(left_img_file)
     right_img = Image.open(right_img_file)
 
     width_actual, height_actual = left_img.size # PIL image size 
 
+    # Crop images so they are all of the same size.
     if (height_actual > height) or (width_actual > width):
         i = random.randint(0, height_actual - height) 
         j = random.randint(0, width_actual - width)

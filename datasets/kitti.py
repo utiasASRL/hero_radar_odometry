@@ -34,7 +34,7 @@ import torch
 from torch.utils.data import Dataset
 
 # project imports
-from utils.helper_func import load_lidar_image, load_camera_image
+from utils.helper_func import load_lidar_image, load_camera_data
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -46,7 +46,7 @@ from utils.helper_func import load_lidar_image, load_camera_image
 class KittiDataset(Dataset):
     """Class to handle Kitti dataset."""
 
-    def __init__(self, config, set_type='training'):
+    def __init__(self, config, set='training'):
         Dataset.__init__(self)
 
         ##########################
@@ -57,7 +57,7 @@ class KittiDataset(Dataset):
         self.path = config['dataset']['data_dir']
 
         # Training or test set
-        self.set = set_type
+        self.set = set
 
         # Get a list of sequences
         if self.set == 'training':
@@ -153,7 +153,7 @@ class KittiDataset(Dataset):
             cam_right_file = join(seq_path, 'image_3', self.frames[s_ind][f_ind] + '.png')
 
             # Load stereo image pair wirh associated disparity
-            input_image, disparity_image = load_camera_image(cam_left_file, cam_right_file, self.height, self.width)
+            input_image, disparity_image = load_camera_data(cam_left_file, cam_right_file, self.height, self.width)
            
             return {'geometry': disparity_image, 'input': input_image, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
 
