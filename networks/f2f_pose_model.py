@@ -18,7 +18,7 @@ class F2FPoseModel(nn.Module):
 
         # load configs
         self.config = config
-        self.window_size = window_size # TODO this is hard-fixed at the moment
+        self.window_size = 2 # TODO this is hard-fixed at the moment
         self.match_type = config["networks"]["match_type"] # zncc, l2, dp
 
         # network arch
