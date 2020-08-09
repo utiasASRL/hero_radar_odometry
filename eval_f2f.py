@@ -28,7 +28,7 @@ import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/steam_f2f_eval.json', type=str,
+    parser.add_argument('--config', default='config/overfit16_soft_xyz.json', type=str,
                       help='config file path (default: config/steam_f2f.json)')
 
     args = parser.parse_args()
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         config = json.load(f)
 
     # Initialize datasets
-    train_dataset = KittiDataset(config, set='training')
+    train_dataset = KittiDataset(config, set='test')
     train_sampler = WindowBatchSampler(batch_size=1,
                                        window_size=2,
                                        seq_len=train_dataset.seq_len,
@@ -61,8 +61,8 @@ if __name__ == '__main__':
 
     # network
     net = F2FPoseModel(config,
-                         config['train_loader']['window_size'],
-                         config['train_loader']['batch_size'])
+                         config['test_loader']['window_size'],
+                         config['test_loader']['batch_size'])
     net.to(device)
     net.load_state_dict(checkpoint['model_state_dict'])
     net.eval()

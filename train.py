@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     # dataloader setup
     train_dataset = KittiDataset(config, set='training')
-    train_sampler = RandomWindowBatchSampler(batch_size=config["train_loader"]["batch_size"],
+    train_sampler = RandomWindowPairBatchSampler(batch_size=config["train_loader"]["batch_size"],
                                              window_size=config["train_loader"]["window_size"],
                                              seq_len=train_dataset.seq_len,
                                              drop_last=True)
@@ -33,7 +33,7 @@ if __name__ == '__main__':
                               pin_memory=True)
 
     valid_dataset = KittiDataset(config, set='validation')
-    valid_sampler = RandomWindowBatchSampler(batch_size=config["train_loader"]["batch_size"],
+    valid_sampler = RandomWindowPairBatchSampler(batch_size=config["train_loader"]["batch_size"],
                                              window_size=config["train_loader"]["window_size"],
                                              seq_len=valid_dataset.seq_len,
                                              drop_last=True)
