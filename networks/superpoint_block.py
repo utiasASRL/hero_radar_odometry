@@ -29,6 +29,7 @@ class SuperpointBlock(nn.Module):
 
         # encoder
         self.inc = DoubleConv(self.n_channels, 64)    # 512 x 384 (out size after layer)
+        self.inc2 = DoubleConv(64, 64)
         self.down1 = Down(64, 128)                # B x 64 x 256 x 192
         self.down2 = Down(128, 256)               # B x 128 x 128 x 96
         self.down3 = Down(256, 512)              # B x 256 x 64 x 48 (H/8 x W/8)
@@ -47,6 +48,7 @@ class SuperpointBlock(nn.Module):
         batch_size, _, height, width = x.size()
 
         x1 = self.inc(x)
+        x1 = self.inc(x1)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)                           # B x 256 x H/8 x W/8
