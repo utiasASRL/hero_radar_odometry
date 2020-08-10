@@ -73,11 +73,12 @@ class Trainer():
                 loss = self.model(batch_sample)
                 t += [time.time()]
 
-                # TODO: backwards prop
                 loss['LOSS'].backward()
 
-                # TODO: optimizer step
                 self.optimizer.step()
+
+                # save intermediate outputs
+                self.model.save_intermediate_outputs()
 
                 # Console print (only one per second)
                 if (t[-1] - last_display) > 1.0:

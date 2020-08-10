@@ -38,6 +38,14 @@ class SVDPoseModel(nn.Module):
 
         self.svd_block = SVDBlock(self.config)
 
+        # intermediate output
+        self.result_path = 'results/' + self.config['session_name'] + '/intermediate_outputs'
+        self.save_dict = {}
+        self.overwrite_flag = False
+        self.save_names = ['T_i_src', 'T_i_tgt', 'keypoint_coords', 'pseudo_gt_coords',
+                           'pseudo_coords', 'geometry_img', 'images', 'T_iv', 'valid_idx',
+                           'keypoints_2D', 'keypoints_gt_2D']
+
     def forward(self, data):
         '''
         Estimate transform between two frames
@@ -124,6 +132,22 @@ class SVDPoseModel(nn.Module):
             valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
         keypoint_loss = self.Keypoint_loss(pseudo_coords, pseudo_gt_coords, valid_idx=valid_idx, inliers=False)
 
+        # save intermediate outputs
+        if len(self.save_names) > 0:
+            print("Saving {}".format(self.save_names))
+
+            self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
+            self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
+            self.save_dict['keypoint_coords'] = keypoint_coords if 'keypoint_coords' in self.save_names else None
+            self.save_dict['pseudo_gt_coords'] = pseudo_gt_coords if 'pseudo_gt_coords' in self.save_names else None
+            self.save_dict['pseudo_coords'] = pseudo_coords if 'pseudo_coords' in self.save_names else None
+            self.save_dict['geometry_img'] = geometry_img if 'geometry_img' in self.save_names else None
+            self.save_dict['images'] = images if 'images' in self.save_names else None
+            self.save_dict['T_iv'] = T_iv if 'T_iv' in self.save_names else None
+            self.save_dict['valid_idx'] = valid_idx if 'valid_idx' in self.save_names else None
+            self.save_dict['keypoints_2D'] = keypoints_2D if 'keypoints_2D' in self.save_names else None
+            self.save_dict['keypoints_gt_2D'] = keypoints_gt_2D if 'keypoints_gt_2D' in self.save_names else None
+
         # result_path = 'results/' + self.config['session_name']
         # if not os.path.exists('{}/keypoint_coords.npy'.format(result_path)):
         #     np.save('{}/T_i_src.npy'.format(result_path), T_i_src.detach().cpu().numpy())
@@ -192,3 +216,15 @@ class SVDPoseModel(nn.Module):
                                                                               loss['SVD_LOSS'].item(),
                                                                               loss['KEY_LOSS'].item())
         print(message)
+
+    def save_intermediate_outputs(self):
+        if len(self.save_dict) > 0 and not self.overwrite_flag:
+            if not os.path.exists(self.result_path):
+                os.makedirs(self.result_path)
+            for key in self.save_dict.keys():
+                value = self.save_dict[key]
+                if value is not None:
+                    np.save('{}/{}.npy'.format(self.result_path, key), value.detach().cpu().numpy())
+            self.overwrite_flag = True
+        else:
+            print("No intermediate output is saved")
