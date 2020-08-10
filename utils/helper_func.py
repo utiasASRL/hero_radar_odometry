@@ -160,16 +160,21 @@ def pc2img_slow(pc, config, rand_T=None):
 
 def compute_disparity(left_img, right_img):
 
+    # f * b ~= 388, closest dist ~= 388 / 96 = 4.04
+    # The ground is farther than 4.04, but this captures
+    # sign posts that mostly seem to be the closes objects.
+    block_size = 7
     stereo = cv2.StereoSGBM_create(minDisparity = 0,
-                                   numDisparities = 48,
-                                   blockSize = 5,
+                                   numDisparities = 96,
+                                   blockSize = block_size,
                                    preFilterCap = 30,
                                    uniquenessRatio = 20,
-                                   P1 = 200,
-                                   P2 = 800,
+                                   P1 = 8 * (block_size**2),
+                                   P2 = 32 * (block_size**2),
                                    speckleWindowSize = 200,
                                    speckleRange = 1,
                                    disp12MaxDiff = -1)
+
 
     disp = stereo.compute(left_img, right_img)
     disp  = disp.astype(np.float32) / 16.0

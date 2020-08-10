@@ -74,13 +74,13 @@ if __name__ == '__main__':
 
         first_left_img = to_img(stereo_pair_window0[0, :3, :, :]) 
         first_right_img = to_img(stereo_pair_window0[0, 3:, :, :])
-        first_left_img.save('{}/first_left_img.png'.format(results_path), 'png')
-        first_right_img.save('{}/first_right_img.png'.format(results_path), 'png')
+        first_left_img.save('{}/first_left_img_{}.png'.format(results_path, i_batch), 'png')
+        first_right_img.save('{}/first_right_img_{}.png'.format(results_path, i_batch), 'png')
 
         second_left_img = to_img(stereo_pair_window1[0, :3, :, :])
         second_right_img = to_img(stereo_pair_window1[0, 3:, :, :])
-        second_left_img.save('{}/second_left_img.png'.format(results_path))
-        second_right_img.save('{}/second_right_img.png'.format(results_path))
+        second_left_img.save('{}/second_left_img_{}.png'.format(results_path, i_batch))
+        second_right_img.save('{}/second_right_img_{}.png'.format(results_path, i_batch))
 
         # Check the disparity
         window = 0
@@ -101,16 +101,18 @@ if __name__ == '__main__':
         assert width == config['dataset']['images']['width']
 
         first_disparity = disparity_window0[0, 0, :, :]
+        print("disp max:{}".format(torch.max(first_disparity)))
+        print("disp min:{}".format(torch.min(first_disparity)))
         first_disparity[first_disparity < 0.0] = 0.0
         first_disparity = first_disparity / torch.max(first_disparity)
         first_disparity_img = to_img(first_disparity)
-        first_disparity_img.save('{}/first_disparity_img.png'.format(results_path), 'png')
+        first_disparity_img.save('{}/first_disparity_img_{}.png'.format(results_path, i_batch), 'png')
         
         second_disparity = disparity_window1[0, 0, :, :]
         second_disparity[second_disparity < 0.0] = 0.0
         second_disparity = second_disparity / torch.max(second_disparity)
         second_disparity_img = to_img(second_disparity)
-        second_disparity_img.save('{}/second_disparity_img.png'.format(results_path))
+        second_disparity_img.save('{}/second_disparity_img_{}.png'.format(results_path, i_batch))
 
         if i_batch > 3:
             break
