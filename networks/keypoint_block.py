@@ -53,7 +53,7 @@ class KeypointBlock(nn.Module):
                             stride=(self.patch_height, self.patch_width))
 
         if no_gap:
-            valid_idx = torch.sum(geometry_img ** 2, dim=1, keepdim=True) != 0
+            valid_idx = torch.sum(geometry_img ** 2, dim=1, keepdim=True) == 0
             detector_scores[valid_idx] = -20
 
         detector_patches = F.unfold(detector_scores, kernel_size=(self.patch_height, self.patch_width),

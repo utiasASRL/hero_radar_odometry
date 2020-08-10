@@ -116,24 +116,27 @@ class SVDPoseModel(nn.Module):
         # Keypoint loss
         ###############
         pseudo_gt_coords = torch.matmul(R_src_tgt, keypoint_coords[::self.window_size]) + t_src_tgt.unsqueeze(-1)
+        keypoints_gt_2D = compute_2D_from_3D(pseudo_gt_coords, self.config)
 
         # remove keypoints that fall on gap pixels
         no_gap = True
         if no_gap:
             valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
-        keypoint_loss = self.Keypoint_loss(pseudo_coords, pseudo_gt_coords, valid_idx=valid_idx)
+        keypoint_loss = self.Keypoint_loss(pseudo_coords, pseudo_gt_coords, valid_idx=valid_idx, inliers=False)
 
-        result_path = 'results/' + self.config['session_name']
-        if not os.path.exists('{}/keypoint_coords.npy'.format(result_path)):
-            np.save('{}/T_i_src.npy'.format(result_path), T_i_src.detach().cpu().numpy())
-            np.save('{}/T_i_tgt.npy'.format(result_path), T_i_tgt.detach().cpu().numpy())
-            np.save('{}/keypoint_coords.npy'.format(result_path), keypoint_coords.detach().cpu().numpy())
-            np.save('{}/pseudo_gt_coords.npy'.format(result_path), pseudo_gt_coords.detach().cpu().numpy())
-            np.save('{}/pseudo_coords.npy'.format(result_path), pseudo_coords.detach().cpu().numpy())
-            np.save('{}/geometry_img.npy'.format(result_path), geometry_img.detach().cpu().numpy())
-            np.save('{}/images.npy'.format(result_path), images.detach().cpu().numpy())
-            np.save('{}/T_iv.npy'.format(result_path), T_iv.detach().cpu().numpy())
-            np.save('{}/valid_idx.npy'.format(result_path), valid_idx.detach().cpu().numpy())
+        # result_path = 'results/' + self.config['session_name']
+        # if not os.path.exists('{}/keypoint_coords.npy'.format(result_path)):
+        #     np.save('{}/T_i_src.npy'.format(result_path), T_i_src.detach().cpu().numpy())
+        #     np.save('{}/T_i_tgt.npy'.format(result_path), T_i_tgt.detach().cpu().numpy())
+        #     np.save('{}/keypoint_coords.npy'.format(result_path), keypoint_coords.detach().cpu().numpy())
+        #     np.save('{}/pseudo_gt_coords.npy'.format(result_path), pseudo_gt_coords.detach().cpu().numpy())
+        #     np.save('{}/pseudo_coords.npy'.format(result_path), pseudo_coords.detach().cpu().numpy())
+        #     np.save('{}/geometry_img.npy'.format(result_path), geometry_img.detach().cpu().numpy())
+        #     np.save('{}/images.npy'.format(result_path), images.detach().cpu().numpy())
+        #     np.save('{}/T_iv.npy'.format(result_path), T_iv.detach().cpu().numpy())
+        #     np.save('{}/valid_idx.npy'.format(result_path), valid_idx.detach().cpu().numpy())
+        #     np.save('{}/keypoints_2D.npy'.format(result_path), keypoints_2D.detach().cpu().numpy())
+        #     np.save('{}/keypoints_gt_2D.npy'.format(result_path), keypoints_gt_2D.detach().cpu().numpy())
 
         loss += keypoint_loss
         loss_dict['KEY_LOSS'] = keypoint_loss
@@ -142,7 +145,7 @@ class SVDPoseModel(nn.Module):
 
         return loss_dict
 
-    def Keypoint_loss(self, src, target, valid_idx=None):
+    def Keypoint_loss(self, src, target, valid_idx=None, inliers=True):
         '''
         Compute mean squared loss for keypoint pairs
         :param src: source points Bx3xN
@@ -151,9 +154,15 @@ class SVDPoseModel(nn.Module):
         '''
         e = (src - target) # Bx3xN
 
+        if inliers:
+            inlier_thresh = 0.4
+            inlier_idx = torch.sum(e ** 2, dim=1) < inlier_thresh
+
         if valid_idx is None:
             return torch.mean(torch.sum(e ** 2, dim=1))
         else:
+            if inliers:
+                valid_idx = valid_idx * inlier_idx
             return torch.mean(torch.sum(e ** 2, dim=1)[valid_idx])
 
 
