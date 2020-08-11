@@ -31,7 +31,7 @@ class KeypointBlock(nn.Module):
         self.register_buffer('v_coords', v_coords)
         self.register_buffer('u_coords', u_coords)
 
-    def forward(self, geometry_img, descriptors, detector_scores, weight_scores):
+    def forward(self, geometry_img, return_mask, descriptors, detector_scores, weight_scores):
         """
         forward function for this block
         :param geometry_img: batch image, contains 3D coordinates of each pixel as channel entries
@@ -55,7 +55,18 @@ class KeypointBlock(nn.Module):
         detector_patches = F.unfold(detector_scores, kernel_size=(self.patch_height, self.patch_width),
                                     stride=(self.patch_height, self.patch_width))  # B x num_patch_elements x num_patches
 
-        softmax_attention = F.softmax(detector_patches/self.temperature, dim=1)  # B x num_patch_elements x num_patches
+        return_patches = F.unfold(return_mask, kernel_size=(self.patch_height, self.patch_width),
+                                  stride=(self.patch_height, self.patch_width))  # B x num_patch_elements x num_patches
+
+
+        numer = torch.exp(detector_patches/self.temperature)  # B x num_patch_elements x num_patches
+        numer = numer*return_patches    # mask no return pixels with zeros
+        denom = torch.sum(numer, dim=1).unsqueeze(1)
+        zp0, zp1, zp2 = torch.nonzero(denom == 0, as_tuple=True)
+        denom[zp0,zp1,zp2] += 1e-9  # prevent divide by 0
+        # softmax_attention = F.softmax(detector_patches/self.temperature, dim=1)  # B x num_patch_elements x num_patches
+        softmax_attention = numer/denom
+
 
         if self.config['networks']['keypoint_block']['grid_sample']:
             expected_v = torch.sum(v_patches*softmax_attention, dim=1)  # B x num_patches

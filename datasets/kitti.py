@@ -146,7 +146,12 @@ class KittiDataset(Dataset):
         # store height and width
         self.height, self.width, _ = geometry_img.shape
 
-        return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
+        # return mask (pixels with measurements set to true, no measurements set to false)
+        return_mask = np.bitwise_or(np.sum(geometry_img, axis=0) != 0, np.sum(input_img, axis=0) != 0)
+        return_mask = np.expand_dims(return_mask, 0)
+
+        return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv,
+                'return_mask': return_mask.astype(np.float32)}
 
     def load_calib_poses(self):
         """

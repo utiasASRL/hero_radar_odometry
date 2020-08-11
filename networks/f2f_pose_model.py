@@ -50,12 +50,13 @@ class F2FPoseModel(nn.Module):
         '''
 
         # parse data
-        geometry_img, images, T_iv = data['geometry'], data['input'], data['T_iv']
+        geometry_img, images, T_iv, return_mask = data['geometry'], data['input'], data['T_iv'], data['return_mask']
 
         # move to GPU
         geometry_img = geometry_img.cuda()
         images = images.cuda()
         T_iv = T_iv.cuda()
+        return_mask = return_mask.cuda()
 
         # divide range by 100
         # images[1, :, :] = images[1, :, :]/100.0
@@ -64,7 +65,7 @@ class F2FPoseModel(nn.Module):
         detector_scores, weight_scores, descs = self.unet_block(images)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
-        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, descs, detector_scores, weight_scores)
+        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
@@ -168,12 +169,13 @@ class F2FPoseModel(nn.Module):
 
     def forward_keypoints(self, data):
         # parse data
-        geometry_img, images, T_iv = data['geometry'], data['input'], data['T_iv']
+        geometry_img, images, T_iv, return_mask = data['geometry'], data['input'], data['T_iv'], data['return_mask']
 
         # move to GPU
         geometry_img = geometry_img.cuda()
         images = images.cuda()
         T_iv = T_iv.cuda()
+        return_mask = return_mask.cuda()
 
         # divide range by 100
         # images[1, :, :] = images[1, :, :]/100.0
@@ -182,7 +184,7 @@ class F2FPoseModel(nn.Module):
         detector_scores, weight_scores, descs = self.unet_block(images)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
-        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, descs, detector_scores, weight_scores)
+        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
