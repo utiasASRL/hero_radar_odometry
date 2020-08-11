@@ -48,7 +48,7 @@ class SuperpointBlock(nn.Module):
         batch_size, _, height, width = x.size()
 
         x1 = self.inc(x)
-        x1 = self.inc(x1)
+        x1 = self.inc2(x1)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)                           # B x 256 x H/8 x W/8

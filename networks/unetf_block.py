@@ -13,9 +13,9 @@ from torchvision import transforms
 from networks.layers import DoubleConv, OutConv, Down, Up
 # from visualization.plots import Plotting
 
-class UNetBlock(nn.Module):
+class UNetFBlock(nn.Module):
     def __init__(self, config):
-        super(UNetBlock, self).__init__()
+        super(UNetFBlock, self).__init__()
         # TODO relying on hard-coded config params
 
         # n_channels
@@ -72,6 +72,13 @@ class UNetBlock(nn.Module):
         self.up4_score = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
         self.outc_score = OutConv(self.first_feature_dimension, self.n_weight_score)
 
+        # up 3
+        self.up1_desc = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 16, self.bilinear)
+        self.up2_desc = Up(self.first_feature_dimension * (16 + 4), self.first_feature_dimension * 16, self.bilinear)
+        self.up3_desc = Up(self.first_feature_dimension * (16 + 2), self.first_feature_dimension * 16, self.bilinear)
+        self.up4_desc = Up(self.first_feature_dimension * (16 + 1), self.first_feature_dimension * 16, self.bilinear)
+        self.outc_desc = OutConv(self.first_feature_dimension*16, 256)
+
     def forward(self, x):
         batch_size, _, height, width = x.size()
 
@@ -98,13 +105,19 @@ class UNetBlock(nn.Module):
         # image. Features are interpolated using bilinear interpolation to
         # get gradients for back-prop. Concatenate along the feature channel
         # to get pixel-wise descriptors of size Bx248xHxW
-        f1 = F.interpolate(x1, size=(height, width), mode='bilinear', align_corners=True)
-        f2 = F.interpolate(x2, size=(height, width), mode='bilinear', align_corners=True)
-        f3 = F.interpolate(x3, size=(height, width), mode='bilinear', align_corners=True)
-        f4 = F.interpolate(x4, size=(height, width), mode='bilinear', align_corners=True)
-        f5 = F.interpolate(x5, size=(height, width), mode='bilinear', align_corners=True)
+        # f1 = F.interpolate(x1, size=(height, width), mode='bilinear', align_corners=True)
+        # f2 = F.interpolate(x2, size=(height, width), mode='bilinear', align_corners=True)
+        # f3 = F.interpolate(x3, size=(height, width), mode='bilinear', align_corners=True)
+        # f4 = F.interpolate(x4, size=(height, width), mode='bilinear', align_corners=True)
+        # f5 = F.interpolate(x5, size=(height, width), mode='bilinear', align_corners=True)
+        #
+        # feature_list = [f1, f2, f3, f4, f5]
+        # features = torch.cat(feature_list, dim=1)
 
-        feature_list = [f1, f2, f3, f4, f5]
-        features = torch.cat(feature_list, dim=1)
+        x4_up_desc = self.up1_desc(x5, x4)
+        x3_up_desc = self.up2_desc(x4_up_desc, x3)
+        x2_up_desc = self.up3_desc(x3_up_desc, x2)
+        x1_up_desc = self.up4_desc(x2_up_desc, x1)
+        features = self.outc_desc(x1_up_desc)
 
         return logits_pts, score, features

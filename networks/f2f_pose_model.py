@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from utils.utils import zn_desc, T_inv
 from networks.unet_block import UNetBlock
+from networks.unetf_block import UNetFBlock
 from networks.superpoint_block import SuperpointBlock
 from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
@@ -27,6 +28,8 @@ class F2FPoseModel(nn.Module):
             self.unet_block = UNetBlock(self.config)
         elif self.config['networks']['base_net'] == 'super':
             self.unet_block = SuperpointBlock(self.config)
+        elif self.config['networks']['base_net'] == 'unetf':
+            self.unet_block = UNetFBlock(self.config)
         else:
             assert False, "Base network should be unet or super"
 
