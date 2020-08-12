@@ -24,6 +24,7 @@ class SVDPoseModel(nn.Module):
 
         # load configs
         self.config = config
+        self.batch_size = batch_size
         self.window_size = window_size # TODO this is hard-fixed at the moment
         self.match_type = config["networks"]["match_type"] # zncc, l2, dp
 
@@ -38,13 +39,16 @@ class SVDPoseModel(nn.Module):
 
         self.svd_block = SVDBlock(self.config)
 
+        self.sigmoid = torch.nn.Sigmoid()
+
         # intermediate output
         self.result_path = 'results/' + self.config['session_name'] + '/intermediate_outputs'
         self.save_dict = {}
         self.overwrite_flag = False
-        self.save_names = ['T_i_src', 'T_i_tgt', 'keypoint_coords', 'pseudo_gt_coords',
+        self.save_names = ['T_i_src', 'T_i_tgt', 'R_tgt_src', 't_tgt_src', 'keypoint_coords', 'pseudo_gt_coords',
                            'pseudo_coords', 'geometry_img', 'images', 'T_iv', 'valid_idx',
-                           'keypoints_2D', 'keypoints_gt_2D']
+                           'keypoints_2D', 'keypoints_gt_2D', 'svd_weights', 'detector_scores', 'weight_scores',
+                           'pseudo_2D']
 
     def forward(self, data):
         '''
@@ -64,6 +68,9 @@ class SVDPoseModel(nn.Module):
         # Extract features, detector scores and weight scores
         detector_scores, weight_scores, descs = self.unet_block(images)
 
+        # Pass weight scores into Sigmoid func
+        weight_scores = self.sigmoid(weight_scores)
+
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
         keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img,
                                                                                               descs,
@@ -71,11 +78,19 @@ class SVDPoseModel(nn.Module):
                                                                                               weight_scores)
 
         # Match the points in src frame to points in target frame to generate pseudo points
+        n_features = descs.size(1)
         pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
-                                                                                 keypoint_coords[1::self.window_size],
-                                                                                 keypoint_weights[1::self.window_size],
+                                                                                 geometry_img[1::self.window_size].view(self.batch_size, 3, -1),
+                                                                                 weight_scores[1::self.window_size].view(self.batch_size, 1, -1),
                                                                                  keypoint_descs[::self.window_size],
-                                                                                 keypoint_descs[1::self.window_size])
+                                                                                 descs[1::self.window_size].view(self.batch_size, n_features, -1))
+
+        # # UNCOMMENT this line to do keypoint matching instead of dense matching
+        # pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+        #                                                                          keypoint_coords[1::self.window_size],
+        #                                                                          keypoint_weights[1::self.window_size],
+        #                                                                          keypoint_descs[::self.window_size],
+        #                                                                          keypoint_descs[1::self.window_size])
 
         # Compute 2D keypoints from 3D pseudo coordinates
         pseudo_2D = compute_2D_from_3D(pseudo_coords, self.config)
@@ -92,6 +107,46 @@ class SVDPoseModel(nn.Module):
             assert False, "Cannot normalize because match type is NOT support"
 
 
+        # Compute ground truth transform
+        T_i_src = T_iv[::self.window_size]
+        T_i_tgt = T_iv[1::self.window_size]
+        T_src_tgt = T_inv(T_i_src) @ T_i_tgt
+        R_src_tgt = T_src_tgt[:,:3,:3]
+        t_src_tgt = T_src_tgt[:,:3, 3]
+        T_tgt_src = T_inv(T_src_tgt)
+        R_tgt_src = T_tgt_src[:,:3,:3]
+        t_tgt_src = T_tgt_src[:,:3, 3]
+
+        loss_dict = {}
+        loss = 0
+
+        ###############
+        # Keypoint loss
+        ###############
+        pseudo_gt_coords = torch.matmul(R_tgt_src, keypoint_coords[::self.window_size]) + t_tgt_src.unsqueeze(-1)
+        keypoints_gt_2D = compute_2D_from_3D(pseudo_gt_coords, self.config)
+
+        # remove keypoints that fall on gap pixels
+        self.valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
+
+        # compute loss term
+        # keypoint_loss = self.Keypoint_loss(pseudo_coords,
+        #                                    pseudo_gt_coords,
+        #                                    inliers=True)
+        keypoint_loss = self.Keypoint_2D_loss(pseudo_2D, keypoints_gt_2D)
+
+        ##########
+        # SVD loss
+        ##########
+
+        # # UNCOMMENT these two lines to verify SVD module is working properly with
+        # # ground truth matches
+        # pseudo_gt_coords = torch.matmul(R_tgt_src, keypoint_coords[::self.window_size]) + t_tgt_src.unsqueeze(-1)
+        # R_pred, t_pred = self.svd_block(keypoint_coords[::self.window_size],
+        #                                 pseudo_gt_coords,
+        #                                 svd_weights)
+
+
         # Compute matching pair weights for matching pairs
         svd_weights = self.svd_weight_block(src_descs,
                                             pseudo_descs,
@@ -99,68 +154,41 @@ class SVDPoseModel(nn.Module):
                                             pseudo_weights)
 
         # Use SVD to solve for optimal transform
-        R_pred, t_pred = self.svd_block(keypoint_coords[::self.window_size],
-                                        pseudo_coords,
-                                        svd_weights)
+        R_pred, t_pred = [], []
+        for i in range(svd_weights.size(0)):
+            R_pred_i, t_pred_i = self.svd_block(keypoint_coords[::self.window_size][i][:, self.valid_idx[i]].unsqueeze(0),
+                                                pseudo_coords[i][:, self.valid_idx[i]].unsqueeze(0),
+                                                svd_weights[i][:, self.valid_idx[i]].unsqueeze(0))
+            R_pred.append(R_pred_i)
+            t_pred.append(t_pred_i.unsqueeze(0))
+        R_pred = torch.cat(R_pred, dim=0)
+        t_pred = torch.cat(t_pred, dim=0)
 
-        # Compute ground truth transform
-        T_i_src = T_iv[::self.window_size]
-        T_i_tgt = T_iv[1::self.window_size]
-        T_src_tgt = T_inv(T_i_src) @ T_i_tgt
-        R_src_tgt = T_src_tgt[:,:3,:3]
-        t_src_tgt = T_src_tgt[:,:3, 3]
-
-        loss_dict = {}
-        loss = 0
-
-        ##########
-        # SVD loss
-        ##########
-        svd_loss = self.SVD_loss(R_src_tgt, R_pred, t_src_tgt, t_pred)
+        svd_loss = self.SVD_loss(R_tgt_src, R_pred, t_tgt_src, t_pred)
         # loss += svd_loss
         loss_dict['SVD_LOSS'] = svd_loss
 
-        ###############
-        # Keypoint loss
-        ###############
-        pseudo_gt_coords = torch.matmul(R_src_tgt, keypoint_coords[::self.window_size]) + t_src_tgt.unsqueeze(-1)
-        keypoints_gt_2D = compute_2D_from_3D(pseudo_gt_coords, self.config)
-
-        # remove keypoints that fall on gap pixels
-        no_gap = True
-        if no_gap:
-            valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
-        keypoint_loss = self.Keypoint_loss(pseudo_coords, pseudo_gt_coords, valid_idx=valid_idx, inliers=False)
-
         # save intermediate outputs
         if len(self.save_names) > 0:
-            print("Saving {}".format(self.save_names))
+            # print("Saving {}".format(self.save_names))
 
             self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
             self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
+            self.save_dict['R_tgt_src'] = R_tgt_src if 'R_tgt_src' in self.save_names else None
+            self.save_dict['t_tgt_src'] = t_tgt_src if 't_tgt_src' in self.save_names else None
             self.save_dict['keypoint_coords'] = keypoint_coords if 'keypoint_coords' in self.save_names else None
             self.save_dict['pseudo_gt_coords'] = pseudo_gt_coords if 'pseudo_gt_coords' in self.save_names else None
             self.save_dict['pseudo_coords'] = pseudo_coords if 'pseudo_coords' in self.save_names else None
             self.save_dict['geometry_img'] = geometry_img if 'geometry_img' in self.save_names else None
             self.save_dict['images'] = images if 'images' in self.save_names else None
             self.save_dict['T_iv'] = T_iv if 'T_iv' in self.save_names else None
-            self.save_dict['valid_idx'] = valid_idx if 'valid_idx' in self.save_names else None
+            self.save_dict['valid_idx'] = self.valid_idx if 'valid_idx' in self.save_names else None
             self.save_dict['keypoints_2D'] = keypoints_2D if 'keypoints_2D' in self.save_names else None
             self.save_dict['keypoints_gt_2D'] = keypoints_gt_2D if 'keypoints_gt_2D' in self.save_names else None
-
-        # result_path = 'results/' + self.config['session_name']
-        # if not os.path.exists('{}/keypoint_coords.npy'.format(result_path)):
-        #     np.save('{}/T_i_src.npy'.format(result_path), T_i_src.detach().cpu().numpy())
-        #     np.save('{}/T_i_tgt.npy'.format(result_path), T_i_tgt.detach().cpu().numpy())
-        #     np.save('{}/keypoint_coords.npy'.format(result_path), keypoint_coords.detach().cpu().numpy())
-        #     np.save('{}/pseudo_gt_coords.npy'.format(result_path), pseudo_gt_coords.detach().cpu().numpy())
-        #     np.save('{}/pseudo_coords.npy'.format(result_path), pseudo_coords.detach().cpu().numpy())
-        #     np.save('{}/geometry_img.npy'.format(result_path), geometry_img.detach().cpu().numpy())
-        #     np.save('{}/images.npy'.format(result_path), images.detach().cpu().numpy())
-        #     np.save('{}/T_iv.npy'.format(result_path), T_iv.detach().cpu().numpy())
-        #     np.save('{}/valid_idx.npy'.format(result_path), valid_idx.detach().cpu().numpy())
-        #     np.save('{}/keypoints_2D.npy'.format(result_path), keypoints_2D.detach().cpu().numpy())
-        #     np.save('{}/keypoints_gt_2D.npy'.format(result_path), keypoints_gt_2D.detach().cpu().numpy())
+            self.save_dict['svd_weights'] = svd_weights if 'svd_weights' in self.save_names else None
+            self.save_dict['detector_scores'] = detector_scores if 'detector_scores' in self.save_names else None
+            self.save_dict['weight_scores'] = weight_scores if 'weight_scores' in self.save_names else None
+            self.save_dict['pseudo_2D'] = pseudo_2D if 'pseudo_2D' in self.save_names else None
 
         loss += keypoint_loss
         loss_dict['KEY_LOSS'] = keypoint_loss
@@ -169,25 +197,35 @@ class SVDPoseModel(nn.Module):
 
         return loss_dict
 
-    def Keypoint_loss(self, src, target, valid_idx=None, inliers=True):
+    def Keypoint_loss(self, src, target, inliers=True):
         '''
         Compute mean squared loss for keypoint pairs
         :param src: source points Bx3xN
         :param target: target points Bx3xN
+        :param inliers:
         :return:
         '''
         e = (src - target) # Bx3xN
 
-        if inliers:
-            inlier_thresh = 0.4
-            inlier_idx = torch.sum(e ** 2, dim=1) < inlier_thresh
-
-        if valid_idx is None:
+        if self.valid_idx is None:
             return torch.mean(torch.sum(e ** 2, dim=1))
         else:
             if inliers:
-                valid_idx = valid_idx * inlier_idx
-            return torch.mean(torch.sum(e ** 2, dim=1)[valid_idx])
+                inlier_thresh = 1.6 ** 2
+                inlier_idx = torch.sum(e ** 2, dim=1) < inlier_thresh
+                inlier_idx = self.valid_idx * inlier_idx
+            return torch.mean(torch.sum(e ** 2, dim=1)[inlier_idx])
+
+    def Keypoint_2D_loss(self, src, target):
+        '''
+        Compute mean squared loss for 2D keypoint pairs
+        :param src: source points BxNx2
+        :param target: target points BxNx2
+        :return:
+        '''
+        loss_fn = torch.nn.MSELoss()
+        keypoint_2D_loss = loss_fn(src, target)
+        return keypoint_2D_loss
 
 
     def SVD_loss(self, R, R_pred, t, t_pred, rel_w=10.0):
@@ -227,4 +265,5 @@ class SVDPoseModel(nn.Module):
                     np.save('{}/{}.npy'.format(self.result_path, key), value.detach().cpu().numpy())
             self.overwrite_flag = True
         else:
-            print("No intermediate output is saved")
+            # print("No intermediate output is saved")
+            pass

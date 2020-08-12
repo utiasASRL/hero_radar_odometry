@@ -86,10 +86,10 @@ class Trainer():
                     sys.stdout = self.stdout_orig
                     self.model.print_loss(loss, epoch, i_batch)
 
-                # File print (every time)
-                sys.stdout = self.stdout_file
-                self.model.print_loss(loss, epoch, i_batch)
-                self.stdout_file.flush()
+                # # File print (every time)
+                # sys.stdout = self.stdout_file
+                # self.model.print_loss(loss, epoch, i_batch)
+                # self.stdout_file.flush()
 
         return loss
 

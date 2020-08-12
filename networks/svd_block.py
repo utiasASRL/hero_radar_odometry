@@ -19,12 +19,13 @@ class SVDBlock(nn.Module):
         self.reflect = nn.Parameter(torch.eye(3), requires_grad=False)
         self.reflect[2, 2] = -1
 
-    def forward(self, keypoints, pseudo, weight):
+    def forward(self, keypoints, pseudo, weight, valid_idx=None):
         '''
         B-batch; N-number of keypoints
         :param keypoints: Bx3xN
         :param pseudo: Bx3xN
         :param weight: Bx1xN
+        :param valid_idx: BxN
         :return: rotation and translation from keypoint to pseudo
         '''
 

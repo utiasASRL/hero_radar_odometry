@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.utils import zn_desc
+
 
 class KeypointBlock(nn.Module):
     """
@@ -88,7 +90,6 @@ class KeypointBlock(nn.Module):
         # compute keypoint descriptors
         keypoint_descs = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear')
         keypoint_descs = keypoint_descs.reshape(N, descriptors.size(1), keypoints_2D.size(1))
-        keypoint_descs = F.normalize(keypoint_descs, dim=1) # B x C x num_patches
 
         # compute keypoint weight scores
         keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')

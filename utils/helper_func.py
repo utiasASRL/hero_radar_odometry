@@ -188,3 +188,15 @@ def compute_2D_from_3D(points, config):
     points_2D = torch.cat((u.unsqueeze(-1), v.unsqueeze(-1)), dim=2)
 
     return points_2D
+
+def gather(x, idx):
+    '''
+    Extract along dimension 1 only certain index elements
+    :param x: 1xCxN
+    :param idx: 1xN
+    :return: BxCxM
+    '''
+    batch_size, n_channel, n_elements = x.size()
+    feature = x.transpose(2,1).contiguous().view(batch_size * n_elements, n_channel)
+    idx_flat = idx.view(-1).contiguous()
+    feature = feature[idx_flat]
