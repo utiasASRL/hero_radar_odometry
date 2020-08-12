@@ -4,6 +4,7 @@ import sys
 
 # third-party imports
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import math
 
@@ -189,14 +190,82 @@ def compute_2D_from_3D(points, config):
 
     return points_2D
 
-def gather(x, idx):
+def plot_error(gt, est, titles, setting, save_name):
     '''
-    Extract along dimension 1 only certain index elements
-    :param x: 1xCxN
-    :param idx: 1xN
-    :return: BxCxM
+    Plot errors between ground truth and estimates.
+    @param gt: ground truth containing Nx3 array
+    @param est: estimation containing Nx3 array
+    @param titles: titles for plotting. Example: ['psi', 'theta', 'phi']
+    @param setting: relative or absolute. Option: 'rel', 'abs'
+    @param save_name: absolute file path to save
+    @return: None
     '''
-    batch_size, n_channel, n_elements = x.size()
-    feature = x.transpose(2,1).contiguous().view(batch_size * n_elements, n_channel)
-    idx_flat = idx.view(-1).contiguous()
-    feature = feature[idx_flat]
+    fig = plt.figure()
+    ax1 = fig.add_subplot(311)
+    # ax1.plot(psi, label='ground truth')
+    # ax1.plot(psi_pred, label='prediction')
+    ax1.plot(est[:,0] - gt[:,0])
+    # ax1.legend()
+    # ax1.set_ylim(-0.1, 0.1)
+    ax1.set_title('{} error along {}'.format(setting, titles[0]))
+    ax2 = fig.add_subplot(312)
+    # ax2.plot(theta, label='ground truth')
+    # ax2.plot(theta_pred, label='prediction')
+    ax2.plot(est[:,1] - gt[:,1])
+    # ax2.set_ylim(-0.1, 0.1)
+    ax2.set_title('{} error along {}'.format(setting, titles[1]))
+    ax3 = fig.add_subplot(313)
+    # ax3.plot(phi, label='ground truth')
+    # ax3.plot(phi_pred, label='prediction')
+    ax3.plot(est[:,2] - gt[:,2])
+    # ax3.set_ylim(-0.1, 0.1)
+    ax3.set_title('{} error along {}'.format(setting, titles[2]))
+    plt.savefig(save_name)
+
+def plot_versus(gt, est, titles, setting, save_name):
+    '''
+    Plot ground truth and estimates.
+    @param gt: ground truth containing Nx3 array
+    @param est: estimation containing Nx3 array
+    @param titles: titles for plotting. Example: ['psi', 'theta', 'phi']
+    @param setting: relative or absolute. Option: 'rel', 'abs'
+    @param save_name: absolute file path to save
+    @return: None
+    '''
+    fig = plt.figure()
+    ax1 = fig.add_subplot(311)
+    ax1.plot(gt[:,0], label='ground truth')
+    ax1.plot(est[:,0], label='prediction')
+    # ax1.plot(est[:,0] - gt[:,0])
+    ax1.legend()
+    # ax1.set_ylim(-0.1, 0.1)
+    ax1.set_title('{} along {}'.format(setting, titles[0]))
+    ax2 = fig.add_subplot(312)
+    ax2.plot(gt[:,1], label='ground truth')
+    ax2.plot(est[:,1], label='prediction')
+    # ax2.plot(est[:,1] - gt[:,1])
+    ax2.legend()
+    # ax2.set_ylim(-0.1, 0.1)
+    ax2.set_title('{} along {}'.format(setting, titles[1]))
+    ax3 = fig.add_subplot(313)
+    ax3.plot(gt[:,2], label='ground truth')
+    ax3.plot(est[:,2], label='prediction')
+    # ax3.plot(est[:,2] - gt[:,2])
+    ax3.legend()
+    # ax3.set_ylim(-0.1, 0.1)
+    ax3.set_title('{} along {}'.format(setting, titles[2]))
+    plt.savefig(save_name)
+
+def plot_route(gt, out, c_gt='g', c_out='r'):
+    x_idx = 0
+    y_idx = 1
+    x = [v for v in gt[:, x_idx]]
+    y = [v for v in gt[:, y_idx]]  # TODO dataset specific
+    plt.plot(y, x, color=c_gt, label='Ground Truth')
+    # plt.scatter(x, y, color='b')
+
+    x = [v for v in out[:, x_idx]]
+    y = [v for v in out[:, y_idx]]
+    plt.plot(y, x, color=c_out, label='Estimation')
+    # plt.scatter(x, y, color='b')
+    plt.gca().set_aspect('equal', adjustable='datalim')
