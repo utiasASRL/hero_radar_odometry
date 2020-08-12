@@ -50,6 +50,7 @@ class Tester():
 
         # config dictionary
         self.config = config
+        self.window_size = config['train_loader']['window_size']
 
         # logging
         self.result_path = os.path.join('results', config['session_name'])
@@ -94,6 +95,9 @@ class Tester():
 
                 eulers_ab.append(euler_21.detach().cpu().numpy())
                 eulers_ab_pred.append(euler_21_pred.detach().cpu().numpy())
+
+            # TODO this is a temporary fix for averaging out the test loss
+            self.test_loss = self.test_loss / (self.window_size * len(self.test_loader) + 1)
 
             # concat and convert to numpy array
             rotations_ab = np.concatenate(rotations_ab, axis=0)
@@ -167,7 +171,7 @@ class Tester():
         Ts_ib_np_pred = np.array(Ts_ib_pred)
         # print(Ts_ib_np_pred.shape)
         # Ts_ib_np_pred = dataset.T_cam0_velo @ Ts_ib_np_pred @ dataset.T_velo_cam0
-        translations_ab_pred = Ts_ib_np_pred[:,:3,3]
+        abs_translations_ab_pred = Ts_ib_np_pred[:,:3,3]
         # print("euler_ab_np_pred:{}".format(euler_ab_np_pred))
         # print("test_rotations_ab:{}".format(T_ab))
         # print("test_translations_ab:{}".format(test_translations_ab))
@@ -175,7 +179,7 @@ class Tester():
         # same transform is applied to ground truth poses to revert from velodyne to camera frame
         Ts_ib_np = np.array(Ts_ib)
         # Ts_ib_np = dataset.T_cam0_velo @ Ts_ib_np @ dataset.T_velo_cam0
-        translations_ab = Ts_ib_np[:,:3,3]
+        abs_translations_ab = Ts_ib_np[:,:3,3]
 
         # scale up the translations
         # print("before:{}".format(translations_ab))
@@ -189,8 +193,8 @@ class Tester():
             'R_ab_pred': rotations_ab_pred,
             'translation_ab_gt': translations_ab,
             'translation_ab_pred': translations_ab_pred,
-            'translation_gt': translations_ab,
-            'translation_pred': translations_ab_pred,
+            'translation_gt': abs_translations_ab,
+            'translation_pred': abs_translations_ab_pred,
         }
         save_fname = '{}/pose_pred.pickle'.format(self.result_path)
         with open(save_fname, 'wb') as f:
@@ -198,10 +202,10 @@ class Tester():
         print('======Save pose predictions to disk=======')
 
         # plot one color
-        assert translations_ab.shape[0] == translations_ab_pred.shape[0]
+        assert abs_translations_ab.shape[0] == abs_translations_ab_pred.shape[0]
         plt.clf()
-        plt.scatter([translations_ab[0][0]], [translations_ab[0][2]], label='sequence start', marker='s', color='k')
-        plot_route(translations_ab, translations_ab_pred, 'r', 'b')
+        plt.scatter([abs_translations_ab[0][0]], [abs_translations_ab[0][2]], label='sequence start', marker='s', color='k')
+        plot_route(abs_translations_ab, abs_translations_ab_pred, 'r', 'b')
         plt.legend()
         plt.title('')
         save_dir = '{}/visualization'.format(self.result_path)
@@ -219,7 +223,7 @@ class Tester():
 
         # save translation plots
         save_name = '{}/abs_translation_error.png'.format(save_dir)
-        plot_error(translations_ab, translations_ab_pred,
+        plot_error(abs_translations_ab, abs_translations_ab_pred,
                    titles=['x', 'y', 'z'], setting='abs', save_name=save_name)
 
         save_name = '{}/rel_translation_error.png'.format(save_dir)
