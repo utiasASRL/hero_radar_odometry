@@ -74,6 +74,11 @@ class KittiDataset(Dataset):
         for seq in self.sequences:
             velo_path = join(self.path, 'sequences', seq, 'velodyne')
             frames = np.sort([vf[:-4] for vf in listdir(velo_path) if vf.endswith('.bin')])
+
+            # # UNCOMMENT these lines to only use certain segment of a sequence
+            # num_frames = 200
+            # frames = frames[:num_frames]
+
             self.frames.append(frames)
 
         ##################
