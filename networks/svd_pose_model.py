@@ -48,7 +48,7 @@ class SVDPoseModel(nn.Module):
         self.save_names = ['T_i_src', 'T_i_tgt', 'R_tgt_src', 't_tgt_src', 'keypoint_coords', 'pseudo_gt_coords',
                            'pseudo_coords', 'geometry_img', 'images', 'T_iv', 'valid_idx',
                            'keypoints_2D', 'keypoints_gt_2D', 'svd_weights', 'detector_scores', 'weight_scores',
-                           'pseudo_2D']
+                           'pseudo_2D', 'R_pred', 't_pred']
 
     def forward(self, data):
         '''
@@ -130,10 +130,14 @@ class SVDPoseModel(nn.Module):
         self.valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
 
         # compute loss term
-        # keypoint_loss = self.Keypoint_loss(pseudo_coords,
-        #                                    pseudo_gt_coords,
-        #                                    inliers=True)
-        keypoint_loss = self.Keypoint_2D_loss(pseudo_2D, keypoints_gt_2D)
+        keypoint_w = 0.001
+        keypoint_loss = self.Keypoint_loss(pseudo_coords,
+                                           pseudo_gt_coords,
+                                           inliers=True)
+        # keypoint_loss = keypoint_w * self.Keypoint_2D_loss(pseudo_2D, keypoints_gt_2D)
+
+        loss += keypoint_loss
+        loss_dict['KEY_LOSS'] = keypoint_loss
 
         ##########
         # SVD loss
@@ -155,6 +159,8 @@ class SVDPoseModel(nn.Module):
 
         # Use SVD to solve for optimal transform
         R_pred, t_pred = [], []
+        # if torch.sum(torch.isnan(pseudo_coords)):
+        #     np.save('{}/pseudo_coords.npy'.format(self.result_path), pseudo_coords.detach().cpu().numpy())
         for i in range(svd_weights.size(0)):
             R_pred_i, t_pred_i = self.svd_block(keypoint_coords[::self.window_size][i][:, self.valid_idx[i]].unsqueeze(0),
                                                 pseudo_coords[i][:, self.valid_idx[i]].unsqueeze(0),
@@ -164,9 +170,11 @@ class SVDPoseModel(nn.Module):
         R_pred = torch.cat(R_pred, dim=0)
         t_pred = torch.cat(t_pred, dim=0)
 
-        svd_loss = self.SVD_loss(R_tgt_src, R_pred, t_tgt_src, t_pred)
-        # loss += svd_loss
+        svd_loss, R_loss, t_loss = self.SVD_loss(R_tgt_src, R_pred, t_tgt_src, t_pred)
+        loss += svd_loss
         loss_dict['SVD_LOSS'] = svd_loss
+        loss_dict['SVD_R_LOSS'] = R_loss
+        loss_dict['SVD_t_LOSS'] = t_loss
 
         # save intermediate outputs
         if len(self.save_names) > 0:
@@ -176,6 +184,8 @@ class SVDPoseModel(nn.Module):
             self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
             self.save_dict['R_tgt_src'] = R_tgt_src if 'R_tgt_src' in self.save_names else None
             self.save_dict['t_tgt_src'] = t_tgt_src if 't_tgt_src' in self.save_names else None
+            self.save_dict['R_pred'] = R_pred if 'R_pred' in self.save_names else None
+            self.save_dict['t_pred'] = t_pred if 't_pred' in self.save_names else None
             self.save_dict['keypoint_coords'] = keypoint_coords if 'keypoint_coords' in self.save_names else None
             self.save_dict['pseudo_gt_coords'] = pseudo_gt_coords if 'pseudo_gt_coords' in self.save_names else None
             self.save_dict['pseudo_coords'] = pseudo_coords if 'pseudo_coords' in self.save_names else None
@@ -189,9 +199,6 @@ class SVDPoseModel(nn.Module):
             self.save_dict['detector_scores'] = detector_scores if 'detector_scores' in self.save_names else None
             self.save_dict['weight_scores'] = weight_scores if 'weight_scores' in self.save_names else None
             self.save_dict['pseudo_2D'] = pseudo_2D if 'pseudo_2D' in self.save_names else None
-
-        loss += keypoint_loss
-        loss_dict['KEY_LOSS'] = keypoint_loss
 
         loss_dict['LOSS'] = loss
 
@@ -210,10 +217,12 @@ class SVDPoseModel(nn.Module):
         if self.valid_idx is None:
             return torch.mean(torch.sum(e ** 2, dim=1))
         else:
+            inlier_thresh = 4.0 ** 2
+            inlier_idx = torch.sum(e ** 2, dim=1) < inlier_thresh
             if inliers:
-                inlier_thresh = 1.6 ** 2
-                inlier_idx = torch.sum(e ** 2, dim=1) < inlier_thresh
                 inlier_idx = self.valid_idx * inlier_idx
+            else:
+                inlier_idx = self.valid_idx
             return torch.mean(torch.sum(e ** 2, dim=1)[inlier_idx])
 
     def Keypoint_2D_loss(self, src, target):
@@ -245,14 +254,16 @@ class SVDPoseModel(nn.Module):
         t_loss = 1.0 * loss_fn(t_pred, t)
         #     print(R_loss, t_loss)
         svd_loss = R_loss + t_loss
-        return svd_loss
+        return svd_loss, R_loss, t_loss
 
     def print_loss(self, loss, epoch, iter):
-        message = 'e{:03d}-i{:04d} => LOSS={:.6f} SL={:.6f} KL={:.6f}'.format(epoch,
+        message = 'e{:03d}-i{:04d} => LOSS={:.6f} KL={:.6f} SL={:.6f} SRL={:.6f} STL={:.6f}'.format(epoch,
                                                                               iter,
                                                                               loss['LOSS'].item(),
+                                                                              loss['KEY_LOSS'].item(),
                                                                               loss['SVD_LOSS'].item(),
-                                                                              loss['KEY_LOSS'].item())
+                                                                              loss['SVD_R_LOSS'].item(),
+                                                                              loss['SVD_t_LOSS'].item())
         print(message)
 
     def save_intermediate_outputs(self):
@@ -267,3 +278,6 @@ class SVDPoseModel(nn.Module):
         else:
             # print("No intermediate output is saved")
             pass
+
+    def return_save_dict(self):
+        return self.save_dict
