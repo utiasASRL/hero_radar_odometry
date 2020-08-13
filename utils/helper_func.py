@@ -158,26 +158,15 @@ def pc2img_slow(pc, config, rand_T=None):
             ignore_num += 1
     return vertex_img
 
-def compute_disparity(left_img, right_img):
+def compute_disparity(left_img, right_img, config):
 
     # f * b ~= 388, closest dist ~= 388 / 96 = 4.04
     # The ground is farther than 4.04, but this captures
     # sign posts that mostly seem to be the closes objects.
-    block_size = 7
-    stereo = cv2.StereoSGBM_create(minDisparity = 0,
-                                   numDisparities = 96,
-                                   blockSize = block_size,
-                                   preFilterCap = 30,
-                                   uniquenessRatio = 20,
-                                   P1 = 8 * (block_size**2),
-                                   P2 = 32 * (block_size**2),
-                                   speckleWindowSize = 200,
-                                   speckleRange = 1,
-                                   disp12MaxDiff = -1)
-
+    stereo = cv2.StereoSGBM_create(**config['dataset']['disparity'])
 
     disp = stereo.compute(left_img, right_img)
-    disp  = disp.astype(np.float32) / 16.0
+    disp = disp.astype(np.float32) / 16.0
 
     disp[np.abs(disp) < 1e-10] = 1e-10
 
@@ -185,7 +174,7 @@ def compute_disparity(left_img, right_img):
 
     return disp.reshape(1, height, width)
 
-def load_camera_data(left_img_file, right_img_file, height, width):
+def load_camera_data(left_img_file, right_img_file, height, width, config):
     
     left_img = Image.open(left_img_file)
     right_img = Image.open(right_img_file)
@@ -203,7 +192,7 @@ def load_camera_data(left_img_file, right_img_file, height, width):
     left_img_uint8 = np.uint8(left_img.copy())
     right_img_uint8 = np.uint8(right_img.copy())
         
-    disparity_img = compute_disparity(left_img_uint8, right_img_uint8)
+    disparity_img = compute_disparity(left_img_uint8, right_img_uint8, config)
 
     to_tensor = transforms.ToTensor()
     left_img = to_tensor(left_img).numpy()

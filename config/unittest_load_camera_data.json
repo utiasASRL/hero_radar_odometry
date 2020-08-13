@@ -15,6 +15,18 @@
         "images": {
             "height": 364,
             "width": 1200
+        },
+        "disparity": {
+            "minDisparity": 0,
+            "numDisparities": 96,
+            "blockSize": 7,
+            "preFilterCap": 30,
+            "uniquenessRatio": 20,
+            "P1": 392,
+            "P2": 1568,
+            "speckleWindowSize": 200,
+            "speckleRange": 1,
+            "disp12MaxDiff": -1
         }
     },
 

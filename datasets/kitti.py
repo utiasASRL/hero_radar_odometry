@@ -152,8 +152,9 @@ class KittiDataset(Dataset):
             cam_left_file = join(seq_path, 'image_2', self.frames[s_ind][f_ind] + '.png')
             cam_right_file = join(seq_path, 'image_3', self.frames[s_ind][f_ind] + '.png')
 
-            # Load stereo image pair wirh associated disparity
-            input_image, disparity_image = load_camera_data(cam_left_file, cam_right_file, self.height, self.width)
+            # Load stereo image pair with associated disparity
+            input_image, disparity_image = load_camera_data(cam_left_file, cam_right_file,
+                                                            self.height, self.width, self.config)
            
             return {'geometry': disparity_image, 'input': input_image, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
 
