@@ -1,9 +1,13 @@
 # sys imports
 import os
+import random
 import sys
 
 # third-party imports
+import cv2
 import numpy as np
+from PIL import Image
+from torchvision import transforms
 
 # project imports
 
@@ -153,3 +157,45 @@ def pc2img_slow(pc, config, rand_T=None):
         else:
             ignore_num += 1
     return vertex_img
+
+def compute_disparity(left_img, right_img, config):
+
+    # f * b ~= 388, closest dist ~= 388 / 96 = 4.04
+    # The ground is farther than 4.04, but this captures
+    # sign posts that mostly seem to be the closes objects.
+    stereo = cv2.StereoSGBM_create(**config['dataset']['disparity'])
+
+    disp = stereo.compute(left_img, right_img)
+    disp = disp.astype(np.float32) / 16.0
+
+    disp[np.abs(disp) < 1e-10] = 1e-10
+
+    height, width = disp.shape
+
+    return disp.reshape(1, height, width)
+
+def load_camera_data(left_img_file, right_img_file, height, width, config):
+    
+    left_img = Image.open(left_img_file)
+    right_img = Image.open(right_img_file)
+
+    width_actual, height_actual = left_img.size # PIL image size 
+
+    # Crop images so they are all of the same size.
+    if (height_actual > height) or (width_actual > width):
+        i = random.randint(0, height_actual - height) 
+        j = random.randint(0, width_actual - width)
+
+        left_img = transforms.functional.crop(left_img, i, j, height, width)
+        right_img = transforms.functional.crop(right_img, i, j, height, width)
+       
+    left_img_uint8 = np.uint8(left_img.copy())
+    right_img_uint8 = np.uint8(right_img.copy())
+        
+    disparity_img = compute_disparity(left_img_uint8, right_img_uint8, config)
+
+    to_tensor = transforms.ToTensor()
+    left_img = to_tensor(left_img).numpy()
+    right_img = to_tensor(right_img).numpy()
+
+    return np.vstack((left_img, right_img)), disparity_img

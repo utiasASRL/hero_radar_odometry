@@ -34,7 +34,7 @@ import torch
 from torch.utils.data import Dataset
 
 # project imports
-from utils.helper_func import load_lidar_image
+from utils.helper_func import load_lidar_image, load_camera_data
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,26 +54,36 @@ class KittiDataset(Dataset):
         ##########################
 
         # Dataset folder
-        self.path = config["dataset"]["data_dir"]
+        self.path = config['dataset']['data_dir']
 
         # Training or test set
         self.set = set
 
         # Get a list of sequences
         if self.set == 'training':
-            self.sequences = config["dataset"]["seq"]["train"]
+            self.sequences = config['dataset']['seq']['train']
         elif self.set == 'validation':
-            self.sequences = config["dataset"]["seq"]["val"]
+            self.sequences = config['dataset']['seq']['val']
         elif self.set == 'test':
-            self.sequences = config["dataset"]["seq"]["test"]
+            self.sequences = config['dataset']['seq']['test']
         else:
             raise ValueError('Unknown set for SemanticKitti data: ', self.set)
+
+        self.sensor = config['dataset']['sensor']
 
         # List all files in each sequence
         self.frames = []
         for seq in self.sequences:
-            velo_path = join(self.path, 'sequences', seq, 'velodyne')
-            frames = np.sort([vf[:-4] for vf in listdir(velo_path) if vf.endswith('.bin')])
+            frames = []
+
+            if self.sensor == 'velodyne':
+                sensor_path = join(self.path, 'sequences', seq, 'velodyne')
+                frames = np.sort([f[:-4] for f in listdir(sensor_path) if f.endswith('.bin')])
+            
+            elif self.sensor == 'camera':
+                sensor_path = join(self.path, 'sequences', seq, 'image_2')
+                frames = np.sort([f[:-4] for f in listdir(sensor_path) if f.endswith('.png')])
+            
             self.frames.append(frames)
 
         ##################
@@ -81,8 +91,8 @@ class KittiDataset(Dataset):
         ##################
 
         # Store height and width of image # TODO make this a variable but not fixed
-        self.height = config["dataset"]["images"]["height"]
-        self.width = config["dataset"]["images"]["width"]
+        self.height = config['dataset']['images']['height']
+        self.width = config['dataset']['images']['width']
 
         # Parameters from config
         self.config = config
@@ -114,24 +124,39 @@ class KittiDataset(Dataset):
 
         s_ind, f_ind = self.all_inds[i]
 
-        # Get center of the first frame in world coordinates
+        # Get center of the first frame in world coordinates, T_world_sensor
         T_iv = self.poses[s_ind][f_ind]
 
-        # Path of points and labels
-        seq_path = join(self.path, 'sequences', self.sequences[s_ind])
-        velo_file = join(seq_path, 'velodyne', self.frames[s_ind][f_ind] + '.bin')
+        if self.sensor == 'velodyne':
+            
+            # Path of points and labels
+            seq_path = join(self.path, 'sequences', self.sequences[s_ind])
+            velo_file = join(seq_path, 'velodyne', self.frames[s_ind][f_ind] + '.bin')
 
-        # Read points
-        points = np.fromfile(velo_file, dtype=np.float32)
-        points = points.reshape((-1, 4))
+            # Read points
+            points = np.fromfile(velo_file, dtype=np.float32)
+            points = points.reshape((-1, 4))
 
-        # convert to image
-        geometry_img, input_img = load_lidar_image(points, self.config, debug=False)
+            # convert to image
+            geometry_img, input_img = load_lidar_image(points, self.config, debug=False)
 
-        # store height and width
-        self.height, self.width, _ = geometry_img.shape
+            # store height and width
+            self.height, self.width, _ = geometry_img.shape
 
-        return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
+            return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
+
+        elif self.sensor == 'camera':
+
+            # Path to images
+            seq_path = join(self.path, 'sequences', self.sequences[s_ind])
+            cam_left_file = join(seq_path, 'image_2', self.frames[s_ind][f_ind] + '.png')
+            cam_right_file = join(seq_path, 'image_3', self.frames[s_ind][f_ind] + '.png')
+
+            # Load stereo image pair with associated disparity
+            input_image, disparity_image = load_camera_data(cam_left_file, cam_right_file,
+                                                            self.height, self.width, self.config)
+           
+            return {'geometry': disparity_image, 'input': input_image, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
 
     def load_calib_poses(self):
         """
@@ -209,9 +234,12 @@ class KittiDataset(Dataset):
 
         poses = []
 
-        Tr = calibration["Tr"]
-        Tr_inv = np.linalg.inv(Tr)
-
+        Tr = np.eye(4)
+        
+        # Transform poses from cam0 to velodyne frame, Tr = T_cam0_vel
+        if self.sensor == 'velodyne':
+            Tr = calibration["Tr"]
+        
         for line in file:
             values = [float(v) for v in line.strip().split()]
 
