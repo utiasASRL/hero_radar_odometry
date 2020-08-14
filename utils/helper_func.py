@@ -1,12 +1,16 @@
 # sys imports
 import os
+import random
 import sys
 
 # third-party imports
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import math
+from PIL import Image
+from torchvision import transforms
 
 # project imports
 from utils.utils import T_inv
@@ -60,6 +64,83 @@ def pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
 
     return geometry_img, input_img
 
+
+def pc2img_laser_to_row(pc, azi_res, azi_min, azi_max, input_channel, horizontal_pix):
+    '''
+    Convert a point cloud to a LiDAR vertex image, where each laser is mapped to a row
+    :param pc: point cloud Nx4
+    :return: vertex image and (range image)
+    '''
+
+    # create image
+    vertical_pix = 64
+    image = np.zeros((5, vertical_pix, horizontal_pix), dtype=np.float32)
+
+    # compute range
+    pc_xyz = pc[:,:3]
+    intensity = pc[:,3]
+    range_m = np.sqrt(np.sum(pc_xyz ** 2, axis=1))
+
+    # compute azimuth and elevation
+    azimuth = np.rad2deg(np.arctan2(pc_xyz[:,1], pc_xyz[:,0]))
+    xy = np.sqrt(pc_xyz[:,0] ** 2 + pc_xyz[:,1] ** 2)
+    elevation = np.rad2deg(np.arctan2(pc_xyz[:,2], xy))
+
+    # partition into lasers
+    start_id = [0]
+    end_id = []
+    counter = 50 # start later than 0 in case first azimuth is 0
+    while counter < pc.shape[0] - 1:
+        # move to next
+        counter += 1
+
+        # check for 0 crossing
+        if azimuth[counter-1] <= 0 and azimuth[counter] > 0 and abs(azimuth[counter]) < 100:
+            end_id += [counter-1]
+            start_id += [counter]
+
+    end_id += [pc.shape[0] - 1]
+
+    for l, _ in enumerate(start_id):
+        a = start_id[l]
+        b = end_id[l] + 1
+
+        # entries for single laser
+        l_xyz = pc_xyz[a:b, :3]
+        l_azimuth = azimuth[a:b]
+        l_intensity = intensity[a:b]
+        l_range = range_m[a:b]
+
+        # sort for range order
+        order = np.argsort(l_range)
+        # l_xyz = l_xyz[order[::-1]]
+        l_azimuth = l_azimuth[order[::-1]]
+        # l_intensity = l_intensity[order[::-1]]
+        # l_range = l_range[order[::-1]]
+
+        u = np.int32((0.5 * (azi_max - azi_min) - l_azimuth) // azi_res)
+        u[u == horizontal_pix] = 0
+        image[0, l, u] = l_xyz[order[::-1], 0]  # x
+        image[1, l, u] = l_xyz[order[::-1], 1]  # y
+        image[2, l, u] = l_xyz[order[::-1], 2]  # z
+        image[3, l, u] = l_intensity[order[::-1]]  # intensity
+        image[4, l, u] = l_range[order[::-1]]  # range
+
+    # parse input channels
+    input_images = []
+    if "vertex" in input_channel:
+        input_images.append(image[:3, :, :])
+    if "intensity" in input_channel:
+        input_images.append(image[3:4, :, :])
+    if "range" in input_channel:
+        input_images.append(image[4:5, :, :])
+
+    input_img = np.vstack(input_images)
+    geometry_img = image[:3, :, :]
+
+    return geometry_img, input_img
+
+
 def load_lidar_image(pc, config, rand_T=None, debug=False):
     '''
     Convert a point cloud to a LiDAR vertex image
@@ -90,9 +171,13 @@ def load_lidar_image(pc, config, rand_T=None, debug=False):
         pc_aug = (rand_T @ pc_aug.T).T
         pc[:,:3] = pc_aug[:,:3]
 
-    geometry_img, input_img = pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
-                                     ele_res, ele_min, ele_max, input_channel,
-                                     horizontal_pix, vertical_pix)
+    if config["dataset"]["images"]["map_laser_to_row"]:
+        geometry_img, input_img = pc2img_laser_to_row(pc, azi_res, azi_min, azi_max,
+                                                      input_channel, horizontal_pix)
+    else:
+        geometry_img, input_img = pc2img(pc, geometry_img, azi_res, azi_min, azi_max,
+                                        ele_res, ele_min, ele_max, input_channel,
+                                        horizontal_pix, vertical_pix)
 
     return geometry_img, input_img
 
@@ -269,3 +354,45 @@ def plot_route(gt, out, c_gt='g', c_out='r'):
     plt.plot(y, x, color=c_out, label='Estimation')
     # plt.scatter(x, y, color='b')
     plt.gca().set_aspect('equal', adjustable='datalim')
+
+def compute_disparity(left_img, right_img, config):
+
+    # f * b ~= 388, closest dist ~= 388 / 96 = 4.04
+    # The ground is farther than 4.04, but this captures
+    # sign posts that mostly seem to be the closes objects.
+    stereo = cv2.StereoSGBM_create(**config['dataset']['disparity'])
+
+    disp = stereo.compute(left_img, right_img)
+    disp = disp.astype(np.float32) / 16.0
+
+    disp[np.abs(disp) < 1e-10] = 1e-10
+
+    height, width = disp.shape
+
+    return disp.reshape(1, height, width)
+
+def load_camera_data(left_img_file, right_img_file, height, width, config):
+    
+    left_img = Image.open(left_img_file)
+    right_img = Image.open(right_img_file)
+
+    width_actual, height_actual = left_img.size # PIL image size 
+
+    # Crop images so they are all of the same size.
+    if (height_actual > height) or (width_actual > width):
+        i = random.randint(0, height_actual - height) 
+        j = random.randint(0, width_actual - width)
+
+        left_img = transforms.functional.crop(left_img, i, j, height, width)
+        right_img = transforms.functional.crop(right_img, i, j, height, width)
+       
+    left_img_uint8 = np.uint8(left_img.copy())
+    right_img_uint8 = np.uint8(right_img.copy())
+        
+    disparity_img = compute_disparity(left_img_uint8, right_img_uint8, config)
+
+    to_tensor = transforms.ToTensor()
+    left_img = to_tensor(left_img).numpy()
+    right_img = to_tensor(right_img).numpy()
+
+    return np.vstack((left_img, right_img)), disparity_img
