@@ -26,7 +26,7 @@ from networks.f2f_pose_model import F2FPoseModel
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/overfit16_soft_xyz.json', type=str,
+    parser.add_argument('--config', default='config/super00_ir_pair.json', type=str,
                       help='config file path (default: config/steam_f2f.json)')
 
     args = parser.parse_args()
@@ -34,12 +34,10 @@ if __name__ == '__main__':
     with open(args.config) as f:
         config = json.load(f)
 
+    config['dataset']['data_dir'] = '/home/david/Data/kitti'
+
     # Initialize datasets
     train_dataset = KittiDataset(config, set='test')
-    # train_sampler = RandomWindowBatchSampler(batch_size=1,
-    #                                          window_size=2,
-    #                                          seq_len=train_dataset.seq_len,
-    #                                          drop_last=True)
     train_sampler = WindowBatchSampler(batch_size=1,
                                        window_size=2,
                                        seq_len=train_dataset.seq_len,
