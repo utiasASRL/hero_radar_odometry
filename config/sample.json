@@ -27,7 +27,7 @@
     "dataset": {
         "data_dir": "/home/david/Data/kitti",
         "seq": {
-            "train": ["00", "01", "02", "03", "04", "05", "06", "07", "10", "11"],
+            "train": ["00", "01", "02", "03", "04", "05", "06", "07", "10"],
             "val": ["08"],
             "test": ["09"]
         },
@@ -35,6 +35,8 @@
             "height": 56,
             "width": 720,
             "input_channel": ["vertex", "intensity", "range"],
+            "preload": false,
+            "map_laser_to_row": false,
             "azi_res": 0.5,
             "azi_min": -180.0,
             "azi_max": 180.0,
