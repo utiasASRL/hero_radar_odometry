@@ -4,6 +4,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 from utils.utils import zn_desc, T_inv
 from networks.unet_block import UNetBlock
@@ -13,6 +14,9 @@ from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
 from networks.svd_block import SVDBlock
 from networks.keypoint_block import KeypointBlock
+
+# steam
+import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
 
 class F2FPoseModel(nn.Module):
     def __init__(self, config, window_size, batch_size):
@@ -76,8 +80,14 @@ class F2FPoseModel(nn.Module):
                                                                                  keypoint_descs[1::self.window_size])
 
         # compute loss
-        loss = self.loss(keypoint_coords[::self.window_size], pseudo_coords,
-                         keypoint_weights[::self.window_size], T_iv)
+        if self.config['networks']['loss'] == "gt":
+            loss = self.loss(keypoint_coords[::self.window_size], pseudo_coords,
+                             keypoint_weights[::self.window_size], T_iv)
+        elif self.config['networks']['loss'] == "steam":
+            loss = self.loss_steam(keypoint_coords[::self.window_size], pseudo_coords,
+                                   keypoint_weights[::self.window_size], T_iv)
+        else:
+            assert False, "Loss must be gt or steam"
 
 
         return loss
@@ -143,6 +153,83 @@ class F2FPoseModel(nn.Module):
             loss += self.weighted_mse_loss(points1_in_2[ids, :],
                                            points2[ids, :],
                                            Wmat[ids, :, :])
+
+            # loss -= torch.mean(3*w[ids, :])
+            loss -= torch.mean(torch.sum(d[ids, :], 1))
+
+        return loss
+
+    def loss_steam(self, src_coords, tgt_coords, weights, T_iv):
+        '''
+        Compute loss
+        :param src_coords: src keypoint coordinates
+        :param tgt_coords: tgt keypoint coordinates
+        :param weights: weights for match pair
+        :param T_iv: groundtruth transform
+        :return:
+        '''
+        loss = 0
+
+        # loop over each batch
+        for batch_i in range(src_coords.size(0)):
+            b = 1
+            # get src points
+            points1 = src_coords[batch_i, :, :].transpose(0, 1)
+
+            # check for no returns in src keypoints
+            nr_ids = torch.nonzero(torch.sum(points1, dim=1), as_tuple=False).squeeze()
+            points1 = points1[nr_ids, :]
+
+            # get tgt points
+            points2 = tgt_coords[batch_i, :, nr_ids].transpose(0, 1)
+
+            # get weights
+            w = weights[batch_i, :, nr_ids].transpose(0, 1)
+            Wmat, d = self.convertWeightMat(w)
+
+            # match consistency
+            w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids, :] # N x M
+            # w12 = torch.zeros((5, 4))
+            _, ind2to1 = torch.max(w12, dim=1)  # N
+            _, ind1to2 = torch.max(w12, dim=0)  # M
+            mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
+            mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
+            points1 = points1[mask_ind, :]
+            points2 = points2[mask_ind, :]
+            # w = w[mask_ind, :]
+            Wmat = Wmat[mask_ind, :, :]
+            d = d[mask_ind, :]
+
+            # get gt poses
+            src_id = 2*batch_i
+            tgt_id = 2*batch_i + 1
+            T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
+
+            # solve steam problem
+            T_21_temp = np.zeros((13, 4, 4), dtype=np.float32)
+            steampy_f2f.run_steam_best_match(points1.detach().cpu().numpy(),
+                                             points2.detach().cpu().numpy(),
+                                             Wmat.detach().cpu().numpy(), T_21_temp)
+            T_21 = torch.from_numpy(T_21_temp)
+            T_21 = T_21.cuda()
+
+            # error rejection
+            points1_in_2 = points1@T_21[0, :3, :3].T + T_21[0, :3, 3].unsqueeze(0)
+            # error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
+            error = (points1_in_2 - points2).unsqueeze(-1)
+            mah = error.transpose(1, 2)@Wmat@error
+            ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
+                                as_tuple=False).squeeze()
+
+            if ids.nelement() <= 1:
+                print("WARNING: ELEMENTS LESS THAN 1")
+                continue
+
+            for ii in range(12):
+                points1_in_2 = points1@T_21[1+ii, :3, :3].T + T_21[1+ii, :3, 3].unsqueeze(0)
+                loss += self.weighted_mse_loss(points1_in_2[ids, :],
+                                               points2[ids, :],
+                                               Wmat[ids, :, :])/12.0
 
             # loss -= torch.mean(3*w[ids, :])
             loss -= torch.mean(torch.sum(d[ids, :], 1))
