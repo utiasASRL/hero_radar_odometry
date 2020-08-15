@@ -200,11 +200,6 @@ class F2FPoseModel(nn.Module):
             Wmat = Wmat[mask_ind, :, :]
             d = d[mask_ind, :]
 
-            # get gt poses
-            src_id = 2*batch_i
-            tgt_id = 2*batch_i + 1
-            T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
-
             # solve steam problem
             T_21_temp = np.zeros((13, 4, 4), dtype=np.float32)
             steampy_f2f.run_steam_best_match(points1.detach().cpu().numpy(),
