@@ -52,7 +52,7 @@ class SVDPoseModel(nn.Module):
                            'pseudo_2D', 'R_pred', 't_pred']
         '''
 
-    def forward(self, data):
+    def forward(self, data, epoch):
         '''
         Estimate transform between two frames
         :param data: dictionary containing outputs of getitem function
@@ -74,26 +74,10 @@ class SVDPoseModel(nn.Module):
         weight_scores = self.sigmoid(weight_scores)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
-        keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights, valid = self.keypoint_block(geometry_img,
+        keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights, keypoint_valid = self.keypoint_block(geometry_img,
                                                                                                      descs,
                                                                                                      detector_scores,
                                                                                                      weight_scores)
-
-        # TODO: loop if we have more than two frames as input (for cycle loss)
-
-        # Match the points in src frame to points in target frame to generate pseudo points
-        pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(keypoint_coords[::self.window_size],
-                                                                                 geometry_img[1::self.window_size].view(self.batch_size, 3, -1),
-                                                                                 weight_scores[1::self.window_size].view(self.batch_size, 1, -1),
-                                                                                 keypoint_descs[::self.window_size],
-                                                                                 descs[1::self.window_size])
-
-        # # UNCOMMENT this line to do keypoint matching instead of dense matching
-        # pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
-        #                                                                          keypoint_coords[1::self.window_size],
-        #                                                                          keypoint_weights[1::self.window_size],
-        #                                                                          keypoint_descs[::self.window_size],
-        #                                                                          keypoint_descs[1::self.window_size])
 
         # Normalize src desc based on match type
         if self.match_type == 'zncc':
@@ -105,16 +89,57 @@ class SVDPoseModel(nn.Module):
         else:
             assert False, "Cannot normalize because match type is NOT support"
 
+        # TODO: loop if we have more than two frames as input (for cycle loss)
+
+        # Match the points in src frame to points in target frame to generate pseudo points
+        pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+                                                                                 geometry_img[1::self.window_size].view(self.batch_size, 3, -1),
+                                                                                 weight_scores[1::self.window_size].view(self.batch_size, 1, -1),
+                                                                                 src_descs,
+                                                                                 descs[1::self.window_size])
+
+        # # UNCOMMENT this line to do keypoint matching instead of dense matching
+        # pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+        #                                                                          keypoint_coords[1::self.window_size],
+        #                                                                          keypoint_weights[1::self.window_size],
+        #                                                                          keypoint_descs[::self.window_size],
+        #                                                                          keypoint_descs[1::self.window_size])
+
 
         # Compute ground truth transform
         T_i_src = T_iv[::self.window_size]
         T_i_tgt = T_iv[1::self.window_size]
-        T_src_tgt = T_inv(T_i_src) @ T_i_tgt
+        T_src_tgt = se3_inv(T_i_src).bmm(T_i_tgt)
         R_src_tgt = T_src_tgt[:,:3,:3]
         t_src_tgt = T_src_tgt[:,:3, 3]
-        T_tgt_src = T_inv(T_src_tgt)
+        T_tgt_src = se3_inv(T_src_tgt)
         R_tgt_src = T_tgt_src[:,:3,:3]
         t_tgt_src = T_tgt_src[:,:3, 3]
+
+        # Compute ground truth coordinates for the pseudo points
+        pseudo_coords_gt = T_tgt_src.bmm(keypoint_coords)
+        pseudo_2D_gt = self.stereo_cam.camera_model(pseudo_coords_gt)[:, 0:2, :].transpose(2,1)  # BxNx2
+
+        # Outlier rejection based on error between predicted pseudo point and ground truth
+        valid_err = torch.ones(keypoint_valid.size()).type_as(keypoint_valid)
+        if self.config['networks']['outlier_rejection']['on']:
+            if self.config['networks']['outlier_rejection']['type'] == '3D':
+                # Find outliers with large keypoint errors in 3D
+                err = torch.norm(pseudo_2D - pseudo_2D_gt, dim=2) # B x N
+                valid_err = err < self.config['networks']['outlier_rejection']['threshold']
+                valid_err = valid_err.unsqueeze(1)
+            elif self.config['networks']['outlier_rejection']['type'] == '3D':
+                # Find outliers with large keypoint errors in 2D
+                err = torch.norm(pseudo_2D - pseudo_2D_gt, dim=2)  # B x N
+                valid_err = err < self.config['networks']['outlier_rejection']['threshold']
+                valid_err = valid_err.unsqueeze(1)
+            else:
+                assert False, "Outlier rejection type must be 2D or 3D"
+
+
+        ###############
+        # Compute loss
+        ###############
 
         loss_dict = {}
         loss = 0
@@ -122,21 +147,40 @@ class SVDPoseModel(nn.Module):
         ###############
         # Keypoint loss
         ###############
-        pseudo_gt_coords = torch.matmul(R_tgt_src, keypoint_coords[::self.window_size]) + t_tgt_src.unsqueeze(-1)
-        keypoints_gt_2D = compute_2D_from_3D(pseudo_gt_coords, self.config)
 
-        # remove keypoints that fall on gap pixels
-        self.valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
+        if ('keypoint_2D' in self.config['loss']['types']) or ('keypoint_3D' in self.config['loss']['types']):
 
-        # compute loss term
-        keypoint_w = 0.001
-        keypoint_loss = self.Keypoint_loss(pseudo_coords,
-                                           pseudo_gt_coords,
-                                           inliers=True)
-        # keypoint_loss = keypoint_w * self.Keypoint_2D_loss(pseudo_2D, keypoints_gt_2D)
+            if self.config['dataset']['sensor'] == 'velodyne':
+                pseudo_gt_coords = torch.matmul(R_tgt_src, keypoint_coords[::self.window_size]) + t_tgt_src.unsqueeze(-1)
+                keypoints_gt_2D = compute_2D_from_3D(pseudo_gt_coords, self.config)
 
-        loss += keypoint_loss
-        loss_dict['KEY_LOSS'] = keypoint_loss
+                # remove keypoints that fall on gap pixels
+                self.valid_idx = torch.sum(keypoint_coords[::self.window_size] ** 2, dim=1) != 0
+
+                # compute loss term
+                if 'keypoint_3D' in self.config['loss']['types']:
+                    keypoint_loss = self.Keypoint_loss(pseudo_coords,
+                                                   pseudo_gt_coords,
+                                                   inliers=True)
+                else:
+                    keypoint_w = 0.001
+                    keypoint_loss = keypoint_w * self.Keypoint_2D_loss(pseudo_2D, keypoints_gt_2D)
+
+            else:
+                # compute loss term
+                if 'keypoint_3D' in self.config['loss']['types']:
+                    valid = keypoint_valid & pseudo_valid & valid_err
+                    valid = valid.squeeze().expand(self.batch_size, valid_err.size(2), 2)  # B x N x 2
+                    keypoint_loss = self.Keypoint_2D_loss(pseudo_coords[valid], pseudo_coords_gt[valid])
+                    keypoint_loss *= self.config['loss']['weights']['keypoint_3D']
+                else:
+                    valid = keypoint_valid & valid_err
+                    valid = valid.squeeze().expand(self.batch_size, valid_err.size(2), 2)  # B x N x 2
+                    keypoint_loss = self.Keypoint_2D_loss(pseudo_2D[valid], pseudo_2D_gt[valid])
+                    keypoint_loss *= self.config['loss']['weights']['keypoint_2D']
+
+            loss += keypoint_loss
+            loss_dict['KEY_LOSS'] = keypoint_loss
 
         ##########
         # SVD loss

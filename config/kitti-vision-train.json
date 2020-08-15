@@ -7,7 +7,7 @@
 
     "networks": {
         "match_type": "zncc",
-        "dense_match": true,
+        "dense_match": true.
         "unet": {
             "n_weight_score": 1,
             "bilinear": true,
@@ -21,6 +21,10 @@
         },
         "matcher_block": {
             "softmax_temperature": 0.01
+        },
+        "outlier_rejection": {
+            "on": true,
+            "threshold": 50.0
         }
     },
 
@@ -41,7 +45,7 @@
         "images": {
             "height": 364,
             "width": 1200,
-            "input_channel": ['rgb']
+            "input_channel": ["rgb"]
         },
         "disparity": {
             "minDisparity": 0,
@@ -56,6 +60,12 @@
             "disp12MaxDiff": -1
         }
     },
+
+    "loss": {
+        "types": ["keypoint", "pose"],
+        "weights": {"keypoint":  0.01, "rotation": 100.0, "translation": 10.0}
+    },
+
 
     "train_loader": {
         "batch_size": 5,

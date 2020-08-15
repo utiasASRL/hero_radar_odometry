@@ -33,13 +33,16 @@ class SoftmaxMatcherBlock(nn.Module):
         image_coords = torch.stack((u_coord, v_coord), dim=1)        # HW x 2
         self.register_buffer('image_coords', image_coords)
 
-    def forward(self, src_coords, tgt_coords, tgt_weights, src_desc, tgt_desc):
+        # stereo camera model
+        self.stereo_cam = StereoCameraModel(**config['dataset']['camera_params'])
+
+    def forward(self, src_coords, tgt_coords, tgt_weights, src_desc_norm, tgt_desc):
         '''
         Descriptors are assumed to be not normalized
         :param src_coords: Bx3xN
         :param tgt_coords: Bx3xM
         :param tgt_weights: Bx1xHxW
-        :param src_desc: BxCxN
+        :param src_desc_norm: BxCxN
         :param tgt_desc: BxCxHxW
         :return: pseudo, pseudo_weights, pseudo_desc (UN-Normalized)
         '''
@@ -48,10 +51,8 @@ class SoftmaxMatcherBlock(nn.Module):
 
         # Normalize the descriptors based on match_type
         if self.match_type == 'zncc':
-            src_desc_norm = zn_desc(src_desc) # BxCxN
             tgt_desc_norm = zn_desc(tgt_desc.view(batch_size, n_features, -1))  # BxCx(WxH)
         elif self.match_type == 'dp':
-            src_desc_norm = F.normalize(src_desc, dim=1)
             tgt_desc_norm = F.normalize(tgt_desc.view(batch_size, n_features, -1), dim=1)
         elif self.match_type == 'l2':
             # TODO implement Mona's setup
@@ -82,11 +83,11 @@ class SoftmaxMatcherBlock(nn.Module):
             batch_image_coords = self.image_coords.unsqueeze(0).expand(batch_size, self.height * self.width, 2)
             pseudo_2D = torch.matmul(batch_image_coords.transpose(2, 1).contiguous(),
                                          soft_match_vals.transpose(2, 1).contiguous()).transpose(2, 1).contiguous()  # BxNx2
+
             pseudo_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img)  # Bx4xN, Bx1xN
             pseudo_coords = pseudo_coords[:, :3, :]  # Bx3xN
 
             pseudo_weights = get_scores(tgt_weights, pseudo_2D)
-            pseudo_weights[valid_pts == 0] = 0.0
             pseudo_descs = sample_desc(tgt_desc, pseudo_2D)
 
         # return normalized desc

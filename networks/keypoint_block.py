@@ -34,6 +34,9 @@ class KeypointBlock(nn.Module):
         self.register_buffer('v_coords', v_coords)
         self.register_buffer('u_coords', u_coords)
 
+        # stereo camera model
+        self.stereo_cam = StereoCameraModel(**config['dataset']['camera_params'])
+
     def forward(self, geometry_img, descriptors, detector_scores, weight_scores):
         """
         forward function for this block
@@ -106,7 +109,7 @@ class KeypointBlock(nn.Module):
             keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear',
                                              align_corners=self.align_corners)
             keypoint_weights = keypoint_weights.reshape(N, weight_scores.size(1), keypoints_2D.size(1)) # N x 1 x num_patches
-            keypoint_weights[valid_pts == 0] = 0.0
+
         else:
             expected_v = torch.sum(v_patches*softmax_attention, dim=1)  # B x num_patches
             expected_u = torch.sum(u_patches*softmax_attention, dim=1)
