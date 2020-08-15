@@ -42,13 +42,15 @@ class SVDPoseModel(nn.Module):
         self.sigmoid = torch.nn.Sigmoid()
 
         # intermediate output
+        '''
         self.result_path = 'results/' + self.config['session_name'] + '/intermediate_outputs'
-        self.save_dict = {}
+        elf.save_dict = {}
         self.overwrite_flag = False
         self.save_names = ['T_i_src', 'T_i_tgt', 'R_tgt_src', 't_tgt_src', 'keypoint_coords', 'pseudo_gt_coords',
                            'pseudo_coords', 'geometry_img', 'images', 'T_iv', 'valid_idx',
                            'keypoints_2D', 'keypoints_gt_2D', 'svd_weights', 'detector_scores', 'weight_scores',
                            'pseudo_2D', 'R_pred', 't_pred']
+        '''
 
     def forward(self, data):
         '''
@@ -72,18 +74,19 @@ class SVDPoseModel(nn.Module):
         weight_scores = self.sigmoid(weight_scores)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
-        keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img,
-                                                                                              descs,
-                                                                                              detector_scores,
-                                                                                              weight_scores)
+        keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights, valid = self.keypoint_block(geometry_img,
+                                                                                                     descs,
+                                                                                                     detector_scores,
+                                                                                                     weight_scores)
+
+        # TODO: loop if we have more than two frames as input (for cycle loss)
 
         # Match the points in src frame to points in target frame to generate pseudo points
-        n_features = descs.size(1)
-        pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+        pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(keypoint_coords[::self.window_size],
                                                                                  geometry_img[1::self.window_size].view(self.batch_size, 3, -1),
                                                                                  weight_scores[1::self.window_size].view(self.batch_size, 1, -1),
                                                                                  keypoint_descs[::self.window_size],
-                                                                                 descs[1::self.window_size].view(self.batch_size, n_features, -1))
+                                                                                 descs[1::self.window_size])
 
         # # UNCOMMENT this line to do keypoint matching instead of dense matching
         # pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
@@ -91,10 +94,6 @@ class SVDPoseModel(nn.Module):
         #                                                                          keypoint_weights[1::self.window_size],
         #                                                                          keypoint_descs[::self.window_size],
         #                                                                          keypoint_descs[1::self.window_size])
-
-        # Compute 2D keypoints from 3D pseudo coordinates
-        pseudo_2D = compute_2D_from_3D(pseudo_coords, self.config)
-        # print(pseudo_2D.shape)
 
         # Normalize src desc based on match type
         if self.match_type == 'zncc':
@@ -175,32 +174,31 @@ class SVDPoseModel(nn.Module):
         loss_dict['SVD_LOSS'] = svd_loss
         loss_dict['SVD_R_LOSS'] = R_loss
         loss_dict['SVD_t_LOSS'] = t_loss
+        loss_dict['LOSS'] = loss
 
         # save intermediate outputs
-        if len(self.save_names) > 0:
-            # print("Saving {}".format(self.save_names))
-
-            self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
-            self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
-            self.save_dict['R_tgt_src'] = R_tgt_src if 'R_tgt_src' in self.save_names else None
-            self.save_dict['t_tgt_src'] = t_tgt_src if 't_tgt_src' in self.save_names else None
-            self.save_dict['R_pred'] = R_pred if 'R_pred' in self.save_names else None
-            self.save_dict['t_pred'] = t_pred if 't_pred' in self.save_names else None
-            self.save_dict['keypoint_coords'] = keypoint_coords if 'keypoint_coords' in self.save_names else None
-            self.save_dict['pseudo_gt_coords'] = pseudo_gt_coords if 'pseudo_gt_coords' in self.save_names else None
-            self.save_dict['pseudo_coords'] = pseudo_coords if 'pseudo_coords' in self.save_names else None
-            self.save_dict['geometry_img'] = geometry_img if 'geometry_img' in self.save_names else None
-            self.save_dict['images'] = images if 'images' in self.save_names else None
-            self.save_dict['T_iv'] = T_iv if 'T_iv' in self.save_names else None
-            self.save_dict['valid_idx'] = self.valid_idx if 'valid_idx' in self.save_names else None
-            self.save_dict['keypoints_2D'] = keypoints_2D if 'keypoints_2D' in self.save_names else None
-            self.save_dict['keypoints_gt_2D'] = keypoints_gt_2D if 'keypoints_gt_2D' in self.save_names else None
-            self.save_dict['svd_weights'] = svd_weights if 'svd_weights' in self.save_names else None
-            self.save_dict['detector_scores'] = detector_scores if 'detector_scores' in self.save_names else None
-            self.save_dict['weight_scores'] = weight_scores if 'weight_scores' in self.save_names else None
-            self.save_dict['pseudo_2D'] = pseudo_2D if 'pseudo_2D' in self.save_names else None
-
-        loss_dict['LOSS'] = loss
+        # if len(self.save_names) > 0:
+        #     # print("Saving {}".format(self.save_names))
+        #
+        #     self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
+        #     self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
+        #     self.save_dict['R_tgt_src'] = R_tgt_src if 'R_tgt_src' in self.save_names else None
+        #     self.save_dict['t_tgt_src'] = t_tgt_src if 't_tgt_src' in self.save_names else None
+        #     self.save_dict['R_pred'] = R_pred if 'R_pred' in self.save_names else None
+        #     self.save_dict['t_pred'] = t_pred if 't_pred' in self.save_names else None
+        #     self.save_dict['keypoint_coords'] = keypoint_coords if 'keypoint_coords' in self.save_names else None
+        #     self.save_dict['pseudo_gt_coords'] = pseudo_gt_coords if 'pseudo_gt_coords' in self.save_names else None
+        #     self.save_dict['pseudo_coords'] = pseudo_coords if 'pseudo_coords' in self.save_names else None
+        #     self.save_dict['geometry_img'] = geometry_img if 'geometry_img' in self.save_names else None
+        #     self.save_dict['images'] = images if 'images' in self.save_names else None
+        #     self.save_dict['T_iv'] = T_iv if 'T_iv' in self.save_names else None
+        #     self.save_dict['valid_idx'] = self.valid_idx if 'valid_idx' in self.save_names else None
+        #     self.save_dict['keypoints_2D'] = keypoints_2D if 'keypoints_2D' in self.save_names else None
+        #     self.save_dict['keypoints_gt_2D'] = keypoints_gt_2D if 'keypoints_gt_2D' in self.save_names else None
+        #     self.save_dict['svd_weights'] = svd_weights if 'svd_weights' in self.save_names else None
+        #     self.save_dict['detector_scores'] = detector_scores if 'detector_scores' in self.save_names else None
+        #     self.save_dict['weight_scores'] = weight_scores if 'weight_scores' in self.save_names else None
+        #     self.save_dict['pseudo_2D'] = pseudo_2D if 'pseudo_2D' in self.save_names else None
 
         return loss_dict
 

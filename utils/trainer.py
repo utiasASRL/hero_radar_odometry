@@ -11,7 +11,7 @@ class Trainer():
     """
     Trainer class
     """
-    def __init__(self, model, train_loader, valid_loader, config):
+    def __init__(self, model, train_loader, valid_loader, config, result_path, checkpoint_dir):
         # network
         self.model = model
 
@@ -33,10 +33,8 @@ class Trainer():
 
         self.start_epoch = 0
         self.min_val_loss = np.Inf
-        self.result_path = os.path.join('results', config['session_name'])
-        self.checkpoint_path = os.path.join(self.result_path, 'checkpoints/chkp.tar')
-        if not os.path.exists(self.result_path):
-            os.makedirs(self.result_path)
+        self.result_path = result_path
+        self.checkpoint_path = '{}/{}'.format(checkpoint_dir, 'chkp.tar')
 
         # load network parameters and optimizer if resuming from previous session
         if config['previous_session'] != "":
@@ -50,13 +48,8 @@ class Trainer():
         # config dictionary
         self.config = config
         self.max_epochs = self.config['trainer']['max_epochs']
-        self.lr_decay_ee = self.config['optimizer']['lr_decay_ee']
-        self.lr_decays = {i: 0.1 ** (1 / self.lr_decay_ee) for i in range(1, self.max_epochs)}
-
-        # logging
-        self.stdout_orig = sys.stdout
-        self.log_path = os.path.join(self.result_path, 'train.txt')
-        self.stdout_file = open(self.log_path, 'w')
+        # self.lr_decay_ee = self.config['optimizer']['lr_decay_ee']
+        self.lr_decays = {}  # {i: 0.1 ** (1 / self.lr_decay_ee) for i in range(1, self.max_epochs)}
 
     def train_epoch(self, epoch):
         """
@@ -70,32 +63,25 @@ class Trainer():
         t = [time.time()]
         last_display = time.time()
         with torch.enable_grad():
-            for i_batch, batch_sample in enumerate(self.train_loader):
-                self.optimizer.zero_grad()
+            with torch.autograd.set_detect_anomaly(self.config['detect_anomaly']):
+                for i_batch, batch_sample in enumerate(self.train_loader):
+                    self.optimizer.zero_grad()
 
-                # TODO: forward prop
-                loss = self.model(batch_sample)
-                t += [time.time()]
+                    # TODO: forward prop
+                    loss = self.model(batch_sample)
+                    t += [time.time()]
 
-                loss['LOSS'].backward()
+                    loss['LOSS'].backward()
 
-                self.optimizer.step()
+                    self.optimizer.step()
 
-                # save intermediate outputs
-                self.model.save_intermediate_outputs()
+                    # save intermediate outputs
+                    self.model.save_intermediate_outputs()
 
-                # Console print (only one per second)
-                if (t[-1] - last_display) > 1.0:
-                    last_display = t[-1]
-                    sys.stdout = self.stdout_orig
-                    self.model.print_loss(loss, epoch, i_batch)
-
-                # # File print (every time)
-                # sys.stdout = self.stdout_file
-                # self.model.print_loss(loss, epoch, i_batch)
-                # self.stdout_file.flush()
-
-        return loss
+                    # Console print (only one per second)
+                    if (t[-1] - last_display) > 60.0:
+                        last_display = t[-1]
+                        self.model.print_loss(loss, epoch, i_batch)
 
     def valid_epoch(self, epoch):
         self.model.eval()
@@ -164,6 +150,7 @@ class Trainer():
         Full training loop
         """
         # validation and early stopping
+        early_stopping = None
         if self.config['trainer']['validate']['on']:
             early_stopping = EarlyStopping(patience=self.config['trainer']['validate']['patience'],
                                            val_loss_min=self.min_val_loss)
@@ -176,13 +163,13 @@ class Trainer():
                 for param_group in self.optimizer.param_groups:
                     # param_group['lr'] *= config.lr_decays[self.epoch]
                     param_group['lr'] = self.config['optimizer']['lr'] * self.lr_decays[epoch]
-            print("Current epoch learning rate: {}".format(self.config['optimizer']['lr'] * self.lr_decays[epoch]))
+                print("Current epoch learning rate: {}".format(self.config['optimizer']['lr'] * self.lr_decays[epoch]))
 
             if self.config['trainer']['validate']['on']:
                 # check for validation set and early stopping
                 val_loss = self.valid_epoch(epoch)
-                stop_flag, loss_decrease_flag, self.min_val_loss = early_stopping.check_stop(
-                    val_loss, self.model, self.optimizer, self.checkpoint_path, epoch)
+                stop_flag, loss_decrease_flag, self.min_val_loss = early_stopping.check_stop(val_loss, self.model,
+                                                                        self.optimizer, self.checkpoint_path, epoch)
 
                 if stop_flag:
                     break
@@ -194,10 +181,6 @@ class Trainer():
                             'optimizer_state_dict': self.optimizer.state_dict(),
                             'loss': val_loss,
                             }, self.checkpoint_path)
-
-        # close log file
-        sys.stdout = self.stdout_orig
-        self.stdout_file.close()
 
     def resume_checkpoint(self, checkpoint_path):
         """

@@ -1,6 +1,9 @@
 {
-    "session_name": "session_name",
+    "session_name": "train-debug",
     "previous_session": "",
+
+    "home_dir": "/home/mgr",
+    "detect_anomaly": true,
 
     "networks": {
         "match_type": "zncc",
@@ -14,7 +17,10 @@
         "keypoint_block": {
             "patch_height": 8,
             "patch_width": 8,
-            "softmax_temp": 1.0
+            "softmax_temp": 100.0
+        },
+        "matcher_block": {
+            "softmax_temperature": 0.01
         }
     },
 
@@ -25,42 +31,49 @@
     },
 
     "dataset": {
-        "data_dir": "/mnt/ssd1/research/dataset/KITTI/dataset",
+        "data_dir": "/home/mgr/data/kitti/dataset",
         "seq": {
-            "train": ["00"],
+            "train": ["00", "01", "02", "03", "04", "05", "06", "07", "10"],
             "val": ["08"],
             "test": ["09"]
         },
+	    "sensor": "camera",
         "images": {
-            "height": 56,
-            "width": 720,
-            "input_channel": ["vertex", "intensity"],
-            "azi_res": 0.5,
-            "azi_min": -180.0,
-            "azi_max": 180.0,
-            "ele_res": 0.5,
-            "ele_min": -25.0,
-            "ele_max": 3.0
+            "height": 364,
+            "width": 1200,
+            "input_channel": ['rgb']
+        },
+        "disparity": {
+            "minDisparity": 0,
+            "numDisparities": 96,
+            "blockSize": 7,
+            "preFilterCap": 30,
+            "uniquenessRatio": 20,
+            "P1": 392,
+            "P2": 1568,
+            "speckleWindowSize": 200,
+            "speckleRange": 1,
+            "disp12MaxDiff": -1
         }
     },
 
     "train_loader": {
-        "batch_size": 1,
-        "window_size": 2,
+        "batch_size": 5,
+        "window_size": 1,
         "num_workers": 4
     },
 
     "test_loader": {
-        "batch_size": 1,
-        "window_size": 2,
-        "num_workers": 0
+        "batch_size": 5,
+        "window_size": 1,
+        "num_workers": 4
     },
 
     "trainer": {
         "max_epochs": 100,
         "validate": {
-            "on": false,
-            "patience": 7
+            "on": true,
+            "patience": 10
         }
     }
 }
