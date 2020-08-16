@@ -202,9 +202,12 @@ class F2FPoseModel(nn.Module):
 
             # solve steam problem
             T_21_temp = np.zeros((13, 4, 4), dtype=np.float32)
-            steampy_f2f.run_steam_best_match(points1.detach().cpu().numpy(),
-                                             points2.detach().cpu().numpy(),
-                                             Wmat.detach().cpu().numpy(), T_21_temp)
+            pts1_npy = points1.detach().cpu().numpy()
+            pts2_npy = points2.detach().cpu().numpy()
+            Wmat_npy = Wmat.detach().cpu().numpy()
+            steampy_f2f.run_steam_best_match(pts1_npy,
+                                             pts2_npy,
+                                             Wmat_npy, T_21_temp)
             T_21 = torch.from_numpy(T_21_temp)
             T_21 = T_21.cuda()
 
