@@ -245,8 +245,8 @@ char const* run_steam_best_match(np::ndarray& p1, np::ndarray& p2, np::ndarray& 
   // point2point terms
   steam::P2P3ErrorEval::Ptr error;
   steam::WeightedLeastSqCostTerm<3,6>::Ptr cost;
-//  steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
-  steam::GemanMcClureLossFunc::Ptr sharedLossFunc(new steam::GemanMcClureLossFunc(1.0));
+  steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
+  // steam::GemanMcClureLossFunc::Ptr sharedLossFunc(new steam::GemanMcClureLossFunc(1.0));
 
   int num_p1 = p1.shape(0);
   int num_p2 = p2.shape(0);
