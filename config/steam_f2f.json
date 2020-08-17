@@ -6,6 +6,10 @@
         "match_type": "dp",
         "dense_match": false,
         "base_net": "super",
+        "loss": "steam",
+        "sobel_mask": ["intensity"],
+        "sobel_int_thresh": 0.7,
+        "sobel_ran_thresh": 0.5,
         "unet": {
             "n_weight_score": 6,
             "bilinear": true,
@@ -31,7 +35,7 @@
     },
 
     "dataset": {
-        "data_dir": "/data/SemanticKitti",
+        "data_dir": "/home/david/Data/kitti",
         "seq": {
             "train": ["00", "01", "02", "03", "04", "05", "06", "07"],
             "val": ["08"],
@@ -40,7 +44,7 @@
         "images": {
             "height": 64,
             "width": 720,
-            "input_channel": ["intensity"],
+            "input_channel": ["intensity", "range"],
             "preload": true,
             "azi_res": 0.5,
             "azi_min": -180.0,
@@ -53,9 +57,9 @@
     },
 
     "train_loader": {
-        "batch_size": 64,
-        "window_size": 5,
-        "num_workers": 10
+        "batch_size": 3,
+        "window_size": 2,
+        "num_workers": 0
     },
 
     "test_loader": {

@@ -68,7 +68,6 @@ class KeypointBlock(nn.Module):
         # softmax_attention = F.softmax(detector_patches/self.temperature, dim=1)  # B x num_patch_elements x num_patches
         softmax_attention = numer/denom
 
-
         if self.config['networks']['keypoint_block']['grid_sample']:
             expected_v = torch.sum(v_patches*softmax_attention, dim=1)  # B x num_patches
             expected_u = torch.sum(u_patches*softmax_attention, dim=1)

@@ -28,7 +28,7 @@ import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='results/ir_unet_w6_e4_p8_steam_00/config.json', type=str,
+    parser.add_argument('--config', default='results/ir_super_w6_e4_p8_steam_noground_00//config.json', type=str,
                       help='config file path (default: config/steam_f2f.json)')
 
     args = parser.parse_args()

@@ -45,6 +45,22 @@ class F2FPoseModel(nn.Module):
 
         self.svd_block = SVDBlock(self.config)
 
+        # sobel kernel
+        sobelx = torch.tensor([[1., 0., -1.],
+                                [2., 0., -2.],
+                                [1., 0., -1.]])
+        sobely = torch.tensor([[1., 2., 1.],
+                                [0., 0., 0.],
+                                [-1., -2., -1.]])
+
+        sobelx = sobelx.view(1, 1, 3, 3).repeat(1, 1, 1, 1)
+        sobely = sobely.view(1, 1, 3, 3).repeat(1, 1, 1, 1)
+        self.register_buffer('sobelx', sobelx)
+        self.register_buffer('sobely', sobely)
+
+        # patch dimesions
+        self.patch_height = config['networks']['keypoint_block']['patch_height']
+        self.patch_width = config['networks']['keypoint_block']['patch_width']
 
     def forward(self, data):
         '''
@@ -71,6 +87,10 @@ class F2FPoseModel(nn.Module):
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
         keypoint_coords, keypoint_descs, keypoint_weights, patch_mask = self.keypoint_block(
             geometry_img, return_mask, descs, detector_scores, weight_scores)
+
+        # sobel mask
+        if self.config['networks']['sobel_mask']:
+            patch_mask = self.sobel_mask(images, patch_mask)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
@@ -280,6 +300,10 @@ class F2FPoseModel(nn.Module):
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
         keypoint_coords, keypoint_descs, keypoint_weights, patch_mask = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)
 
+        # sobel mask
+        if self.config['networks']['sobel_mask']:
+            patch_mask = self.sobel_mask(images, patch_mask)
+
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
         match_vals = self.softmax_matcher_block(keypoint_coords[::self.window_size],
@@ -334,3 +358,36 @@ class F2FPoseModel(nn.Module):
         outy = F.pad(outy, (1,1,1,1))
 
         return outx, outy
+
+    def sobel_mask(self, images, patch_mask):
+        # bitwise or between intensity and range sobel masks
+        # bitwise and with result and patch_mask
+
+        pixel_mask = torch.zeros_like(images[:, 0:1, :, :])
+
+        # intensity
+        if "intensity" in self.config['networks']['sobel_mask']:
+            # assume intensity channel is 0
+            sobel_out = F.conv2d(images[:, 0:1, :, :], self.sobelx)
+            sobel_out = F.pad(sobel_out, (1,1,1,1))
+            sobel_out = sobel_out > self.config['networks']['sobel_int_thresh']
+            pixel_mask = (pixel_mask + sobel_out) > 0
+
+        # range
+        if "range" in self.config['networks']['sobel_mask']:
+            # assume range channel is 1
+            sobelx_out = F.conv2d(images[:, 1:2, :, :], self.sobelx)
+            sobely_out = F.conv2d(images[:, 1:2, :, :], self.sobely)
+            sobelx_out = F.pad(sobelx_out, (1,1,1,1))
+            sobely_out = F.pad(sobely_out, (1,1,1,1))
+            sobel_out = torch.sqrt(sobelx_out ** 2 + sobely_out ** 2)
+            sobel_out = sobel_out > self.config['networks']['sobel_ran_thresh']
+            pixel_mask = (pixel_mask + sobel_out) > 0
+
+        # unfold
+        mask_patches = F.unfold(pixel_mask.float(), kernel_size=(self.patch_height, self.patch_width),
+                                stride=(self.patch_height, self.patch_width))  # B x num_patch_elements x num_patches
+        mask_patches = torch.sum(mask_patches, dim=1).unsqueeze(1) > 0
+        out_mask = patch_mask*mask_patches
+
+        return out_mask

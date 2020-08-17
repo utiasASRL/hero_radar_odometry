@@ -148,7 +148,7 @@ class KittiDataset(Dataset):
 
         # return mask (pixels with measurements set to true, no measurements set to false)
         return_mask = np.bitwise_or(np.sum(geometry_img, axis=0) != 0, np.sum(input_img, axis=0) != 0)
-        return_mask = np.bitwise_and(return_mask, geometry_img[2, :, :] > -1.2)
+        # return_mask = np.bitwise_and(return_mask, geometry_img[2, :, :] > -1.2)
         return_mask = np.expand_dims(return_mask, 0)
 
         return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv,
