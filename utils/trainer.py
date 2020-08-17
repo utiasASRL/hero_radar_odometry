@@ -64,7 +64,7 @@ class Trainer():
         :param epoch: Integer, current training epoch.
         """
         total_loss = {}
-        total_error = torch.zeros(6)
+        total_sq_error = torch.zeros(6)
 
         self.model.train()
 
@@ -87,7 +87,8 @@ class Trainer():
                     self.optimizer.step()
 
                     # record prediction error for each DOF
-                    total_error += torch.sum(self.model.get_error(), dim=0)
+                    if epoch >= self.config['loss']['start_svd_epoch']:
+                        total_sq_error += torch.sum(self.model.get_error()**2, dim=0)
 
                     # record loss
                     for key in loss:
@@ -113,11 +114,11 @@ class Trainer():
             print('{}: {:.6f}'.format(key, avg_loss))
 
         num_samples = count * self.config['train_loader']['batch_size']
-        avg_error = total_error / num_samples
+        rms_error = torch.sqrt(total_error / num_samples)
         if self.epoch_error_train is None:
-            self.epoch_error_train = avg_error
+            self.epoch_error_train = rms_error
         else:
-            self.epoch_error_train = np.concatenate((self.epoch_errors, avg_error), axis=0)
+            self.epoch_error_train = np.concatenate((self.epoch_errors, rms_error), axis=0)
 
         print('Avg error: {}'.format(self.epoch_error[-1, :]))
         print('Time: {}'.format(time.time() - start))
@@ -129,7 +130,7 @@ class Trainer():
         :param epoch: Integer, current training epoch.
         """
         total_loss = {}
-        total_error = torch.zeros(6)
+        total_sq_error = torch.zeros(6)
 
         self.model.eval()
 
@@ -146,7 +147,8 @@ class Trainer():
                     t += [time.time()]
 
                     # record prediction error for each DOF
-                    total_error += torch.sum(self.model.get_error(), dim=0)
+                    if epoch >= self.config['loss']['start_svd_epoch']:
+                        total_sq_error += torch.sum(self.model.get_error()**2, dim=0)
 
                     # record loss
                     for key in loss:
@@ -172,12 +174,12 @@ class Trainer():
             print('{}: {:.6f}'.format(key, avg_loss))
 
         num_samples = count * self.config['train_loader']['batch_size']
-        avg_error = total_error / num_samples
+        rms_error = torch.sqrt(total_error / num_samples)
         print('Avg error: {}'.format(avg_error))
         if self.epoch_error_valid is None:
-            self.epoch_error_valid = avg_error
+            self.epoch_error_valid = rms_error
         else:
-            self.epoch_error_valid = np.concatenate((self.epoch_errors, avg_error), axis=0)
+            self.epoch_error_valid = np.concatenate((self.epoch_errors, rms_error), axis=0)
 
         print('Time: {}'.format(time.time() - start))
         print('\n')
@@ -222,7 +224,8 @@ class Trainer():
                             }, self.checkpoint_path)
 
             plot_epoch_losses(self.epoch_loss_train, self.epoch_loss_valid, self.result_path)
-            plot_epoch_errors(self.epoch_error_train, self.epoch_error_valid, self.result_path)
+            if epoch >= self.config['loss']['start_svd_epoch']:
+                plot_epoch_errors(self.epoch_error_train, self.epoch_error_valid, self.result_path)
 
     def resume_checkpoint(self, checkpoint_path):
         """

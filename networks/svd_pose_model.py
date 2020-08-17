@@ -183,7 +183,7 @@ class SVDPoseModel(nn.Module):
         # SVD loss
         ##########
 
-        if ('svd' in self.config['loss']['types']) and (epoch > self.config['loss']['start_svd_epoch']):
+        if ('svd' in self.config['loss']['types']) and (epoch >= self.config['loss']['start_svd_epoch']):
 
             # # UNCOMMENT these two lines to verify SVD module is working properly with
             # # ground truth matches
@@ -227,7 +227,7 @@ class SVDPoseModel(nn.Module):
         loss_dict['LOSS'] = loss
 
         # save intermediate outputs
-        if (len(self.save_names) > 0) and (epoch > self.config['loss']['start_svd_epoch']):
+        if (len(self.save_names) > 0) and (epoch >= self.config['loss']['start_svd_epoch']):
 
             self.save_dict['T_tgt_src'] = T_trg_src if 'T_tgt_src' in self.save_names else None
             self.save_dict['T_tgt_src_pred'] = T_trg_src_pred if 'T_tgt_src_pred' in self.save_names else None
@@ -331,7 +331,7 @@ class SVDPoseModel(nn.Module):
         T_tgt_src = self.save_dict['T_tgt_src']
         T_tgt_src_pred = self.save_dict['T_tgt_src_pred']
 
-        return se3_log(se3_inv(T_tgt_src).bmm(T_tgt_src_pred))
+        return se3_log(T_tgt_src) - se3_log(T_tgt_src_pred)
 
     def print_inliers(self, epoch, iter):
 
