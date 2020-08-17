@@ -16,10 +16,13 @@ def _init_saving(args):
     config_fname = args.config
 
     # create directories
-    result_path = '{}/results/{}'.format(config['home_dir'], config['session_name'])
-    chkp_dir = os.path.join(result_path, 'checkpoints')
+    result_path = '{}/results'.format(config['home_dir'])
+    session_path = os.path.join(result_path, config['session_name'])
+    chkp_dir = os.path.join(session_path, 'checkpoints')
     if not os.path.exists(result_path):
         os.makedirs(result_path)
+    if not os.path.exists(session_path):
+        os.makedirs(session_path)
     if not os.path.exists(chkp_dir):
         os.makedirs(chkp_dir)
     if not os.path.exists('{}/backup'.format(chkp_dir)):
@@ -34,7 +37,7 @@ def _init_saving(args):
     # os.system('cp networks/svd_block.py {}/backup/svd_block.py.backup'.format(chkp_dir))
     # os.system('cp networks/layers.py {}/backup/layers.py.backup'.format(chkp_dir))
 
-    return result_path, chkp_dir
+    return result_path, session_path, chkp_dir
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -52,16 +55,16 @@ if __name__ == '__main__':
     config["session_name"] = args.session_name
 
     # save copies of important files
-    result_path, checkpoint_dir = _init_saving(args)
+    result_path, session_path, checkpoint_dir = _init_saving(args)
 
     # logging
     stdout_orig = sys.stdout
-    log_path_out = os.path.join(self.result_path, 'out_train.txt')
+    log_path_out = os.path.join(session_path, 'out_train.txt')
     stdout_file = open(log_path_out, 'w')
     sys.stdout = stdout_file
 
     stderr_orig = sys.stderr
-    log_path_err = os.path.join(self.result_path, 'err_train.txt')
+    log_path_err = os.path.join(session_path, 'err_train.txt')
     stdout_file = open(log_path_err, 'w')
     sys.stderr = stderr_file
 
@@ -92,7 +95,7 @@ if __name__ == '__main__':
                          config['train_loader']['batch_size'])
 
     # trainer
-    trainer = Trainer(model, train_loader, valid_loader, config, result_path, checkpoint_dir)
+    trainer = Trainer(model, train_loader, valid_loader, config, result_path, session_path, checkpoint_dir)
 
     # train
     trainer.train()

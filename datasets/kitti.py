@@ -108,6 +108,7 @@ class KittiDataset(Dataset):
         self.all_inds = None
         self.val_confs = []
         self.seq_len = [len(_) for _ in self.frames]
+        self.cam_calib = []
 
         # Load everything
         self.load_calib_poses()
@@ -126,6 +127,9 @@ class KittiDataset(Dataset):
 
         # Get center of the first frame in world coordinates, T_world_sensor
         T_iv = self.poses[s_ind][f_ind]
+
+        # Get static transforms between camera frames
+        cam_calib = self.cam_calib[s_ind]
 
         if self.sensor == 'velodyne':
             if self.config['dataset']['images']['preload']:
@@ -158,7 +162,8 @@ class KittiDataset(Dataset):
             # store height and width
             self.height, self.width, _ = geometry_img.shape
 
-            return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
+            return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv,
+                    'cam_calib': cam_calib}
 
         elif self.sensor == 'camera':
 
@@ -171,7 +176,8 @@ class KittiDataset(Dataset):
             input_image, disparity_image = load_camera_data(cam_left_file, cam_right_file,
                                                             self.height, self.width, self.config)
            
-            return {'geometry': disparity_image, 'input': input_image, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv}
+            return {'geometry': disparity_image, 'input': input_image, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv,
+                    'cam_calib': cam_calib}
 
     def load_calib_poses(self):
         """
@@ -185,6 +191,7 @@ class KittiDataset(Dataset):
         self.calibrations = []
         self.times = []
         self.poses = []
+        self.cam_calib = []
 
         for seq in self.sequences:
 
@@ -199,6 +206,10 @@ class KittiDataset(Dataset):
             # Read poses
             poses_f64 = self.parse_poses(join(seq_folder, 'poses.txt'), self.calibrations[-1])
             self.poses.append([pose.astype(np.float32) for pose in poses_f64])
+
+            # Read transform matrices between camera frames and camera parameters
+            self.cam_calib.append(self.parse_camera_calibration(self.calibrations[-1]))
+            print(self.cam_calib[-1])
 
         ###################################
         # Prepare the indices of all frames
@@ -236,6 +247,29 @@ class KittiDataset(Dataset):
         calib_file.close()
 
         return calib
+
+    def parse_camera_calibration(self, calib):
+        """ read camera parameters and create transform matrices with translation between camera frames
+
+            Returns
+            -------
+            dict
+                dict containing camera parameter matrices (K2, K3) as 3x3 numpy arrays, baseline (b), and transforms
+                (T_c2_c0, T_c3_c0) between camera frames as 4x4 numpy arrays
+        """
+        P2 = calib['P2']
+        K2 = P2[0:3, 0:3]
+        T_c2_c0 = np.eye(4)
+        T_c2_c0[:3, 3] = P2[:3, 3] / P2[0, 0] # Divide by focal length to get translation in meters
+
+        P3 = calib['P3']
+        K3 = P3[0:3, 0:3]
+        T_c3_c0 = np.eye(4)
+        T_c3_c0[:3, 3] = P3[:3, 3] / P3[0, 0]  # Divide by focal length to get translation in meters
+
+        b = abs(T_c3_c0.bmm(se3_inv(T_c2_c0))[0, 3])
+
+        return {'K2': K2, 'K3': K3, 'b': b, 'T_c2_c0': T_c2_c0, 'T_c3_c0': T_c3_c0}
 
     def parse_poses(self, filename, calibration):
         """ read poses file with per-scan poses from given filename

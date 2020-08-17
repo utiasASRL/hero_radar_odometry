@@ -24,6 +24,7 @@
         },
         "outlier_rejection": {
             "on": true,
+            "type": '2D',
             "threshold": 50.0
         }
     },
@@ -62,8 +63,13 @@
     },
 
     "loss": {
-        "types": ["keypoint", "pose"],
-        "weights": {"keypoint":  0.01, "rotation": 100.0, "translation": 10.0}
+        "types": ["keypoint_2D", "svd"],
+        "weights": {"keypoint_2D":  0.01, "keypoint_3D":  0.01, "svd": 10.0},
+        "start_svd_epoch": 2
+    },
+
+    "record": {
+        "save_names": ["T_tgt_src", "T_tgt_src_pred", "inliers"]
     },
 
 

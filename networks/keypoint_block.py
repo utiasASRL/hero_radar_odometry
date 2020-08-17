@@ -37,7 +37,7 @@ class KeypointBlock(nn.Module):
         # stereo camera model
         self.stereo_cam = StereoCameraModel(**config['dataset']['camera_params'])
 
-    def forward(self, geometry_img, descriptors, detector_scores, weight_scores):
+    def forward(self, geometry_img, descriptors, detector_scores, weight_scores, cam_calib):
         """
         forward function for this block
         :param geometry_img: batch image, contains 3D coordinates of each pixel as channel entries for lidar data,
@@ -96,9 +96,8 @@ class KeypointBlock(nn.Module):
                 keypoint_coords = keypoint_coords.transpose(1, 2)                           # N x 3 x num_patches
 
             else:
-                # Compute 3D keypoints using stereo camera model.
-                keypoint_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img) # N x 4 x num_patches, N x 1 x num_patches
-                keypoint_coords = keypoints_coords[:, :3, :]  # N x 3 x num_patches
+                # Compute 3D points with camera model, points are in cam0 frame, N x 3 x numpatches, N x 1 x num_patches
+                keypoint_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img, cam_calib)
 
             # compute keypoint descriptors
             keypoint_descs = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear',

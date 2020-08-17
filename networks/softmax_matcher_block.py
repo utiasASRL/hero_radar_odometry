@@ -36,7 +36,7 @@ class SoftmaxMatcherBlock(nn.Module):
         # stereo camera model
         self.stereo_cam = StereoCameraModel(**config['dataset']['camera_params'])
 
-    def forward(self, src_coords, tgt_coords, tgt_weights, src_desc_norm, tgt_desc):
+    def forward(self, src_coords, tgt_coords, tgt_weights, src_desc_norm, tgt_desc, cam_calib):
         '''
         Descriptors are assumed to be not normalized
         :param src_coords: Bx3xN
@@ -84,8 +84,8 @@ class SoftmaxMatcherBlock(nn.Module):
             pseudo_2D = torch.matmul(batch_image_coords.transpose(2, 1).contiguous(),
                                          soft_match_vals.transpose(2, 1).contiguous()).transpose(2, 1).contiguous()  # BxNx2
 
-            pseudo_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img)  # Bx4xN, Bx1xN
-            pseudo_coords = pseudo_coords[:, :3, :]  # Bx3xN
+            # Compute 3D points with camera model, points are in cam0 frame, Bx3xN, Bx1xN
+            pseudo_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img, cam_calib)
 
             pseudo_weights = get_scores(tgt_weights, pseudo_2D)
             pseudo_descs = sample_desc(tgt_desc, pseudo_2D)

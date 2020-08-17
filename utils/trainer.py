@@ -6,12 +6,13 @@ import numpy as np
 
 from utils.early_stopping import EarlyStopping
 from utils.lie_algebra import so3_to_rpy
+from utils.plot import plot_epoch_losses, plot_epoch_errors
 
 class Trainer():
     """
     Trainer class
     """
-    def __init__(self, model, train_loader, valid_loader, config, result_path, checkpoint_dir):
+    def __init__(self, model, train_loader, valid_loader, config, result_path, session_path, checkpoint_dir):
         # network
         self.model = model
 
@@ -33,17 +34,23 @@ class Trainer():
 
         self.start_epoch = 0
         self.min_val_loss = np.Inf
-        self.result_path = result_path
+        self.result_path = session_path
         self.checkpoint_path = '{}/{}'.format(checkpoint_dir, 'chkp.tar')
 
         # load network parameters and optimizer if resuming from previous session
         if config['previous_session'] != "":
-            resume_path = "{}/{}/{}".format('results', config['previous_session'], 'chkp.tar')
+            resume_path = "{}/{}/{}".format(result_path, config['previous_session'], 'chkp.tar')
             self.resume_checkpoint(resume_path)
 
         # data loaders
         self.train_loader = train_loader
         self.valid_loader = valid_loader
+
+        # store avg loss and errors fro epochs
+        self.epoch_loss_train = {}
+        self.epoch_error_train = None
+        self.epoch_loss_valid = {}
+        self.epoch_error_valid = None
 
         # config dictionary
         self.config = config
@@ -56,94 +63,126 @@ class Trainer():
         Training logic for an epoch
         :param epoch: Integer, current training epoch.
         """
+        total_loss = {}
+        total_error = torch.zeros(6)
 
         self.model.train()
 
-        # TODO: add anomoly detection
         t = [time.time()]
         last_display = time.time()
+        start = time.time()
+
+        count = 0
         with torch.enable_grad():
             with torch.autograd.set_detect_anomaly(self.config['detect_anomaly']):
+
                 for i_batch, batch_sample in enumerate(self.train_loader):
                     self.optimizer.zero_grad()
 
-                    # TODO: forward prop
-                    loss = self.model(batch_sample)
+                    loss = self.model(batch_sample, epoch, i_batch)
                     t += [time.time()]
 
                     loss['LOSS'].backward()
 
                     self.optimizer.step()
 
-                    # save intermediate outputs
-                    self.model.save_intermediate_outputs()
+                    # record prediction error for each DOF
+                    total_error += torch.sum(self.model.get_error(), dim=0)
+
+                    # record loss
+                    for key in loss:
+                        if key in total_loss:
+                            total_loss[key] += loss[key].item()
+                        else:
+                            total_loss[key] = loss[key].item()
 
                     # Console print (only one per second)
                     if (t[-1] - last_display) > 60.0:
                         last_display = t[-1]
                         self.model.print_loss(loss, epoch, i_batch)
+                        self.model.print_inliers(epoch, i_batch)
+
+                    count += 1
+
+        # Get and print summary statistics for the epoch
+        print('\n Training epoch: {}'.format(epoch))
+
+        for key in total_loss:
+            avg_loss = total_loss[key] / count
+            self.epoch_loss_train[key].append(avg_loss)
+            print('{}: {:.6f}'.format(key, avg_loss))
+
+        num_samples = count * self.config['train_loader']['batch_size']
+        avg_error = total_error / num_samples
+        if self.epoch_error_train is None:
+            self.epoch_error_train = avg_error
+        else:
+            self.epoch_error_train = np.concatenate((self.epoch_errors, avg_error), axis=0)
+
+        print('Avg error: {}'.format(self.epoch_error[-1, :]))
+        print('Time: {}'.format(time.time() - start))
+        print('\n')
 
     def valid_epoch(self, epoch):
+        """
+        Validation logic for an epoch
+        :param epoch: Integer, current training epoch.
+        """
+        total_loss = {}
+        total_error = torch.zeros(6)
+
         self.model.eval()
 
-        # init saving lists
-        rotations_ab = [] # store R_21
-        translations_ab = [] # store t_21
-        rotations_ab_pred = [] # store R_21_pred
-        translations_ab_pred = [] # store t_21_pred
+        t = [time.time()]
+        last_display = time.time()
+        start = time.time()
 
-        eulers_ab = [] # store euler_12
-        eulers_ab_pred = [] # store euler_12_pred
-
+        count = 0
         with torch.no_grad():
-            for i_batch, batch_sample in enumerate(self.test_loader):
 
-                # forward prop
-                loss = self.model(batch_sample)
-                self.textio.cprint("loss:{}".format(loss['LOSS'].item()))
-                self.test_loss += loss['LOSS'].item()
+                for i_batch, batch_sample in enumerate(self.valid_loader):
 
-                # collect poses
-                save_dict = self.model.return_save_dict()
-                R_21_pred, t_21_pred = save_dict['R_pred'], save_dict['t_pred']
-                R_21, t_21 = save_dict['R_tgt_src'], save_dict['t_tgt_src']
-                euler_21 = so3_to_rpy(R_21)
-                euler_21_pred = so3_to_rpy(R_21_pred)
+                    loss = self.model(batch_sample, epoch, i_batch)
+                    t += [time.time()]
 
-                # append to list
-                rotations_ab.append(R_21.detach().cpu().numpy())
-                translations_ab.append(t_21.detach().cpu().numpy())
-                rotations_ab_pred.append(R_21_pred.detach().cpu().numpy())
-                translations_ab_pred.append(t_21_pred.detach().cpu().numpy())
+                    # record prediction error for each DOF
+                    total_error += torch.sum(self.model.get_error(), dim=0)
 
-                eulers_ab.append(euler_21.detach().cpu().numpy())
-                eulers_ab_pred.append(euler_21_pred.detach().cpu().numpy())
+                    # record loss
+                    for key in loss:
+                        if key in total_loss:
+                            total_loss[key] += loss[key].item()
+                        else:
+                            total_loss[key] = loss[key].item()
 
-            # concat and convert to numpy array
-            rotations_ab = np.concatenate(rotations_ab, axis=0)
-            translations_ab = np.concatenate(translations_ab, axis=0)
-            rotations_ab_pred = np.concatenate(rotations_ab_pred, axis=0)
-            translations_ab_pred = np.concatenate(translations_ab_pred, axis=0)
+                    # Console print (only one per minute)
+                    if (t[-1] - last_display) > 60.0:
+                        last_display = t[-1]
+                        self.model.print_loss(loss, epoch, i_batch)
+                        self.model.print_inliers(epoch, i_batch)
 
-            eulers_ab = np.concatenate(eulers_ab, axis=0)
-            eulers_ab_pred = np.concatenate(eulers_ab_pred, axis=0)
+                    count += 1
 
-        test_r_mse_ab = np.mean((eulers_ab_pred - eulers_ab) ** 2)
-        test_r_rmse_ab = np.sqrt(test_r_mse_ab)
-        test_r_mae_ab = np.mean(np.abs(eulers_ab_pred - eulers_ab))
-        test_t_mse_ab = np.mean((translations_ab - translations_ab_pred) ** 2)
-        test_t_rmse_ab = np.sqrt(test_t_mse_ab)
-        test_t_mae_ab = np.mean(np.abs(translations_ab - translations_ab_pred))
+        # Get and print summary statistics for the epoch
+        print('\n Validation epoch: {}'.format(epoch))
 
-        self.textio.cprint('==FINAL TEST==')
-        self.textio.cprint('A--------->B')
-        self.textio.cprint('EPOCH:: %d, Loss: %f, rot_MSE: %f, rot_RMSE: %f, '
-                           'rot_MAE: %f, trans_MSE: %f, trans_RMSE: %f, trans_MAE: %f'
-                           % (-1, self.test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab,
-                              test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab))
+        for key in total_loss:
+            avg_loss = total_loss[key] / count
+            self.epoch_loss_valid[key].append(avg_loss)
+            print('{}: {:.6f}'.format(key, avg_loss))
 
+        num_samples = count * self.config['train_loader']['batch_size']
+        avg_error = total_error / num_samples
+        print('Avg error: {}'.format(avg_error))
+        if self.epoch_error_valid is None:
+            self.epoch_error_valid = avg_error
+        else:
+            self.epoch_error_valid = np.concatenate((self.epoch_errors, avg_error), axis=0)
 
-        return loss['LOSS'].item()
+        print('Time: {}'.format(time.time() - start))
+        print('\n')
+
+        return self.epoch_loss_valid['LOSS'][-1]
 
     def train(self):
         """
@@ -181,6 +220,9 @@ class Trainer():
                             'optimizer_state_dict': self.optimizer.state_dict(),
                             'loss': val_loss,
                             }, self.checkpoint_path)
+
+            plot_epoch_losses(self.epoch_loss_train, self.epoch_loss_valid, self.result_path)
+            plot_epoch_errors(self.epoch_error_train, self.epoch_error_valid, self.result_path)
 
     def resume_checkpoint(self, checkpoint_path):
         """
