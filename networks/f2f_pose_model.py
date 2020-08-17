@@ -69,30 +69,31 @@ class F2FPoseModel(nn.Module):
         detector_scores, weight_scores, descs = self.unet_block(images)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
-        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)
+        keypoint_coords, keypoint_descs, keypoint_weights, patch_mask = self.keypoint_block(
+            geometry_img, return_mask, descs, detector_scores, weight_scores)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
-        pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
-                                                                                 keypoint_coords[1::self.window_size],
-                                                                                 keypoint_weights[1::self.window_size],
-                                                                                 keypoint_descs[::self.window_size],
-                                                                                 keypoint_descs[1::self.window_size])
+        match_vals = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+                                                 keypoint_coords[1::self.window_size],
+                                                 keypoint_weights[1::self.window_size],
+                                                 keypoint_descs[::self.window_size],
+                                                 keypoint_descs[1::self.window_size])
 
         # compute loss
         if self.config['networks']['loss'] == "gt":
-            loss = self.loss(keypoint_coords[::self.window_size], pseudo_coords,
-                             keypoint_weights[::self.window_size], T_iv)
+            loss = self.loss(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
+                             keypoint_weights[::self.window_size], patch_mask, T_iv)
         elif self.config['networks']['loss'] == "steam":
-            loss = self.loss_steam(keypoint_coords[::self.window_size], pseudo_coords,
-                                   keypoint_weights[::self.window_size], T_iv)
+            loss = self.loss_steam(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
+                                   keypoint_weights[::self.window_size], patch_mask)
         else:
             assert False, "Loss must be gt or steam"
 
 
         return loss
 
-    def loss(self, src_coords, tgt_coords, weights, T_iv):
+    def loss(self, src_coords, tgt_coords, weights, patch_mask, T_iv):
         '''
         Compute loss
         :param src_coords: src keypoint coordinates
@@ -105,29 +106,24 @@ class F2FPoseModel(nn.Module):
 
         # loop over each batch
         for batch_i in range(src_coords.size(0)):
-            b = 1
-            # get src points
-            points1 = src_coords[batch_i, :, :].transpose(0, 1)
 
-            # check for no returns in src keypoints
-            nr_ids = torch.nonzero(torch.sum(points1, dim=1), as_tuple=False).squeeze()
-            points1 = points1[nr_ids, :]
+            # mask
+            nr_ids1 = torch.nonzero(patch_mask[batch_i*self.window_size, :, :].squeeze(), as_tuple=False).squeeze()
+            nr_ids2 = torch.nonzero(patch_mask[batch_i*self.window_size+1, :, :].squeeze(), as_tuple=False).squeeze()
+
+            # get src points
+            points1 = src_coords[batch_i, :, nr_ids1].transpose(0, 1)
 
             # get tgt points
-            points2 = tgt_coords[batch_i, :, nr_ids].transpose(0, 1)
+            w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids1, :] # N x M
+            w12 = w12[:, nr_ids2]
+            points2 = F.softmax(w12*50.0, dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
 
             # get weights
-            w = weights[batch_i, :, nr_ids].transpose(0, 1)
+            w = weights[batch_i, :, nr_ids1].transpose(0, 1)
             Wmat, d = self.convertWeightMat(w)
 
-            # get gt poses
-            src_id = 2*batch_i
-            tgt_id = 2*batch_i + 1
-            T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
-
             # match consistency
-            w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids, :] # N x M
-            # w12 = torch.zeros((5, 4))
             _, ind2to1 = torch.max(w12, dim=1)  # N
             _, ind1to2 = torch.max(w12, dim=0)  # M
             mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
@@ -137,6 +133,11 @@ class F2FPoseModel(nn.Module):
             # w = w[mask_ind, :]
             Wmat = Wmat[mask_ind, :, :]
             d = d[mask_ind, :]
+
+            # get gt poses
+            src_id = 2*batch_i
+            tgt_id = 2*batch_i + 1
+            T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
 
             # error rejection
             points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
@@ -159,7 +160,7 @@ class F2FPoseModel(nn.Module):
 
         return loss
 
-    def loss_steam(self, src_coords, tgt_coords, weights, T_iv):
+    def loss_steam(self, src_coords, tgt_coords, weights, patch_mask):
         '''
         Compute loss
         :param src_coords: src keypoint coordinates
@@ -172,23 +173,27 @@ class F2FPoseModel(nn.Module):
 
         # loop over each batch
         for batch_i in range(src_coords.size(0)):
-            b = 1
-            # get src points
-            points1 = src_coords[batch_i, :, :].transpose(0, 1)
 
-            # check for no returns in src keypoints
-            nr_ids = torch.nonzero(torch.sum(points1, dim=1), as_tuple=False).squeeze()
-            points1 = points1[nr_ids, :]
+            # mask
+            # nr_ids = torch.nonzero(torch.sum(points1, dim=1), as_tuple=False).squeeze()
+            nr_ids1 = torch.nonzero(patch_mask[batch_i*self.window_size, :, :].squeeze(), as_tuple=False).squeeze()
+            nr_ids2 = torch.nonzero(patch_mask[batch_i*self.window_size+1, :, :].squeeze(), as_tuple=False).squeeze()
+
+            # get src points
+            points1 = src_coords[batch_i, :, nr_ids1].transpose(0, 1)
 
             # get tgt points
-            points2 = tgt_coords[batch_i, :, nr_ids].transpose(0, 1)
+            w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids1, :] # N x M
+            w12 = w12[:, nr_ids2]
+            points2 = F.softmax(w12*50.0, dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+            # torch.matmul(tgt_coords, soft_match_vals.transpose(2, 1)) # Bx3xN
+            # F.softmax(self.match_vals / self.softmax_temperature, dim=2)
 
             # get weights
-            w = weights[batch_i, :, nr_ids].transpose(0, 1)
+            w = weights[batch_i, :, nr_ids1].transpose(0, 1)
             Wmat, d = self.convertWeightMat(w)
 
             # match consistency
-            w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids, :] # N x M
             # w12 = torch.zeros((5, 4))
             _, ind2to1 = torch.max(w12, dim=1)  # N
             _, ind1to2 = torch.max(w12, dim=0)  # M
@@ -263,7 +268,7 @@ class F2FPoseModel(nn.Module):
         # move to GPU
         geometry_img = geometry_img.cuda()
         images = images.cuda()
-        T_iv = T_iv.cuda()
+        # T_iv = T_iv.cuda()
         return_mask = return_mask.cuda()
 
         # divide range by 100
@@ -273,17 +278,17 @@ class F2FPoseModel(nn.Module):
         detector_scores, weight_scores, descs = self.unet_block(images)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
-        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)
+        keypoint_coords, keypoint_descs, keypoint_weights, patch_mask = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
-        pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
-                                                                                 keypoint_coords[1::self.window_size],
-                                                                                 keypoint_weights[1::self.window_size],
-                                                                                 keypoint_descs[::self.window_size],
-                                                                                 keypoint_descs[1::self.window_size])
+        match_vals = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+                                                                 keypoint_coords[1::self.window_size],
+                                                                 keypoint_weights[1::self.window_size],
+                                                                 keypoint_descs[::self.window_size],
+                                                                 keypoint_descs[1::self.window_size])
 
-        return keypoint_coords[::self.window_size], pseudo_coords, keypoint_weights[::self.window_size]
+        return keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size], keypoint_weights[::self.window_size], patch_mask
 
     def convertWeightMat(self, w):
         if w.size(1) == 1:
@@ -311,3 +316,21 @@ class F2FPoseModel(nn.Module):
             assert False, "Weight should be dim 1 or 6"
 
         return A, d
+
+    def sobel(self, images):
+        sobel_x = torch.tensor([[1., 0., -1.],
+                                [2., 0., -2.],
+                                [1., 0., -1.]], device = images.device)
+        sobel_y = torch.tensor([[1., 2., 1.],
+                                [0., 0., 0.],
+                                [-1., -2., -1.]], device = images.device)
+
+        sobel_x = sobel_x.view(1, 1, 3, 3).repeat(images.size(1), images.size(1), 1, 1)
+        sobel_y = sobel_y.view(1, 1, 3, 3).repeat(images.size(1), images.size(1), 1, 1)
+
+        outx = F.conv2d(images, sobel_x)
+        outy = F.conv2d(images, sobel_y)
+        outx = F.pad(outx, (1,1,1,1))
+        outy = F.pad(outy, (1,1,1,1))
+
+        return outx, outy

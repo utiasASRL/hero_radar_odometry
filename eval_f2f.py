@@ -28,7 +28,7 @@ import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='results/ir_super_w6_mah/config.json', type=str,
+    parser.add_argument('--config', default='results/ir_unet_w6_e4_p8_steam_00/config.json', type=str,
                       help='config file path (default: config/steam_f2f.json)')
 
     args = parser.parse_args()
@@ -76,25 +76,25 @@ if __name__ == '__main__':
     for i_batch, sample_batch in enumerate(training_loader):
         fid = int(sample_batch['f_ind'][0])
 
-        src_coords, tgt_coords, weights = net.forward_keypoints(sample_batch)
+        src_coords, tgt_coords, weights, patch_mask = net.forward_keypoints(sample_batch)
+
+        # mask
+        nr_ids1 = torch.nonzero(patch_mask[0, :, :].squeeze(), as_tuple=False).squeeze()
+        nr_ids2 = torch.nonzero(patch_mask[1, :, :].squeeze(), as_tuple=False).squeeze()
 
         # get src points
-        points1 = src_coords[0, :, :].transpose(0, 1)
-
-        # check for no returns in src keypoints
-        nr_ids = torch.nonzero(torch.sum(points1, dim=1), as_tuple=False).squeeze()
-        points1 = points1[nr_ids, :]
+        points1 = src_coords[0, :, nr_ids1].transpose(0, 1)
 
         # get tgt points
-        points2 = tgt_coords[0, :, nr_ids].transpose(0, 1)
+        w12 = net.softmax_matcher_block.match_vals[0, nr_ids1, :] # N x M
+        w12 = w12[:, nr_ids2]
+        points2 = F.softmax(w12*50.0, dim=1)@tgt_coords[0, :, nr_ids2].transpose(0, 1)
 
         # get weights
-        w = weights[0, :, nr_ids].transpose(0, 1)
+        w = weights[0, :, nr_ids1].transpose(0, 1)
         Wmat, d = net.convertWeightMat(w)
 
         # match consistency
-        w12 = net.softmax_matcher_block.match_vals[0, nr_ids, :] # N x M
-        # w12 = torch.zeros((5, 4))
         _, ind2to1 = torch.max(w12, dim=1)  # N
         _, ind1to2 = torch.max(w12, dim=0)  # M
         mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))

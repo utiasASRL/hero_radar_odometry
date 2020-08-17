@@ -53,25 +53,26 @@ class SoftmaxMatcherBlock(nn.Module):
             soft_match_vals = F.softmax(self.match_vals / self.softmax_temperature, dim=2) # B x N x M
         elif self.match_type == 'dp':
             self.match_vals = torch.matmul(src_desc_norm.transpose(2, 1).contiguous(), tgt_desc_norm) # B x N x M
-            soft_match_vals = F.softmax(self.match_vals / self.softmax_temperature, dim=2) # B x N x M
+            # soft_match_vals = F.softmax(self.match_vals / self.softmax_temperature, dim=2) # B x N x M
         else:
             assert False, "Only support match type zncc now"
 
         # extract pseudo points and attri associated with them
         # TODO this is different from Mona's implementation cuz she grid-sampled for pseudo scores and desc
         # TODO in my case, I extract desc and then do norm
-        pseudo_coords = torch.matmul(tgt_coords, soft_match_vals.transpose(2, 1)) # Bx3xN
-        pseudo_weights = torch.matmul(tgt_weights, soft_match_vals.transpose(2, 1)) # Bx1xN
-        pseudo_descs = torch.matmul(tgt_desc, soft_match_vals.transpose(2, 1)) # BxCxN
+        # pseudo_coords = torch.matmul(tgt_coords, soft_match_vals.transpose(2, 1)) # Bx3xN
+        # pseudo_weights = torch.matmul(tgt_weights, soft_match_vals.transpose(2, 1)) # Bx1xN
+        # pseudo_descs = torch.matmul(tgt_desc, soft_match_vals.transpose(2, 1)) # BxCxN
+        #
+        # # return normalized desc
+        # if self.match_type == 'zncc':
+        #     pseudo_descs = zn_desc(pseudo_descs)
+        # elif self.match_type == 'dp':
+        #     pseudo_descs = F.normalize(pseudo_descs, dim=1)
+        # elif self.match_type == 'l2':
+        #     pass
+        # else:
+        #     assert False, "Cannot normalize because match type is NOT support"
 
-        # return normalized desc
-        if self.match_type == 'zncc':
-            pseudo_descs = zn_desc(pseudo_descs)
-        elif self.match_type == 'dp':
-            pseudo_descs = F.normalize(pseudo_descs, dim=1)
-        elif self.match_type == 'l2':
-            pass
-        else:
-            assert False, "Cannot normalize because match type is NOT support"
-
-        return pseudo_coords, pseudo_weights, pseudo_descs
+        # return pseudo_coords, pseudo_weights, pseudo_descs
+        return self.match_vals

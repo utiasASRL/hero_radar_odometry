@@ -62,6 +62,7 @@ class KeypointBlock(nn.Module):
         numer = torch.exp(detector_patches/self.temperature)  # B x num_patch_elements x num_patches
         numer = numer*return_patches    # mask no return pixels with zeros
         denom = torch.sum(numer, dim=1).unsqueeze(1)
+        patch_mask = denom > 0
         zp0, zp1, zp2 = torch.nonzero(denom == 0, as_tuple=True)
         denom[zp0,zp1,zp2] += 1e-9  # prevent divide by 0
         # softmax_attention = F.softmax(detector_patches/self.temperature, dim=1)  # B x num_patch_elements x num_patches
@@ -126,7 +127,7 @@ class KeypointBlock(nn.Module):
             weight_windows = weight_windows.view(N, weight_scores.size(1), self.patch_height*self.patch_width, weight_windows.size(2))
             keypoint_weights = torch.sum(weight_windows * softmax_attention, dim=2)    # B x C x num_patches
 
-        return keypoint_coords, keypoint_descs, keypoint_weights
+        return keypoint_coords, keypoint_descs, keypoint_weights, patch_mask
 
     def normalize_coords(self, coords_2D, batch_size, width, height):
         """
