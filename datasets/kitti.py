@@ -209,7 +209,6 @@ class KittiDataset(Dataset):
 
             # Read transform matrices between camera frames and camera parameters
             self.cam_calib.append(self.parse_camera_calibration(self.calibrations[-1]))
-            print(self.cam_calib[-1])
 
         ###################################
         # Prepare the indices of all frames
@@ -267,9 +266,7 @@ class KittiDataset(Dataset):
         T_c3_c0 = np.eye(4)
         T_c3_c0[:3, 3] = P3[:3, 3] / P3[0, 0]  # Divide by focal length to get translation in meters
 
-        b = abs(T_c3_c0.bmm(se3_inv(T_c2_c0))[0, 3])
-
-        return {'K2': K2, 'K3': K3, 'b': b, 'T_c2_c0': T_c2_c0, 'T_c3_c0': T_c3_c0}
+        return {'K2': K2, 'K3': K3, 'T_c2_c0': T_c2_c0, 'T_c3_c0': T_c3_c0}
 
     def parse_poses(self, filename, calibration):
         """ read poses file with per-scan poses from given filename

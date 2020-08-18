@@ -11,8 +11,8 @@ import torch.nn.functional as F
 from torchvision import transforms
 
 from networks.layers import DoubleConv, OutConv, Down, Up
+from utils.stereo_camera_model import StereoCameraModel
 from utils.utils import zn_desc, sample_desc, get_scores
-# from visualization.plots import Plotting
 
 class SoftmaxMatcherBlock(nn.Module):
     def __init__(self, config):
@@ -34,9 +34,9 @@ class SoftmaxMatcherBlock(nn.Module):
         self.register_buffer('image_coords', image_coords)
 
         # stereo camera model
-        self.stereo_cam = StereoCameraModel(**config['dataset']['camera_params'])
+        self.stereo_cam = StereoCameraModel()
 
-    def forward(self, src_coords, tgt_coords, tgt_weights, src_desc_norm, tgt_desc, cam_calib):
+    def forward(self, src_coords, geometry_img, tgt_weights, src_desc_norm, tgt_desc, cam_calib):
         '''
         Descriptors are assumed to be not normalized
         :param src_coords: Bx3xN
@@ -71,10 +71,11 @@ class SoftmaxMatcherBlock(nn.Module):
         # extract pseudo points and attributes associated with them
         # TODO this is different from Mona's implementation cuz she grid-sampled for pseudo scores and desc
         # TODO in my case, I extract desc and then do norm
-        valid_pts = torch.ones(batch_size, 1, n_features).type_as(tgt_desc).int()
+        valid_pts = torch.ones(batch_size, 1, self.height * self.width).type_as(tgt_desc).int()
         if self.config['dataset']['sensor'] == 'velodyne':
+            tgt_coords = geometry_img.view(batch_size, 3, -1)
             pseudo_coords = torch.matmul(tgt_coords, soft_match_vals.transpose(2, 1)) # Bx3xN
-            pseudo_weights = torch.matmul(tgt_weights.view(batch_size, n_features, -1), soft_match_vals.transpose(2, 1)) # Bx1xN
+            pseudo_weights = torch.matmul(tgt_weights.view(batch_size, 1, -1), soft_match_vals.transpose(2, 1)) # Bx1xN
             pseudo_descs = torch.matmul(tgt_desc.view(batch_size, n_features, -1), soft_match_vals.transpose(2, 1)) # BxCxN
 
             # Compute 2D keypoints from 3D pseudo coordinates
@@ -85,7 +86,7 @@ class SoftmaxMatcherBlock(nn.Module):
                                          soft_match_vals.transpose(2, 1).contiguous()).transpose(2, 1).contiguous()  # BxNx2
 
             # Compute 3D points with camera model, points are in cam0 frame, Bx3xN, Bx1xN
-            pseudo_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img, cam_calib)
+            pseudo_coords, valid_pts = self.stereo_cam.inverse_camera_model(pseudo_2D, geometry_img, cam_calib)
 
             pseudo_weights = get_scores(tgt_weights, pseudo_2D)
             pseudo_descs = sample_desc(tgt_desc, pseudo_2D)

@@ -63,6 +63,7 @@ class SVDBlock(nn.Module):
 
         t = -R @ (keypoints_centroid - R.transpose(2,1) @ pseudo_centroid)
         t = t.squeeze()
+
         return R, t
 
 
@@ -71,15 +72,15 @@ class SVD(nn.Module):
     def __init__(self):
         super(SVD, self).__init__()
 
-    def forward(self, src_coords, tgt_coords, weights, valid):
-        batch_size, _, n_points = keypoints.size()  # B x 3 x N
+    def forward(self, src_coords, tgt_coords, weights):
+        batch_size, _, n_points = src_coords.size()  # B x 3 x N
 
         # Compute weighted centroids (elementwise multiplication/division)
         src_centroid = torch.sum(src_coords * weights, dim=2, keepdim=True) / torch.sum(weights, dim=2, keepdim=True)  # B x 3 x 1
         tgt_centroid = torch.sum(tgt_coords * weights, dim=2, keepdim=True) / torch.sum(weights, dim=2, keepdim=True)
 
-        src_centered = src_coords - centroid_src  # B x 3 x N
-        tgt_centered = tgt_coords - centroid_trg
+        src_centered = src_coords - src_centroid  # B x 3 x N
+        tgt_centered = tgt_coords - tgt_centroid
 
         W = torch.diag_embed(weights.reshape(batch_size, n_points))  # B x N x N
         w = torch.sum(weights, dim=2).unsqueeze(2)                   # B x 1 x 1
@@ -97,7 +98,7 @@ class SVD(nn.Module):
         # R = torch.bmm(V, torch.bmm(diag, U.transpose(2, 1).contiguous()))
         # t = centroid_trg - torch.bmm(R, centroid_src)
         R_tgt_src = torch.bmm(U, torch.bmm(diag, V.transpose(2, 1).contiguous()))  # B x 3 x 3
-        t_tgt_src_insrc = centroid_src - torch.bmm(R_tgt_src.transpose(2, 1).contiguous(), centroid_tgt)  # B x 3 x 1
+        t_tgt_src_insrc = src_centroid - torch.bmm(R_tgt_src.transpose(2, 1).contiguous(), tgt_centroid)  # B x 3 x 1
         t_src_tgt_intgt = -R_tgt_src.bmm(t_tgt_src_insrc)
 
         # Create translation matrix

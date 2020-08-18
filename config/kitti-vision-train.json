@@ -7,7 +7,7 @@
 
     "networks": {
         "match_type": "zncc",
-        "dense_match": true.
+        "dense_match": true,
         "unet": {
             "n_weight_score": 1,
             "bilinear": true,
@@ -15,16 +15,18 @@
             "depth": 4
         },
         "keypoint_block": {
-            "patch_height": 8,
-            "patch_width": 8,
-            "softmax_temp": 100.0
+            "patch_height": 16,
+            "patch_width": 16,
+            "softmax_temp": 1.0,
+            "align_corners": false,
+            "grid_sample": true
         },
         "matcher_block": {
             "softmax_temperature": 0.01
         },
         "outlier_rejection": {
             "on": true,
-            "type": '2D',
+            "type": "2D",
             "threshold": 50.0
         }
     },
@@ -45,7 +47,7 @@
 	    "sensor": "camera",
         "images": {
             "height": 364,
-            "width": 1200,
+            "width": 1000,
             "input_channel": ["rgb"]
         },
         "disparity": {
@@ -65,23 +67,23 @@
     "loss": {
         "types": ["keypoint_2D", "svd"],
         "weights": {"keypoint_2D":  0.01, "keypoint_3D":  0.01, "svd": 10.0},
-        "start_svd_epoch": 2
+        "start_svd_epoch": 1
     },
 
     "record": {
-        "save_names": ["T_tgt_src", "T_tgt_src_pred", "inliers"]
+        "save_names": ["T_tgt_src", "T_tgt_src_pred", "inliers", "src_valid", "pseudo_valid"]
     },
 
 
     "train_loader": {
-        "batch_size": 5,
-        "window_size": 1,
+        "batch_size": 2,
+        "window_size": 2,
         "num_workers": 4
     },
 
     "test_loader": {
-        "batch_size": 5,
-        "window_size": 1,
+        "batch_size": 1,
+        "window_size": 2,
         "num_workers": 4
     },
 

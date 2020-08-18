@@ -9,9 +9,10 @@ from torchvision import transforms
 from PIL import Image
 import numpy as np
 
-from utils.lie_algebra import se3_inv, se3_log, se3_exp
+from utils.lie_algebra import se3_inv, se3_log, se3_exp, so3_log
 from utils.utils import zn_desc, T_inv
 from utils.helper_func import compute_2D_from_3D
+from utils.stereo_camera_model import StereoCameraModel
 from networks.unet_block import UNetBlock
 from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
@@ -38,8 +39,13 @@ class SVDPoseModel(nn.Module):
         self.svd_weight_block = SVDWeightBlock(self.config)
 
         self.svd_block = SVD()
+        # self.svd_block = SVDBlock(self.config)
+
 
         self.sigmoid = torch.nn.Sigmoid()
+
+        # stereo camera model
+        self.stereo_cam = StereoCameraModel()
 
         # intermediate output
         #self.result_path = 'results/' + self.config['session_name'] + '/intermediate_outputs'
@@ -59,7 +65,7 @@ class SVDPoseModel(nn.Module):
 
         # move to GPU
         geometry_img = geometry_img.cuda()
-        images = images.cuda()
+        images = images.cuda() if self.config['dataset']['sensor'] == 'velodyne' else images[:, :3, :, :].cuda()
         T_iv = T_iv.cuda()
 
         # Extract features, detector scores and weight scores
@@ -72,7 +78,8 @@ class SVDPoseModel(nn.Module):
         keypoints_2D, keypoint_coords, keypoint_descs, keypoint_weights, keypoint_valid = self.keypoint_block(geometry_img,
                                                                                                      descs,
                                                                                                      detector_scores,
-                                                                                                     weight_scores)
+                                                                                                     weight_scores,
+                                                                                                     cam_calib)
 
         src_coords = keypoint_coords[::self.window_size]
         src_valid = keypoint_valid[::self.window_size]
@@ -93,10 +100,11 @@ class SVDPoseModel(nn.Module):
 
         # Match the points in src frame to points in target frame to generate pseudo points
         pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(src_coords,
-                                                                                 geometry_img[1::self.window_size].view(self.batch_size, 3, -1),
-                                                                                 weight_scores[1::self.window_size].view(self.batch_size, 1, -1),
+                                                                                 geometry_img[1::self.window_size],
+                                                                                 weight_scores[1::self.window_size],
                                                                                  src_descs,
-                                                                                 descs[1::self.window_size])
+                                                                                 descs[1::self.window_size],
+                                                                                 cam_calib)
 
         # # UNCOMMENT this line to do keypoint matching instead of dense matching
         # pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
@@ -118,24 +126,23 @@ class SVDPoseModel(nn.Module):
         if self.config['dataset']['sensor'] == 'velodyne':
             pseudo_gt_2D = compute_2D_from_3D(pseudo_gt_coords, self.config)
         else:
-            pseudo_gt_2D = self.stereo_cam.camera_model(pseudo_gt_coords)[:, 0:2, :].transpose(2,1)  # BxNx2
+            pseudo_gt_2D = self.stereo_cam.camera_model(pseudo_gt_coords, cam_calib)[:, 0:2, :].transpose(2,1) # BxNx2
 
         # Outlier rejection based on error between predicted pseudo point and ground truth
-        valid_err = torch.ones(keypoint_valid.size()).type_as(keypoint_valid)
+        inlier_valid = torch.ones(src_valid.size()).type_as(src_valid)
         if self.config['networks']['outlier_rejection']['on']:
             if self.config['networks']['outlier_rejection']['type'] == '3D':
                 # Find outliers with large keypoint errors in 3D
                 err = torch.norm(pseudo_coords - pseudo_gt_coords, dim=1) # B x N
-                valid_err = err < self.config['networks']['outlier_rejection']['threshold']
-                valid_err = valid_err.unsqueeze(1) # B x 1 x N
+                inlier_valid = err < self.config['networks']['outlier_rejection']['threshold']
+                inlier_valid = inlier_valid.unsqueeze(1) # B x 1 x N
             elif self.config['networks']['outlier_rejection']['type'] == '2D':
                 # Find outliers with large keypoint errors in 2D
                 err = torch.norm(pseudo_2D - pseudo_gt_2D, dim=2)  # B x N
-                valid_err = err < self.config['networks']['outlier_rejection']['threshold']
-                valid_err = valid_err.unsqueeze(1) # B x 1 x N
+                inlier_valid = err < self.config['networks']['outlier_rejection']['threshold']
+                inlier_valid = inlier_valid.unsqueeze(1) # B x 1 x N
             else:
                 assert False, "Outlier rejection type must be 2D or 3D"
-
 
         ###############
         # Compute loss
@@ -166,14 +173,14 @@ class SVDPoseModel(nn.Module):
             else:
                 # compute loss term
                 if 'keypoint_3D' in self.config['loss']['types']:
-                    valid = src_valid & pseudo_valid & valid_err                 # B x 1 x N
-                    valid = valid.expand(self.batch_size, 3, valid_err.size(2))  # B x 3 x N
-                    keypoint_loss = self.Keypoint_2D_loss(pseudo_coords[valid], pseudo_coords_gt[valid])
+                    valid = src_valid & pseudo_valid & inlier_valid                 # B x 1 x N
+                    valid = valid.expand(self.batch_size, 3, inlier_valid.size(2))  # B x 3 x N
+                    keypoint_loss = self.Keypoint_2D_loss(pseudo_coords[valid], pseudo_gt_coords[valid])
                     keypoint_loss *= self.config['loss']['weights']['keypoint_3D']
                 else:
-                    valid = src_valid & valid_err                                                # B x 1 x N
-                    valid = valid.transpose(2, 1).expand(self.batch_size, valid_err.size(2), 2)  # B x N x 2
-                    keypoint_loss = self.Keypoint_2D_loss(pseudo_2D[valid], pseudo_2D_gt[valid])
+                    valid = src_valid & inlier_valid                                                # B x 1 x N
+                    valid = valid.transpose(2, 1).expand(self.batch_size, inlier_valid.size(2), 2)  # B x N x 2
+                    keypoint_loss = self.Keypoint_2D_loss(pseudo_2D[valid], pseudo_gt_2D[valid])
                     keypoint_loss *= self.config['loss']['weights']['keypoint_2D']
 
             loss += keypoint_loss
@@ -199,25 +206,32 @@ class SVDPoseModel(nn.Module):
                                                 src_weights,
                                                 pseudo_weights)
 
+            valid = src_valid & pseudo_valid & inlier_valid
+            svd_weights[valid == 0] = 0.0
+
             # # Use SVD to solve for optimal transform
             # R_pred, t_pred = [], []
             # # if torch.sum(torch.isnan(pseudo_coords)):
             # #     np.save('{}/pseudo_coords.npy'.format(self.result_path), pseudo_coords.detach().cpu().numpy())
             # for i in range(svd_weights.size(0)):
-            #     R_pred_i, t_pred_i = self.svd_block(keypoint_coords[::self.window_size][i][:, self.valid_idx[i]].unsqueeze(0),
-            #                                         pseudo_coords[i][:, self.valid_idx[i]].unsqueeze(0),
-            #                                         svd_weights[i][:, self.valid_idx[i]].unsqueeze(0))
+            #     R_pred_i, t_pred_i = self.svd_block(src_coords[i].unsqueeze(0),
+            #                                         pseudo_coords[i].unsqueeze(0),
+            #                                         svd_weights[i].unsqueeze(0))
             #     R_pred.append(R_pred_i)
             #     t_pred.append(t_pred_i.unsqueeze(0))
             # R_pred = torch.cat(R_pred, dim=0)
-            # t_pred = torch.cat(t_pred, dim=0
+            # t_pred = torch.cat(t_pred, dim=0)
 
             # Use SVD to solve for optimal transform
-            valid = src_valid & pseudo_valid & valid_err
-            svd_weights[valid == 0] = 0.0
+            # valid = src_valid & pseudo_valid & inlier_valid
+            # svd_weights[valid == 0] = 0.0
             T_tgt_src_pred, R_tgt_src_pred, t_tgt_src_pred = self.svd_block(src_coords, pseudo_coords, svd_weights)
 
-            svd_loss, R_loss, t_loss = self.SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred)
+            # T_tgt_src_test, _, _ = self.svd_block(src_coords, pseudo_gt_coords, svd_weights)
+            # print('SVD test diff: {}'.format(T_tgt_src_test.bmm(se3_inv(T_tgt_src))))
+
+            svd_loss, R_loss, t_loss = self.SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src.unsqueeze(-1), t_tgt_src_pred)
+            # svd_loss, R_loss, t_loss = self.SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred)
             svd_loss_weight = self.config['loss']['weights']['svd']
             loss += svd_loss_weight * svd_loss
             loss_dict['SVD_LOSS'] = svd_loss_weight * svd_loss
@@ -227,11 +241,19 @@ class SVDPoseModel(nn.Module):
         loss_dict['LOSS'] = loss
 
         # save intermediate outputs
-        if (len(self.save_names) > 0) and (epoch >= self.config['loss']['start_svd_epoch']):
+        if (len(self.save_names) > 0):
 
-            self.save_dict['T_tgt_src'] = T_trg_src if 'T_tgt_src' in self.save_names else None
-            self.save_dict['T_tgt_src_pred'] = T_trg_src_pred if 'T_tgt_src_pred' in self.save_names else None
-            self.save_dict['inliers'] = valid_err if 'inliers' in self.save_names else None
+            # self.save_dict['R_tgt_src'] = R_tgt_src if 'T_tgt_src' in self.save_names else None
+            # self.save_dict['R_tgt_src_pred'] = R_pred if 'T_tgt_src_pred' in self.save_names else None
+            # self.save_dict['t_tgt_src'] = t_tgt_src if 'T_tgt_src' in self.save_names else None
+            # self.save_dict['t_tgt_src_pred'] = t_pred if 'T_tgt_src_pred' in self.save_names else None
+            self.save_dict['inliers'] = inlier_valid if 'inliers' in self.save_names else None
+            self.save_dict['src_valid'] = src_valid if 'src_valid' in self.save_names else None
+            self.save_dict['pseudo_valid'] = pseudo_valid if 'pseudo_valid' in self.save_names else None
+
+            if epoch >= self.config['loss']['start_svd_epoch']:
+                self.save_dict['T_tgt_src'] = T_tgt_src if 'T_tgt_src' in self.save_names else None
+                self.save_dict['T_tgt_src_pred'] = T_tgt_src_pred if 'T_tgt_src_pred' in self.save_names else None
         #     # print("Saving {}".format(self.save_names))
         #
         #     self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
@@ -324,19 +346,30 @@ class SVDPoseModel(nn.Module):
         for key in loss:
             message = '{} {}: {:.6f},'.format(message, key, loss[key].item())
 
-        print(message, flush=True)
+        print(message + '\n', flush=True)
 
     def get_pose_error(self):
 
         T_tgt_src = self.save_dict['T_tgt_src']
         T_tgt_src_pred = self.save_dict['T_tgt_src_pred']
 
+        # R_tgt_src = self.save_dict['R_tgt_src']
+        # R_tgt_src_pred = self.save_dict['R_tgt_src_pred']
+        # t_tgt_src = self.save_dict['t_tgt_src']
+        # t_tgt_src_pred = self.save_dict['t_tgt_src_pred']
+        #
+        # error = torch.zeros(self.batch_size, 6).cuda()
+        # error[:, :3] = so3_log(R_tgt_src_pred) - so3_log(R_tgt_src)
+        # error[:, 3:] = t_tgt_src_pred - t_tgt_src
+
         return se3_log(T_tgt_src) - se3_log(T_tgt_src_pred)
 
     def print_inliers(self, epoch, iter):
 
-        print('epoch: {} i: {} => num inliers: {}'.format(epoch, iter,
-                                                          torch.sum(self.save_dict['inliers'], dim=2).squeeze()))
+        print('epoch: {} i: {} => num inliers: {}, src_valid: {}, pseudo_valid: {} \n'.format(epoch, iter,
+                                              torch.sum(self.save_dict['inliers'], dim=2).squeeze().cpu().numpy(),
+                                              torch.sum(self.save_dict['src_valid'], dim=2).squeeze().cpu().numpy(),
+                                              torch.sum(self.save_dict['pseudo_valid'], dim=2).squeeze().cpu().numpy()))
 
     def save_intermediate_outputs(self):
         if len(self.save_dict) > 0 and not self.overwrite_flag:

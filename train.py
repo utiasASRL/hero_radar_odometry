@@ -1,4 +1,5 @@
 import os
+import sys
 import signal
 import argparse
 import json
@@ -65,7 +66,7 @@ if __name__ == '__main__':
 
     stderr_orig = sys.stderr
     log_path_err = os.path.join(session_path, 'err_train.txt')
-    stdout_file = open(log_path_err, 'w')
+    stderr_file = open(log_path_err, 'w')
     sys.stderr = stderr_file
 
     # dataloader setup

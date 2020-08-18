@@ -16,7 +16,7 @@ class UNetBlock(nn.Module):
         n_channels += 3 if 'vertex' in input_channel else 0
         n_channels += 1 if 'intensity' in input_channel else 0
         n_channels += 1 if 'range' in input_channel else 0
-        n_chanels += 3 if 'rgb' in input_channel else 0
+        n_channels += 3 if 'rgb' in input_channel else 0
 
         n_weight_score = config["networks"]["unet"]["n_weight_score"] # this specifies num_classes for output
         bilinear = config["networks"]["unet"]["bilinear"]

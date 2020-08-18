@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from utils.stereo_camera_model import StereoCameraModel
 from utils.utils import zn_desc
 
 
@@ -35,7 +37,7 @@ class KeypointBlock(nn.Module):
         self.register_buffer('u_coords', u_coords)
 
         # stereo camera model
-        self.stereo_cam = StereoCameraModel(**config['dataset']['camera_params'])
+        self.stereo_cam = StereoCameraModel()
 
     def forward(self, geometry_img, descriptors, detector_scores, weight_scores, cam_calib):
         """

@@ -77,9 +77,10 @@ class Trainer():
             with torch.autograd.set_detect_anomaly(self.config['detect_anomaly']):
 
                 for i_batch, batch_sample in enumerate(self.train_loader):
+
                     self.optimizer.zero_grad()
 
-                    loss = self.model(batch_sample, epoch, i_batch)
+                    loss = self.model(batch_sample, epoch)
                     t += [time.time()]
 
                     loss['LOSS'].backward()
@@ -88,7 +89,7 @@ class Trainer():
 
                     # record prediction error for each DOF
                     if epoch >= self.config['loss']['start_svd_epoch']:
-                        total_sq_error += torch.sum(self.model.get_error()**2, dim=0)
+                        total_sq_error += torch.sum(self.model.get_pose_error().detach().cpu()**2, dim=0)
 
                     # record loss
                     for key in loss:
@@ -106,21 +107,24 @@ class Trainer():
                     count += 1
 
         # Get and print summary statistics for the epoch
-        print('\n Training epoch: {}'.format(epoch))
+        print('\nTraining epoch: {}'.format(epoch))
 
         for key in total_loss:
             avg_loss = total_loss[key] / count
-            self.epoch_loss_train[key].append(avg_loss)
+            if key in self.epoch_loss_train:
+                self.epoch_loss_train[key].append(avg_loss)
+            else:
+                self.epoch_loss_train[key] = [avg_loss]
             print('{}: {:.6f}'.format(key, avg_loss))
 
         num_samples = count * self.config['train_loader']['batch_size']
-        rms_error = torch.sqrt(total_error / num_samples)
+        rms_error = torch.sqrt(total_sq_error / num_samples)
         if self.epoch_error_train is None:
             self.epoch_error_train = rms_error
         else:
-            self.epoch_error_train = np.concatenate((self.epoch_errors, rms_error), axis=0)
+            self.epoch_error_train = np.concatenate((self.epoch_error_train, rms_error), axis=0)
 
-        print('Avg error: {}'.format(self.epoch_error[-1, :]))
+        print('Avg error: {}'.format(rms_error))
         print('Time: {}'.format(time.time() - start))
         print('\n')
 
@@ -143,12 +147,12 @@ class Trainer():
 
                 for i_batch, batch_sample in enumerate(self.valid_loader):
 
-                    loss = self.model(batch_sample, epoch, i_batch)
+                    loss = self.model(batch_sample, epoch)
                     t += [time.time()]
 
                     # record prediction error for each DOF
                     if epoch >= self.config['loss']['start_svd_epoch']:
-                        total_sq_error += torch.sum(self.model.get_error()**2, dim=0)
+                        total_sq_error += torch.sum(self.model.get_pose_error().detach().cpu()**2, dim=0)
 
                     # record loss
                     for key in loss:
@@ -166,21 +170,24 @@ class Trainer():
                     count += 1
 
         # Get and print summary statistics for the epoch
-        print('\n Validation epoch: {}'.format(epoch))
+        print('\nValidation epoch: {}'.format(epoch))
 
         for key in total_loss:
             avg_loss = total_loss[key] / count
-            self.epoch_loss_valid[key].append(avg_loss)
+            if key in self.epoch_loss_valid:
+                self.epoch_loss_valid[key].append(avg_loss)
+            else:
+                self.epoch_loss_valid[key] = [avg_loss]
             print('{}: {:.6f}'.format(key, avg_loss))
 
         num_samples = count * self.config['train_loader']['batch_size']
-        rms_error = torch.sqrt(total_error / num_samples)
-        print('Avg error: {}'.format(avg_error))
+        rms_error = torch.sqrt(total_sq_error / num_samples)
         if self.epoch_error_valid is None:
             self.epoch_error_valid = rms_error
         else:
-            self.epoch_error_valid = np.concatenate((self.epoch_errors, rms_error), axis=0)
+            self.epoch_error_valid = np.concatenate((self.epoch_error_valid, rms_error), axis=0)
 
+        print('Avg error: {}'.format(rms_error))
         print('Time: {}'.format(time.time() - start))
         print('\n')
 

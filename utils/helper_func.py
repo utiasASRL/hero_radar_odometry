@@ -367,9 +367,7 @@ def compute_disparity(left_img, right_img, config):
 
     disp[np.abs(disp) < 1e-10] = 1e-10
 
-    height, width = disp.shape
-
-    return disp.reshape(1, height, width)
+    return disp
 
 def load_camera_data(left_img_file, right_img_file, height, width, config):
     
