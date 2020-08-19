@@ -7,9 +7,9 @@
         "dense_match": false,
         "base_net": "super",
         "loss": "steam",
-        "sobel_mask": ["intensity"],
+        "sobel_mask": ["intensity", "vehicle"],
         "sobel_int_thresh": 0.7,
-        "sobel_ran_thresh": 0.5,
+        "sobel_ran_thresh": 0.2,
         "unet": {
             "n_weight_score": 6,
             "bilinear": true,
@@ -37,9 +37,9 @@
     "dataset": {
         "data_dir": "/home/david/Data/kitti",
         "seq": {
-            "train": ["00", "01", "02", "03", "04", "05", "06", "07"],
+            "train": ["00"],
             "val": ["08"],
-            "test": ["00", "09", "10"]
+            "test": ["00"]
         },
         "images": {
             "height": 64,

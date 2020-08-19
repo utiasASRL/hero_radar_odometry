@@ -62,6 +62,10 @@ class F2FPoseModel(nn.Module):
         self.patch_height = config['networks']['keypoint_block']['patch_height']
         self.patch_width = config['networks']['keypoint_block']['patch_width']
 
+        # vehicle mask
+        if "vehicle" in self.config['networks']['sobel_mask']:
+            self.vehicle_mask = self.create_vehicle_mask()
+
     def forward(self, data):
         '''
         Estimate transform between two frames
@@ -386,6 +390,10 @@ class F2FPoseModel(nn.Module):
             sobel_out = sobel_out > self.config['networks']['sobel_ran_thresh']
             pixel_mask = (pixel_mask + sobel_out) > 0
 
+        # vehicle mask
+        if "vehicle" in self.config['networks']['sobel_mask']:
+            pixel_mask = pixel_mask*self.vehicle_mask
+
         # unfold
         mask_patches = F.unfold(pixel_mask.float(), kernel_size=(self.patch_height, self.patch_width),
                                 stride=(self.patch_height, self.patch_width))  # B x num_patch_elements x num_patches
@@ -393,3 +401,34 @@ class F2FPoseModel(nn.Module):
         out_mask = patch_mask*mask_patches
 
         return out_mask
+
+    def create_vehicle_mask(self):
+        # vehicle mask
+        # TODO: Hardcoded for 64 x 720 images
+        vehicle_mask = torch.ones(64, 720)
+        vehicle_mask = vehicle_mask.cuda()
+
+        # left/right vertical border
+        vborder = 6
+        vehicle_mask[:, :vborder+1] = 0
+        vehicle_mask[:, -vborder:] = 0
+
+        # bottom-left blob
+        vehicle_mask[-23:, :48] = 0
+        vehicle_mask[-35:, 24:54] = 0
+        vehicle_mask[-15:, 48:82] = 0
+        vehicle_mask[-23:, 72:112] = 0
+
+        # bottom-centre blob
+        vehicle_mask[-17:, 275:440] = 0
+
+        # bottom-centre-right blob
+        vehicle_mask[-27:, 460:533] = 0
+        vehicle_mask[-17:, 533:541] = 0
+
+        # bottom-right blob
+        vehicle_mask[-20:, 580:655] = 0
+        vehicle_mask[-32:, 655:695] = 0
+        vehicle_mask[-22:, 695:] = 0
+
+        return vehicle_mask
