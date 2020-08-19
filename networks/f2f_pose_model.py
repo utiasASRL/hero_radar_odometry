@@ -431,4 +431,7 @@ class F2FPoseModel(nn.Module):
         vehicle_mask[-32:, 655:695] = 0
         vehicle_mask[-22:, 695:] = 0
 
+        vehicle_mask = vehicle_mask.unsqueeze(0)
+        vehicle_mask = vehicle_mask.unsqueeze(0)
+
         return vehicle_mask
