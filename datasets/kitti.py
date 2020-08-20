@@ -119,7 +119,7 @@ class KittiDataset(Dataset):
 
 
         if self.config['dataset']['images']['preload']:
-            seq_path = join(self.path, 'preload', self.sequences[s_ind])
+            seq_path = join(self.path, 'preload/preload2', self.sequences[s_ind])
             velo_file = join(seq_path, str(f_ind) + '.npy')
             image = np.load(velo_file)
             geometry_img = image[:3, :, :]
