@@ -235,9 +235,12 @@ class F2FPoseModel(nn.Module):
             Wmat_npy = Wmat.detach().cpu().numpy()
             pts2_npy = points2.detach().cpu().numpy()
             if not self.config['networks']['steam_pseudo']:
-                points2_actual = tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
-                points2_actual = points2_actual[ind2to1, :]
-                pts2_npy = points2_actual[mask_ind, :].detach().cpu().numpy()
+                points2e = tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+                points2e = points2e[ind2to1, :]
+                points2e = points2e[mask_ind, :]
+                pts2_npy = points2e.detach().cpu().numpy()
+            else:
+                points2e = points2
             steampy_f2f.run_steam_best_match(pts1_npy,
                                              pts2_npy,
                                              Wmat_npy, T_21_temp)
@@ -247,7 +250,7 @@ class F2FPoseModel(nn.Module):
             # error rejection
             points1_in_2 = points1@T_21[0, :3, :3].T + T_21[0, :3, 3].unsqueeze(0)
             # error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
-            error = (points1_in_2 - points2).unsqueeze(-1)
+            error = (points1_in_2 - points2e).unsqueeze(-1)
             mah = error.transpose(1, 2)@Wmat@error
             ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
                                 as_tuple=False).squeeze()
