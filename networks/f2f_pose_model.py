@@ -208,12 +208,10 @@ class F2FPoseModel(nn.Module):
             # get src points
             points1 = src_coords[batch_i, :, nr_ids1].transpose(0, 1)
 
-            # get tgt points
+            # get tgt points (pseudo)
             w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids1, :] # N x M
             w12 = w12[:, nr_ids2]
             points2 = F.softmax(w12*50.0, dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
-            # torch.matmul(tgt_coords, soft_match_vals.transpose(2, 1)) # Bx3xN
-            # F.softmax(self.match_vals / self.softmax_temperature, dim=2)
 
             # get weights
             w = weights[batch_i, :, nr_ids1].transpose(0, 1)
@@ -234,8 +232,12 @@ class F2FPoseModel(nn.Module):
             # solve steam problem
             T_21_temp = np.zeros((13, 4, 4), dtype=np.float32)
             pts1_npy = points1.detach().cpu().numpy()
-            pts2_npy = points2.detach().cpu().numpy()
             Wmat_npy = Wmat.detach().cpu().numpy()
+            pts2_npy = points2.detach().cpu().numpy()
+            if not self.config['networks']['steam_pseudo']:
+                points2_actual = tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+                points2_actual = points2_actual[ind2to1, :]
+                pts2_npy = points2_actual[mask_ind, :].detach().cpu().numpy()
             steampy_f2f.run_steam_best_match(pts1_npy,
                                              pts2_npy,
                                              Wmat_npy, T_21_temp)

@@ -7,6 +7,7 @@
         "dense_match": false,
         "base_net": "super",
         "loss": "steam",
+        "steam_pseudo": true,
         "sobel_mask": ["intensity", "vehicle"],
         "sobel_int_thresh": 0.7,
         "sobel_ran_thresh": 0.2,
