@@ -32,6 +32,7 @@ from os.path import exists, join, isdir
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from skimage import feature
 
 # project imports
 from utils.helper_func import load_lidar_image
@@ -102,6 +103,33 @@ class KittiDataset(Dataset):
         # Load everything
         self.load_calib_poses()
 
+        # vehicle_mask
+        vehicle_mask = np.ones((64, 720))
+
+        # left/right vertical border
+        vborder = 6
+        vehicle_mask[:, :vborder+1] = 0
+        vehicle_mask[:, -vborder:] = 0
+
+        # bottom-left blob
+        vehicle_mask[-23:, :48] = 0
+        vehicle_mask[-35:, 24:54] = 0
+        vehicle_mask[-15:, 48:82] = 0
+        vehicle_mask[-23:, 72:112] = 0
+
+        # bottom-centre blob
+        vehicle_mask[-17:, 275:440] = 0
+
+        # bottom-centre-right blob
+        vehicle_mask[-27:, 460:533] = 0
+        vehicle_mask[-17:, 533:541] = 0
+
+        # bottom-right blob
+        vehicle_mask[-20:, 580:655] = 0
+        vehicle_mask[-32:, 655:695] = 0
+        vehicle_mask[-22:, 695:] = 0
+        self.vehicle_mask = vehicle_mask.astype(bool)
+
         return
 
     def __len__(self):
@@ -152,8 +180,12 @@ class KittiDataset(Dataset):
         return_mask = np.bitwise_and(return_mask, np.sum(geometry_img ** 2, axis=0) > 3.0 ** 2)
         return_mask = np.expand_dims(return_mask, 0)
 
+        # canny
+        canny_edge = feature.canny(input_img[1, :, :], sigma=0.1, mask=self.vehicle_mask)
+        canny_edge = np.expand_dims(canny_edge, 0)
+
         return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv,
-                'return_mask': return_mask.astype(np.float32)}
+                'return_mask': return_mask.astype(np.float32), 'canny_edge': canny_edge.astype(np.float32)}
 
     def load_calib_poses(self):
         """

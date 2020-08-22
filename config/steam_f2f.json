@@ -8,7 +8,7 @@
         "base_net": "super",
         "loss": "steam",
         "steam_pseudo": true,
-        "sobel_mask": ["intensity", "vehicle"],
+        "sobel_mask": ["canny"],
         "sobel_int_thresh": 0.7,
         "sobel_ran_thresh": 0.2,
         "unet": {
@@ -40,7 +40,7 @@
         "seq": {
             "train": ["00"],
             "val": ["08"],
-            "test": ["00"]
+            "test": ["01"]
         },
         "images": {
             "height": 64,

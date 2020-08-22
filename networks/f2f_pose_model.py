@@ -74,13 +74,15 @@ class F2FPoseModel(nn.Module):
         '''
 
         # parse data
-        geometry_img, images, T_iv, return_mask = data['geometry'], data['input'], data['T_iv'], data['return_mask']
+        geometry_img, images, T_iv, return_mask, canny_edge = data['geometry'], data['input'], data['T_iv'], \
+                                                              data['return_mask'], data['canny_edge']
 
         # move to GPU
         geometry_img = geometry_img.cuda()
         images = images.cuda()
         T_iv = T_iv.cuda()
         return_mask = return_mask.cuda()
+        canny_edge = canny_edge.cuda()
 
         # divide range by 100
         # images[1, :, :] = images[1, :, :]/100.0
@@ -94,7 +96,7 @@ class F2FPoseModel(nn.Module):
 
         # sobel mask
         if self.config['networks']['sobel_mask']:
-            patch_mask = self.sobel_mask(images, patch_mask)
+            patch_mask = self.sobel_mask(images, patch_mask, canny_edge)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
@@ -294,13 +296,15 @@ class F2FPoseModel(nn.Module):
 
     def forward_keypoints(self, data):
         # parse data
-        geometry_img, images, T_iv, return_mask = data['geometry'], data['input'], data['T_iv'], data['return_mask']
+        geometry_img, images, T_iv, return_mask, canny_edge = data['geometry'], data['input'], data['T_iv'], \
+                                                              data['return_mask'], data['canny_edge']
 
         # move to GPU
         geometry_img = geometry_img.cuda()
         images = images.cuda()
         # T_iv = T_iv.cuda()
         return_mask = return_mask.cuda()
+        canny_edge = canny_edge.cuda()
 
         # divide range by 100
         # images[1, :, :] = images[1, :, :]/100.0
@@ -313,7 +317,7 @@ class F2FPoseModel(nn.Module):
 
         # sobel mask
         if self.config['networks']['sobel_mask']:
-            patch_mask = self.sobel_mask(images, patch_mask)
+            patch_mask = self.sobel_mask(images, patch_mask, canny_edge)
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
@@ -370,11 +374,15 @@ class F2FPoseModel(nn.Module):
 
         return outx, outy
 
-    def sobel_mask(self, images, patch_mask):
+    def sobel_mask(self, images, patch_mask, canny_edge):
         # bitwise or between intensity and range sobel masks
         # bitwise and with result and patch_mask
 
         pixel_mask = torch.zeros_like(images[:, 0:1, :, :])
+
+        # canny (assume its use is always on its own)
+        if "canny" in self.config['networks']['sobel_mask']:
+            pixel_mask = (pixel_mask + canny_edge) > 0
 
         # intensity
         if "intensity" in self.config['networks']['sobel_mask']:
