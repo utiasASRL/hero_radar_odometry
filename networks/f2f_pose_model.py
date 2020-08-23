@@ -165,10 +165,17 @@ class F2FPoseModel(nn.Module):
             tgt_id = 2*batch_i + 1
             T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
 
+            if not self.config['networks']['steam_pseudo']:
+                points2e = tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+                points2e = points2e[ind2to1, :]
+                points2e = points2e[mask_ind, :]
+            else:
+                points2e = points2
+
             # error rejection
             points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
             # error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
-            error = (points1_in_2 - points2).unsqueeze(-1)
+            error = (points1_in_2 - points2e).unsqueeze(-1)
             mah = error.transpose(1, 2)@Wmat@error
             ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
                                 as_tuple=False).squeeze()
