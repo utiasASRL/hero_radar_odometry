@@ -27,7 +27,7 @@ from networks.f2f_pose_model import F2FPoseModel
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='results/ir_super_w6_mah_00/config.json', type=str,
+    parser.add_argument('--config', default='results/ir_super2_w6_mah4_p8_gt_sobi6v_00/config.json', type=str,
                       help='config file path (default: config/steam_f2f.json)')
 
     args = parser.parse_args()
@@ -80,22 +80,27 @@ if __name__ == '__main__':
         fid = int(data['f_ind'][0])
 
         # print keypoints
-        src_coords, tgt_coords, weights = net.forward_keypoints(data)
+        src_coords, tgt_coords, weights, patch_mask = net.forward_keypoints(data)
+
+         # mask
+        nr_ids1 = torch.nonzero(patch_mask[0, :, :].squeeze(), as_tuple=False).squeeze()
+        nr_ids2 = torch.nonzero(patch_mask[1, :, :].squeeze(), as_tuple=False).squeeze()
 
         # get src points
-        points1 = src_coords[0, :, :].transpose(0, 1)
-
-        # check for no returns in src keypoints
-        nr_ids = torch.nonzero(torch.sum(points1, dim=1), as_tuple=False).squeeze()
-        points1 = points1[nr_ids, :]
+        points1 = src_coords[0, :, nr_ids1].transpose(0, 1)
 
         # get tgt points
-        points2 = tgt_coords[0, :, nr_ids].transpose(0, 1)
+        w12 = net.softmax_matcher_block.match_vals[0, nr_ids1, :] # N x M
+        w12 = w12[:, nr_ids2]
+        points2 = F.softmax(w12*config['networks']['pseudo_temp'], dim=1)@tgt_coords[0, :, nr_ids2].transpose(0, 1)
+
+        # get weights
+        w = weights[0, :, nr_ids1].transpose(0, 1)
+        Wmat, d = net.convertWeightMat(w)
 
         # match consistency
-        w12 = net.softmax_matcher_block.match_vals[0, nr_ids, :] # N x M
         # w12 = torch.zeros((5, 4))
-        _, ind2to1 = torch.max(w12, dim=1)  # N
+        match_score, ind2to1 = torch.max(w12, dim=1)  # N
         _, ind1to2 = torch.max(w12, dim=0)  # M
         mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
         mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
@@ -105,6 +110,11 @@ if __name__ == '__main__':
         T_iv = data['T_iv'].cuda()
         T_21 = net.se3_inv(T_iv[1, :, :])@T_iv[0, :, :]
         points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
+
+        # actual tgt points
+        points2 = tgt_coords[0, :, nr_ids2].transpose(0, 1)
+        points2 = points2[ind2to1, :]
+        points2 = points2[mask_ind, :]
 
         # convert to numpy
         points1_in_2 = points1_in_2.detach().cpu().numpy()
@@ -121,7 +131,7 @@ if __name__ == '__main__':
         pointsToVTK("{}/points2_{}".format(output_path, fid), x, y, z)
 
         # association lines
-        skip = 10
+        skip = 1
         points1_in_2 = points1_in_2[::skip]
         points2 = points2[::skip]
         N = points1_in_2.shape[0]
@@ -134,8 +144,10 @@ if __name__ == '__main__':
         x[1::2] = points2[:, 0]
         y[1::2] = points2[:, 1]
         z[1::2] = points2[:, 2] + 50
+        m = np.zeros((N,), order='C')
+        m[:] = match_score[mask_ind].detach().cpu().numpy()
 
-        linesToVTK("{}/img_{}".format(output_path, fid), x, y, z)
+        linesToVTK("{}/match_{}".format(output_path, fid), x, y, z, cellData={"match_score": m})
 
         # print raw image pc
         geometry_img = data['geometry'][0, :, :].cuda()

@@ -8,6 +8,7 @@
         "base_net": "super",
         "loss": "steam",
         "steam_pseudo": true,
+        "pseudo_temp": 60.0,
         "sobel_mask": ["canny"],
         "sobel_int_thresh": 0.7,
         "sobel_ran_thresh": 0.2,

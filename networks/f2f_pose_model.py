@@ -143,7 +143,7 @@ class F2FPoseModel(nn.Module):
             # get tgt points
             w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids1, :] # N x M
             w12 = w12[:, nr_ids2]
-            points2 = F.softmax(w12*50.0, dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+            points2 = F.softmax(w12*self.config['networks']['pseudo_temp'], dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
 
             # get weights
             w = weights[batch_i, :, nr_ids1].transpose(0, 1)
@@ -220,7 +220,7 @@ class F2FPoseModel(nn.Module):
             # get tgt points (pseudo)
             w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids1, :] # N x M
             w12 = w12[:, nr_ids2]
-            points2 = F.softmax(w12*50.0, dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+            points2 = F.softmax(w12*self.config['networks']['pseudo_temp'], dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
 
             # get weights
             w = weights[batch_i, :, nr_ids1].transpose(0, 1)
