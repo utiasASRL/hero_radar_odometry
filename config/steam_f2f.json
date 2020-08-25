@@ -5,10 +5,10 @@
     "networks": {
         "match_type": "dp",
         "dense_match": false,
-        "base_net": "super",
-        "loss": "steam",
+        "base_net": "dual_super",
+        "loss": "gt",
         "steam_pseudo": true,
-        "pseudo_temp": 60.0,
+        "pseudo_temp": 50.0,
         "sobel_mask": ["canny"],
         "sobel_int_thresh": 0.7,
         "sobel_ran_thresh": 0.2,

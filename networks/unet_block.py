@@ -72,7 +72,7 @@ class UNetBlock(nn.Module):
         self.up4_score = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
         self.outc_score = OutConv(self.first_feature_dimension, self.n_weight_score)
 
-    def forward(self, x):
+    def forward(self, x, v):
         batch_size, _, height, width = x.size()
 
         x1 = self.inc(x)

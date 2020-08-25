@@ -10,12 +10,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
 
-from networks.layers import DoubleConv, OutConv, Down, Up, SingleConv
+from networks.layers import DoubleConv, OutConv, Down, Up, SingleConv, LeakyDoubleConv
 # from visualization.plots import Plotting
 
-class SuperpointBlock(nn.Module):
+class DualSuperBlock(nn.Module):
     def __init__(self, config):
-        super(SuperpointBlock, self).__init__()
+        super(DualSuperBlock, self).__init__()
         # TODO relying on hard-coded config params
 
         # n_channels
@@ -26,6 +26,12 @@ class SuperpointBlock(nn.Module):
         self.n_channels += 1 if 'range' in self.input_channel else 0
 
         self.n_weight = config['networks']['unet']['n_weight_score']
+
+        # weight net
+        self.weight_net = nn.Sequential(
+            LeakyDoubleConv(3, 6),
+            LeakyDoubleConv(6, 6)
+        )
 
         # encoder
         self.inc = DoubleConv(self.n_channels, 64)    # 512 x 384 (out size after layer)
@@ -40,8 +46,8 @@ class SuperpointBlock(nn.Module):
         self.decode_detector = DoubleConv(512, 512)
         self.out_detector = OutConv(512, 64)
 
-        self.decode_weight = DoubleConv(512, 512)
-        self.out_weight = OutConv(512, 64*self.n_weight)
+        # self.decode_weight = DoubleConv(512, 512)
+        # self.out_weight = OutConv(512, 64*self.n_weight)
 
         self.decode_desc = DoubleConv(512, 512)
         self.out_desc = OutConv(512, 256)
@@ -81,8 +87,9 @@ class SuperpointBlock(nn.Module):
         desc = self.out_desc(desc)
         desc = F.interpolate(desc, size=(height, width), mode='bicubic', align_corners=True)      # B x 256 x H x W
 
-        weight = self.decode_weight(x)              # B x 64 x H/8 x W/8
-        weight = self.out_weight(weight)
-        weight = F.pixel_shuffle(weight, 8)          # B x 1 x H x W
+        # weight = self.decode_weight(x)              # B x 64 x H/8 x W/8
+        # weight = self.out_weight(weight)
+        # weight = F.pixel_shuffle(weight, 8)          # B x 1 x H x W
+        weight = self.weight_net(v)
 
         return detector, weight, desc

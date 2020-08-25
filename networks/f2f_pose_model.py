@@ -10,6 +10,7 @@ from utils.utils import zn_desc, T_inv
 from networks.unet_block import UNetBlock
 from networks.unetf_block import UNetFBlock
 from networks.superpoint_block import SuperpointBlock
+from networks.dual_super_block import DualSuperBlock
 from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
 from networks.svd_block import SVDBlock
@@ -34,6 +35,8 @@ class F2FPoseModel(nn.Module):
             self.unet_block = SuperpointBlock(self.config)
         elif self.config['networks']['base_net'] == 'unetf':
             self.unet_block = UNetFBlock(self.config)
+        elif self.config['networks']['base_net'] == 'dual_super':
+            self.unet_block = DualSuperBlock(self.config)
         else:
             assert False, "Base network should be unet or super"
 
@@ -77,18 +80,22 @@ class F2FPoseModel(nn.Module):
         geometry_img, images, T_iv, return_mask, canny_edge = data['geometry'], data['input'], data['T_iv'], \
                                                               data['return_mask'], data['canny_edge']
 
+        ageometry_img, R_oa = data['ageometry'], data['R_oa']
+
         # move to GPU
         geometry_img = geometry_img.cuda()
         images = images.cuda()
         T_iv = T_iv.cuda()
         return_mask = return_mask.cuda()
         canny_edge = canny_edge.cuda()
+        ageometry_img = ageometry_img.cuda()
+        R_oa = R_oa.cuda()
 
         # divide range by 100
         # images[1, :, :] = images[1, :, :]/100.0
 
         # Extract features, detector scores and weight scores
-        detector_scores, weight_scores, descs = self.unet_block(images)
+        detector_scores, weight_scores, descs = self.unet_block(images, ageometry_img)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
         keypoint_coords, keypoint_descs, keypoint_weights, patch_mask = self.keypoint_block(
@@ -109,17 +116,17 @@ class F2FPoseModel(nn.Module):
         # compute loss
         if self.config['networks']['loss'] == "gt":
             loss = self.loss(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
-                             keypoint_weights[::self.window_size], patch_mask, T_iv)
+                             keypoint_weights[::self.window_size], patch_mask, T_iv, R_oa)
         elif self.config['networks']['loss'] == "steam":
             loss = self.loss_steam(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
-                                   keypoint_weights[::self.window_size], patch_mask)
+                                   keypoint_weights[::self.window_size], patch_mask, R_oa)
         else:
             assert False, "Loss must be gt or steam"
 
 
         return loss
 
-    def loss(self, src_coords, tgt_coords, weights, patch_mask, T_iv):
+    def loss(self, src_coords, tgt_coords, weights, patch_mask, T_iv, R_oa):
         '''
         Compute loss
         :param src_coords: src keypoint coordinates
@@ -148,6 +155,10 @@ class F2FPoseModel(nn.Module):
             # get weights
             w = weights[batch_i, :, nr_ids1].transpose(0, 1)
             Wmat, d = self.convertWeightMat(w)
+
+            # rotate cov back
+            if self.config['networks']['base_net'] == 'dual_super':
+                Wmat = R_oa[batch_i*2, :, :]@Wmat@R_oa[batch_i*2, :, :].T
 
             # match consistency
             _, ind2to1 = torch.max(w12, dim=1)  # N
@@ -197,7 +208,7 @@ class F2FPoseModel(nn.Module):
 
         return loss
 
-    def loss_steam(self, src_coords, tgt_coords, weights, patch_mask):
+    def loss_steam(self, src_coords, tgt_coords, weights, patch_mask, R_oa):
         '''
         Compute loss
         :param src_coords: src keypoint coordinates
@@ -227,6 +238,9 @@ class F2FPoseModel(nn.Module):
             # get weights
             w = weights[batch_i, :, nr_ids1].transpose(0, 1)
             Wmat, d = self.convertWeightMat(w)
+
+            if self.config['networks']['base_net'] == 'dual_super':
+                Wmat = R_oa[batch_i*2, :, :]@Wmat@R_oa[batch_i*2, :, :].T
 
             # match consistency
             # w12 = torch.zeros((5, 4))
@@ -321,7 +335,7 @@ class F2FPoseModel(nn.Module):
         # images[1, :, :] = images[1, :, :]/100.0
 
         # Extract features, detector scores and weight scores
-        detector_scores, weight_scores, descs = self.unet_block(images)
+        detector_scores, weight_scores, descs = self.unet_block(images, geometry_img)
 
         # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
         keypoint_coords, keypoint_descs, keypoint_weights, patch_mask = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)

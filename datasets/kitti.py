@@ -184,8 +184,18 @@ class KittiDataset(Dataset):
         canny_edge = feature.canny(input_img[1, :, :], sigma=0.1, mask=self.vehicle_mask)
         canny_edge = np.expand_dims(canny_edge, 0)
 
+        # augment geometry
+        aug_geo_img = geometry_img.reshape((3, -1))
+        theta = np.random.rand() * np.pi * 1.0 - np.pi * 0.5
+        c, s = np.cos(theta), np.sin(theta)
+        R_ao = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]], dtype=np.float32)
+        R_ao = R_ao.astype(np.float32)
+        aug_geo_img = R_ao@aug_geo_img
+        aug_geo_img = aug_geo_img.reshape((3, 64, 720))
+
         return {'geometry': geometry_img, 'input': input_img, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv,
-                'return_mask': return_mask.astype(np.float32), 'canny_edge': canny_edge.astype(np.float32)}
+                'return_mask': return_mask.astype(np.float32), 'canny_edge': canny_edge.astype(np.float32),
+                'ageometry': aug_geo_img, 'R_oa': R_ao.T}
 
     def load_calib_poses(self):
         """

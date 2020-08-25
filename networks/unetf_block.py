@@ -79,7 +79,7 @@ class UNetFBlock(nn.Module):
         self.up4_desc = Up(self.first_feature_dimension * (16 + 1), self.first_feature_dimension * 16, self.bilinear)
         self.outc_desc = OutConv(self.first_feature_dimension*16, 256)
 
-    def forward(self, x):
+    def forward(self, x, v):
         batch_size, _, height, width = x.size()
 
         x1 = self.inc(x)
