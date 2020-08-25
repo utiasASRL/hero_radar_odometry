@@ -174,13 +174,15 @@ class F2FPoseModel(nn.Module):
 
             # error rejection
             points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
-            # error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
-            error = (points1_in_2 - points2e).unsqueeze(-1)
-            mah = error.transpose(1, 2)@Wmat@error
-            ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-                                as_tuple=False).squeeze()
-            # ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-            #                     as_tuple=False).squeeze()
+            if self.config["networks"]["keypoint_loss"]["mah"]:
+                error = (points1_in_2 - points2e).unsqueeze(-1)
+                mah = error.transpose(1, 2)@Wmat@error
+                ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
+                                    as_tuple=False).squeeze()
+            else:
+                error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
+                ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
+                                    as_tuple=False).squeeze()
 
             if ids.nelement() <= 1:
                 print("WARNING: ELEMENTS LESS THAN 1")
@@ -258,13 +260,15 @@ class F2FPoseModel(nn.Module):
 
             # error rejection
             points1_in_2 = points1@T_21[0, :3, :3].T + T_21[0, :3, 3].unsqueeze(0)
-            # error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
-            error = (points1_in_2 - points2e).unsqueeze(-1)
-            mah = error.transpose(1, 2)@Wmat@error
-            ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-                                as_tuple=False).squeeze()
-            # ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-            #                     as_tuple=False).squeeze()
+            if self.config["networks"]["keypoint_loss"]["mah"]:
+                error = (points1_in_2 - points2e).unsqueeze(-1)
+                mah = error.transpose(1, 2)@Wmat@error
+                ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
+                                    as_tuple=False).squeeze()
+            else:
+                error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
+                ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
+                                    as_tuple=False).squeeze()
 
             if ids.nelement() <= 1:
                 print("WARNING: ELEMENTS LESS THAN 1")

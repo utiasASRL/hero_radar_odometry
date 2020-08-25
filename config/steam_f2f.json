@@ -26,6 +26,7 @@
             "align_corners": true
         },
         "keypoint_loss": {
+            "mah": false,
             "error_thresh": 4.0
         }
     },
