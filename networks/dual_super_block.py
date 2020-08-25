@@ -29,9 +29,9 @@ class DualSuperBlock(nn.Module):
 
         # weight net
         self.weight_net = nn.Sequential(
-            LeakyDoubleConv(3, 6),
-            LeakyDoubleConv(6, 6),
-            OutConv(6, 6)
+            LeakyDoubleConv(3, 32),
+            LeakyDoubleConv(32, 32),
+            OutConv(32, self.n_weight)
         )
 
         # encoder
