@@ -80,7 +80,7 @@ class F2FPoseModel(nn.Module):
         geometry_img, images, T_iv, return_mask, canny_edge = data['geometry'], data['input'], data['T_iv'], \
                                                               data['return_mask'], data['canny_edge']
 
-        ageometry_img, R_oa = data['ageometry'], data['R_oa']
+        R_oa = data['R_oa']
 
         # move to GPU
         geometry_img = geometry_img.cuda()
@@ -88,11 +88,17 @@ class F2FPoseModel(nn.Module):
         T_iv = T_iv.cuda()
         return_mask = return_mask.cuda()
         canny_edge = canny_edge.cuda()
-        ageometry_img = ageometry_img.cuda()
         R_oa = R_oa.cuda()
 
         # divide range by 100
         # images[1, :, :] = images[1, :, :]/100.0
+        if self.config['networks']['base_net'] == 'dual_super':
+            ageometry_img = geometry_img.detach().clone()
+            ageometry_img = torch.reshape(ageometry_img, (R_oa.size(0), 3, -1))
+            ageometry_img = torch.matmul(R_oa.transpose(1,2), ageometry_img)
+            ageometry_img = torch.reshape(ageometry_img, (R_oa.size(0), 3, 64, 720))
+        else:
+            ageometry_img = geometry_img
 
         # Extract features, detector scores and weight scores
         detector_scores, weight_scores, descs = self.unet_block(images, ageometry_img)
