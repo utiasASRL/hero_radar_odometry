@@ -16,7 +16,8 @@
             "n_weight_score": 6,
             "bilinear": true,
             "first_feature_dimension": 8,
-            "depth": 4
+            "depth": 4,
+            "leaky": true
         },
         "keypoint_block": {
             "patch_height": 8,
@@ -42,7 +43,7 @@
         "seq": {
             "train": ["00"],
             "val": ["08"],
-            "test": ["01"]
+            "test": ["10"]
         },
         "images": {
             "height": 64,

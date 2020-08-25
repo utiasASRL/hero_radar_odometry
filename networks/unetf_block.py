@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
 
-from networks.layers import DoubleConv, OutConv, Down, Up
+from networks.layers import DoubleConv, OutConv, Down, Up, LeakyDoubleConv, LeakyDown, LeakyUp
 # from visualization.plots import Plotting
 
 class UNetFBlock(nn.Module):
@@ -30,53 +30,62 @@ class UNetFBlock(nn.Module):
         self.first_feature_dimension = config["networks"]["unet"]["first_feature_dimension"]
         self.depth = config["networks"]["unet"]["depth"]
 
-        self.inc = DoubleConv(self.n_channels, self.first_feature_dimension)    # 512 x 384 (out size after layer)
-        self.inc2 = DoubleConv(self.first_feature_dimension, self.first_feature_dimension)
+        if config["networks"]["unet"]["leaky"]:
+            self.inc = LeakyDoubleConv(self.n_channels, self.first_feature_dimension)    # 512 x 384 (out size after layer)
+            self.inc2 = LeakyDoubleConv(self.first_feature_dimension, self.first_feature_dimension)
+        else:
+            self.inc = DoubleConv(self.n_channels, self.first_feature_dimension)    # 512 x 384 (out size after layer)
+            self.inc2 = DoubleConv(self.first_feature_dimension, self.first_feature_dimension)
 
         # down
-        # self.down = nn.ModuleList()
-        # for i in range(self.depth):
-        #     in_dim = self.first_feature_dimension * (i + 1)
-        #     out_dim = self.first_feature_dimension * (i + 2)
-        #     self.down.append(Down(in_dim, out_dim))
-        self.down1 = Down(self.first_feature_dimension, self.first_feature_dimension * 2)                # 256 x 192
-        self.down2 = Down(self.first_feature_dimension * 2, self.first_feature_dimension * 4)               # 128 x 96
-        self.down3 = Down(self.first_feature_dimension * 4, self.first_feature_dimension * 8)               # 64 x 48
-        self.down4 = Down(self.first_feature_dimension * 8, self.first_feature_dimension * 16)              # 32 x 24
+        if config["networks"]["unet"]["leaky"]:
+            self.down1 = LeakyDown(self.first_feature_dimension, self.first_feature_dimension * 2)                # 256 x 192
+            self.down2 = LeakyDown(self.first_feature_dimension * 2, self.first_feature_dimension * 4)               # 128 x 96
+            self.down3 = LeakyDown(self.first_feature_dimension * 4, self.first_feature_dimension * 8)               # 64 x 48
+            self.down4 = LeakyDown(self.first_feature_dimension * 8, self.first_feature_dimension * 16)              # 32 x 24
+        else:
+            self.down1 = Down(self.first_feature_dimension, self.first_feature_dimension * 2)                # 256 x 192
+            self.down2 = Down(self.first_feature_dimension * 2, self.first_feature_dimension * 4)               # 128 x 96
+            self.down3 = Down(self.first_feature_dimension * 4, self.first_feature_dimension * 8)               # 64 x 48
+            self.down4 = Down(self.first_feature_dimension * 8, self.first_feature_dimension * 16)              # 32 x 24
 
         # up 1
-        # self.up1 = nn.ModuleList()
-        # for i in range(self.depth):
-        #     in_factor = 2 ** (self.depth - i) + 2 ** (self.depth - i - 1)
-        #     out_factor = 2 ** (self.depth - i - 1)
-        #     in_dim = self.first_feature_dimension * in_factor
-        #     out_dim = self.first_feature_dimension * out_factor
-        #     self.up1.append(Up(in_dim, out_dim))
-        self.up1_pts = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
-        self.up2_pts = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
-        self.up3_pts = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
-        self.up4_pts = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
+        if config["networks"]["unet"]["leaky"]:
+            self.up1_pts = LeakyUp(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
+            self.up2_pts = LeakyUp(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
+            self.up3_pts = LeakyUp(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
+            self.up4_pts = LeakyUp(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
+        else:
+            self.up1_pts = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
+            self.up2_pts = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
+            self.up3_pts = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
+            self.up4_pts = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
         self.outc_pts = OutConv(self.first_feature_dimension, 1)
 
         # up 2
-        # self.up2 = nn.ModuleList()
-        # for i in range(self.depth):
-        #     in_factor = 2 ** (self.depth - i) + 2 ** (self.depth - i - 1)
-        #     out_factor = 2 ** (self.depth - i - 1)
-        #     in_dim = self.first_feature_dimension * in_factor
-        #     out_dim = self.first_feature_dimension * out_factor
-        #     self.up2.append(Up(in_dim, out_dim))
-        self.up1_score = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
-        self.up2_score = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
-        self.up3_score = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
-        self.up4_score = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
+        if config["networks"]["unet"]["leaky"]:
+            self.up1_score = LeakyUp(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
+            self.up2_score = LeakyUp(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
+            self.up3_score = LeakyUp(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
+            self.up4_score = LeakyUp(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
+        else:
+            self.up1_score = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
+            self.up2_score = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
+            self.up3_score = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
+            self.up4_score = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
         self.outc_score = OutConv(self.first_feature_dimension, self.n_weight_score)
 
         # up 3
-        self.up1_desc = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 16, self.bilinear)
-        self.up2_desc = Up(self.first_feature_dimension * (16 + 4), self.first_feature_dimension * 16, self.bilinear)
-        self.up3_desc = Up(self.first_feature_dimension * (16 + 2), self.first_feature_dimension * 16, self.bilinear)
-        self.up4_desc = Up(self.first_feature_dimension * (16 + 1), self.first_feature_dimension * 16, self.bilinear)
+        if config["networks"]["unet"]["leaky"]:
+            self.up1_desc = LeakyUp(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 16, self.bilinear)
+            self.up2_desc = LeakyUp(self.first_feature_dimension * (16 + 4), self.first_feature_dimension * 16, self.bilinear)
+            self.up3_desc = LeakyUp(self.first_feature_dimension * (16 + 2), self.first_feature_dimension * 16, self.bilinear)
+            self.up4_desc = LeakyUp(self.first_feature_dimension * (16 + 1), self.first_feature_dimension * 16, self.bilinear)
+        else:
+            self.up1_desc = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 16, self.bilinear)
+            self.up2_desc = Up(self.first_feature_dimension * (16 + 4), self.first_feature_dimension * 16, self.bilinear)
+            self.up3_desc = Up(self.first_feature_dimension * (16 + 2), self.first_feature_dimension * 16, self.bilinear)
+            self.up4_desc = Up(self.first_feature_dimension * (16 + 1), self.first_feature_dimension * 16, self.bilinear)
         self.outc_desc = OutConv(self.first_feature_dimension*16, 256)
 
     def forward(self, x, v):
