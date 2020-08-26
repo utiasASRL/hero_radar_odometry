@@ -166,6 +166,11 @@ class F2FPoseModel(nn.Module):
             if self.config['networks']['base_net'] == 'dual_super':
                 Wmat = R_oa[batch_i*2, :, :]@Wmat@R_oa[batch_i*2, :, :].T
 
+            if nr_ids1.nelement() <= 1 or nr_ids2.nelement() <= 1:
+                print("WARNING: IDS ELEMENTS LESS THAN 1")
+                print("batch: ", batch_i)
+                continue
+
             # match consistency
             _, ind2to1 = torch.max(w12, dim=1)  # N
             _, ind1to2 = torch.max(w12, dim=0)  # M
