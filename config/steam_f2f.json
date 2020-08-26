@@ -5,13 +5,14 @@
     "networks": {
         "match_type": "dp",
         "dense_match": false,
-        "base_net": "dual_super",
+        "base_net": "unet",
         "loss": "gt",
         "steam_pseudo": true,
         "pseudo_temp": 50.0,
         "sobel_mask": ["canny"],
         "sobel_int_thresh": 0.7,
         "sobel_ran_thresh": 0.2,
+        "match_consistency": true,
         "unet": {
             "n_weight_score": 6,
             "bilinear": true,

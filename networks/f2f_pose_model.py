@@ -174,13 +174,16 @@ class F2FPoseModel(nn.Module):
             # match consistency
             _, ind2to1 = torch.max(w12, dim=1)  # N
             _, ind1to2 = torch.max(w12, dim=0)  # M
-            mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
-            mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
-            points1 = points1[mask_ind, :]
-            points2 = points2[mask_ind, :]
-            # w = w[mask_ind, :]
-            Wmat = Wmat[mask_ind, :, :]
-            d = d[mask_ind, :]
+            if self.config['networks']['match_consistency']:
+                mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
+                mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
+                points1 = points1[mask_ind, :]
+                points2 = points2[mask_ind, :]
+                # w = w[mask_ind, :]
+                Wmat = Wmat[mask_ind, :, :]
+                d = d[mask_ind, :]
+            else:
+                mask_ind = torch.arange(points1.size(0))
 
             # get gt poses
             src_id = 2*batch_i
