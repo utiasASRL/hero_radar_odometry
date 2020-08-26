@@ -79,11 +79,14 @@ class Trainer():
                 loss = self.model(batch_sample)
                 t += [time.time()]
 
-                # backwards prop
-                loss.backward()
+                if loss != 0:
+                    # backwards prop
+                    loss.backward()
 
-                # update
-                self.optimizer.step()
+                    # update
+                    self.optimizer.step()
+                else:
+                    print("WARNING! LOSS IS 0!")
 
                 # Console print (only one per second)
                 if (t[-1] - last_display) > 1.0:
