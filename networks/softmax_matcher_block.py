@@ -22,24 +22,12 @@ class SoftmaxMatcherBlock(nn.Module):
         self.match_type = config["networks"]["match_type"]  # zncc, l2, dp
         self.softmax_temperature = config['networks']['matcher_block']['softmax_temperature']
 
-        # Coordinates need for camera sensor
-        self.height = config['dataset']['images']['height']
-        self.width = config['dataset']['images']['width']
-        v_coord, u_coord = torch.meshgrid([torch.arange(0, self.height),
-                                           torch.arange(0, self.width)])
-
-        v_coord = v_coord.reshape(self.height * self.width).float()  # HW
-        u_coord = u_coord.reshape(self.height * self.width).float()
-        image_coords = torch.stack((u_coord, v_coord), dim=1)        # HW x 2
-        self.register_buffer('image_coords', image_coords)
-
         # stereo camera model
         self.stereo_cam = StereoCameraModel()
 
-    def forward(self, src_coords, geometry_img, tgt_weights, src_desc_norm, tgt_desc, cam_calib):
+    def forward(self, geometry_img, tgt_coords, tgt_2D, tgt_weights, tgt_weights_dense, src_desc_norm, tgt_desc, tgt_desc_dense, cam_calib):
         '''
         Descriptors are assumed to be not normalized
-        :param src_coords: Bx3xN
         :param tgt_coords: Bx3xM
         :param tgt_weights: Bx1xHxW
         :param src_desc_norm: BxCxN
@@ -47,7 +35,8 @@ class SoftmaxMatcherBlock(nn.Module):
         :return: pseudo, pseudo_weights, pseudo_desc (UN-Normalized)
         '''
 
-        batch_size, n_features, _, _ = tgt_desc.size()
+        batch_size = tgt_desc.size(0)
+        n_features = tgt_desc.size(1)
 
         # Normalize the descriptors based on match_type
         if self.match_type == 'zncc':
@@ -71,9 +60,8 @@ class SoftmaxMatcherBlock(nn.Module):
         # extract pseudo points and attributes associated with them
         # TODO this is different from Mona's implementation cuz she grid-sampled for pseudo scores and desc
         # TODO in my case, I extract desc and then do norm
-        valid_pts = torch.ones(batch_size, 1, self.height * self.width).type_as(tgt_desc).int()
+        valid_pts = torch.ones(batch_size, 1, src_desc_norm.size(2)).cuda().int()
         if self.config['dataset']['sensor'] == 'velodyne':
-            tgt_coords = geometry_img.view(batch_size, 3, -1)
             pseudo_coords = torch.matmul(tgt_coords, soft_match_vals.transpose(2, 1)) # Bx3xN
             pseudo_weights = torch.matmul(tgt_weights.view(batch_size, 1, -1), soft_match_vals.transpose(2, 1)) # Bx1xN
             pseudo_descs = torch.matmul(tgt_desc.view(batch_size, n_features, -1), soft_match_vals.transpose(2, 1)) # BxCxN
@@ -81,15 +69,13 @@ class SoftmaxMatcherBlock(nn.Module):
             # Compute 2D keypoints from 3D pseudo coordinates
             pseudo_2D = compute_2D_from_3D(pseudo_coords, self.config)
         else:
-            batch_image_coords = self.image_coords.unsqueeze(0).expand(batch_size, self.height * self.width, 2)
-            pseudo_2D = torch.matmul(batch_image_coords.transpose(2, 1).contiguous(),
-                                         soft_match_vals.transpose(2, 1).contiguous()).transpose(2, 1).contiguous()  # BxNx2
+            pseudo_2D = torch.matmul(tgt_2D.transpose(2, 1), soft_match_vals.transpose(2, 1)).transpose(2, 1)  # BxNx2
 
             # Compute 3D points with camera model, points are in cam0 frame, Bx3xN, Bx1xN
             pseudo_coords, valid_pts = self.stereo_cam.inverse_camera_model(pseudo_2D, geometry_img, cam_calib)
 
-            pseudo_weights = get_scores(tgt_weights, pseudo_2D)
-            pseudo_descs = sample_desc(tgt_desc, pseudo_2D)
+            pseudo_weights = get_scores(tgt_weights_dense, pseudo_2D)
+            pseudo_descs = sample_desc(tgt_desc_dense, pseudo_2D)
 
         # return normalized desc
         if self.match_type == 'zncc':

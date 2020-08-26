@@ -15,19 +15,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/sample.json', type=str,
                         help='config file path (default: config/sample.json)')
-    parser.add_argument('--session_name', type=str, default='session', metavar='N',
-                        help='Session name')
-    parser.add_argument('--previous_session', type=str, default='session', metavar='N',
-                        help='Previous session name')
+    # parser.add_argument('--session_name', type=str, default='session', metavar='N',
+    #                     help='Session name')
+    # parser.add_argument('--previous_session', type=str, default='session', metavar='N',
+    #                     help='Previous session name')
 
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = json.load(f)
 
-    # set session name depending on input arg
-    config["session_name"] = args.session_name
-    config["previous_session"] = args.previous_session
+    # # set session name depending on input arg
+    # config["session_name"] = args.session_name
+    # config["previous_session"] = args.previous_session
 
     # dataloader setup
     test_dataset = KittiDataset(config, set='test')
@@ -51,6 +51,6 @@ if __name__ == '__main__':
     # train
     tester.test()
 
-    print('Forcing exit now')
-    os.kill(os.getpid(), signal.SIGINT)
+    # print('Forcing exit now')
+    # os.kill(os.getpid(), signal.SIGINT)
 

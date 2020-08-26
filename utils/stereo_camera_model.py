@@ -73,10 +73,8 @@ class StereoCameraModel(nn.Module):
         batch_size, _, n_points = cam_coords.size()
 
         # [Ul, Vl, Ur, Vr] = M * [x, y, z, 1]^T
-        if cam_coords.size(1) == 4:
-            img_coords = M.bmm(cam_coords)
-        else:
-            img_coords = M[:, :, :3].bmm(cam_coords) + M[:, :, 3].unsqueeze(-1)
+        assert cam_coords.size(1) == 4
+        img_coords = M.bmm(cam_coords)
 
         inv_z = 1.0 / cam_coords[:, 2, :].reshape(batch_size, 1, n_points)  # [B, 1, N], elementwise division
         img_coords = img_coords * inv_z                                     # [B, 4, N], elementwise multiplication
@@ -109,8 +107,7 @@ class StereoCameraModel(nn.Module):
 
         disp_min = (self.fl * self.b) / 600.0  # Farthest point 600 m
         disp_max = (self.fl * self.b) / 0.1    # Closest point 0.1 m (the max disp is 96, so closes point is actually 4m)
-        valid_points = (point_disparities >= disp_min) & (
-                    point_disparities <= disp_max)  # [B, 1, N] point in range 0.1 to 333 m
+        valid_points = (point_disparities >= disp_min) & (point_disparities <= disp_max)  # [B, 1, N] point in range 0.1 to 333 m
 
         # Create the [ul, vl, d, 1] vector
         ones = torch.ones(batch_size, n_points).type_as(disparity)
@@ -151,7 +148,7 @@ class StereoCameraModel(nn.Module):
         if cam_coords.size(1) == 4:
             cam_coords = T_c2_c0.bmm(cam_coords)
         else:
-            img_coords = T_c2_c0[:, :, :3].bmm(cam_coords) + T_c2_c0[:, :, 3].unsqueeze(-1)
+            cam_coords = T_c2_c0[:, :, :3].bmm(cam_coords) + T_c2_c0[:, :, 3].unsqueeze(-1)
 
         self.M, self.Q =  self.set_camera_model_matrices(K2[0, 0, 0], K2[0, 0, 2], K2[0, 1, 2],
                                                          K3[0, 0, 0], K3[0, 0, 2], K3[0, 1, 2], self.b)

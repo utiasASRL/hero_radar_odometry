@@ -99,12 +99,37 @@ class SVDPoseModel(nn.Module):
         # TODO: loop if we have more than two frames as input (for cycle loss)
 
         # Match the points in src frame to points in target frame to generate pseudo points
-        pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(src_coords,
-                                                                                 geometry_img[1::self.window_size],
-                                                                                 weight_scores[1::self.window_size],
-                                                                                 src_descs,
-                                                                                 descs[1::self.window_size],
-                                                                                 cam_calib)
+        if self.config['networks']['dense_match']:
+            # Dense 2D image coordinates
+            height = self.config['dataset']['images']['height']
+            width = self.config['dataset']['images']['width']
+            v_coord, u_coord = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
+            v_coord = v_coord.reshape(height * width).float()  # HW
+            u_coord = u_coord.reshape(height * width).float()
+            image_coords = torch.stack((u_coord, v_coord), dim=1)  # HW x 2
+            tgt_2D_dense = image_coords.unsqueeze(0).expand(self.batch_size, height * width, 2).cuda()
+
+            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(
+                                                                                  geometry_img[1::self.window_size],
+                                                                                  geometry_img[1::self.window_size],
+                                                                                  tgt_2D_dense,
+                                                                                  weight_scores[1::self.window_size],
+                                                                                  weight_scores[1::self.window_size],
+                                                                                  src_descs,
+                                                                                  descs[1::self.window_size],
+                                                                                  descs[1::self.window_size],
+                                                                                  cam_calib)
+        else:
+            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(
+                                                                                  geometry_img[1::self.window_size],
+                                                                                  keypoint_coords[1::self.window_size],
+                                                                                  keypoints_2D[1::self.window_size],
+                                                                                  keypoint_weights[1::self.window_size],
+                                                                                  weight_scores[1::self.window_size],
+                                                                                  src_descs,
+                                                                                  keypoint_descs[1::self.window_size],
+                                                                                  descs[1::self.window_size],
+                                                                                  cam_calib)
 
         # # UNCOMMENT this line to do keypoint matching instead of dense matching
         # pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
@@ -243,38 +268,27 @@ class SVDPoseModel(nn.Module):
         # save intermediate outputs
         if (len(self.save_names) > 0):
 
-            # self.save_dict['R_tgt_src'] = R_tgt_src if 'T_tgt_src' in self.save_names else None
-            # self.save_dict['R_tgt_src_pred'] = R_pred if 'T_tgt_src_pred' in self.save_names else None
-            # self.save_dict['t_tgt_src'] = t_tgt_src if 'T_tgt_src' in self.save_names else None
-            # self.save_dict['t_tgt_src_pred'] = t_pred if 'T_tgt_src_pred' in self.save_names else None
             self.save_dict['inliers'] = inlier_valid if 'inliers' in self.save_names else None
             self.save_dict['src_valid'] = src_valid if 'src_valid' in self.save_names else None
             self.save_dict['pseudo_valid'] = pseudo_valid if 'pseudo_valid' in self.save_names else None
+            self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
+            self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
 
             if epoch >= self.config['loss']['start_svd_epoch']:
                 self.save_dict['T_tgt_src'] = T_tgt_src if 'T_tgt_src' in self.save_names else None
                 self.save_dict['T_tgt_src_pred'] = T_tgt_src_pred if 'T_tgt_src_pred' in self.save_names else None
-        #     # print("Saving {}".format(self.save_names))
-        #
-        #     self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
-        #     self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
-        #     self.save_dict['R_tgt_src'] = R_tgt_src if 'R_tgt_src' in self.save_names else None
-        #     self.save_dict['t_tgt_src'] = t_tgt_src if 't_tgt_src' in self.save_names else None
-        #     self.save_dict['R_pred'] = R_pred if 'R_pred' in self.save_names else None
-        #     self.save_dict['t_pred'] = t_pred if 't_pred' in self.save_names else None
-        #     self.save_dict['keypoint_coords'] = keypoint_coords if 'keypoint_coords' in self.save_names else None
-        #     self.save_dict['pseudo_gt_coords'] = pseudo_gt_coords if 'pseudo_gt_coords' in self.save_names else None
-        #     self.save_dict['pseudo_coords'] = pseudo_coords if 'pseudo_coords' in self.save_names else None
-        #     self.save_dict['geometry_img'] = geometry_img if 'geometry_img' in self.save_names else None
-        #     self.save_dict['images'] = images if 'images' in self.save_names else None
-        #     self.save_dict['T_iv'] = T_iv if 'T_iv' in self.save_names else None
-        #     self.save_dict['valid_idx'] = self.valid_idx if 'valid_idx' in self.save_names else None
-        #     self.save_dict['keypoints_2D'] = keypoints_2D if 'keypoints_2D' in self.save_names else None
-        #     self.save_dict['keypoints_gt_2D'] = keypoints_gt_2D if 'keypoints_gt_2D' in self.save_names else None
-        #     self.save_dict['svd_weights'] = svd_weights if 'svd_weights' in self.save_names else None
-        #     self.save_dict['detector_scores'] = detector_scores if 'detector_scores' in self.save_names else None
-        #     self.save_dict['weight_scores'] = weight_scores if 'weight_scores' in self.save_names else None
-        #     self.save_dict['pseudo_2D'] = pseudo_2D if 'pseudo_2D' in self.save_names else None
+                self.save_dict['R_tgt_src'] = R_tgt_src if 'T_tgt_src' in self.save_names else None
+                self.save_dict['R_tgt_src_pred'] = R_tgt_src_pred if 'T_tgt_src_pred' in self.save_names else None
+                self.save_dict['t_tgt_src'] = t_tgt_src.unsqueeze(-1) if 'T_tgt_src' in self.save_names else None
+                self.save_dict['t_tgt_src_pred'] = t_tgt_src_pred if 'T_tgt_src_pred' in self.save_names else None
+                self.save_dict['weights'] = svd_weights if 'weights' in self.save_names else None
+
+            self.save_dict['src_coords'] = src_coords if 'src_coords' in self.save_names else None
+            self.save_dict['src_2D'] = src_2D if 'src_2D' in self.save_names else None
+            self.save_dict['pseudo_2D'] = pseudo_2D if 'pseudo_2D' in self.save_names else None
+            self.save_dict['pseudo_gt_2D'] = pseudo_gt_2D if 'pseudo_gt_2D' in self.save_names else None
+            self.save_dict['weight_scores_src'] = weight_scores[::self.window_size] if 'weight_scores_src' in self.save_names else None
+            self.save_dict['weight_scores_tgt'] = weight_scores[1::self.window_size] if 'weight_scores_tgt' in self.save_names else None
 
         return loss_dict
 
@@ -366,10 +380,15 @@ class SVDPoseModel(nn.Module):
 
     def print_inliers(self, epoch, iter):
 
-        print('epoch: {} i: {} => num inliers: {}, src_valid: {}, pseudo_valid: {} \n'.format(epoch, iter,
-                                              torch.sum(self.save_dict['inliers'], dim=2).squeeze().cpu().numpy(),
-                                              torch.sum(self.save_dict['src_valid'], dim=2).squeeze().cpu().numpy(),
-                                              torch.sum(self.save_dict['pseudo_valid'], dim=2).squeeze().cpu().numpy()))
+        msg = 'epoch: {} i: {}\ninliers:      {}\nsrc_valid:    {}\npseudo_valid: {}\n'.format(epoch, iter,
+                                                            torch.sum(self.save_dict['inliers'], dim=2).squeeze(),
+                                                            torch.sum(self.save_dict['src_valid'], dim=2).squeeze(),
+                                                            torch.sum(self.save_dict['pseudo_valid'], dim=2).squeeze())
+
+        if epoch >= self.config['loss']['start_svd_epoch']:
+            msg += 'weights:      {}\n'.format(torch.sum(self.save_dict['weights'] > 0.0, dim=2).squeeze())
+
+        print(msg)
 
     def save_intermediate_outputs(self):
         if len(self.save_dict) > 0 and not self.overwrite_flag:

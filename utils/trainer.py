@@ -35,11 +35,15 @@ class Trainer():
         self.start_epoch = 0
         self.min_val_loss = np.Inf
         self.result_path = session_path
+        self.plot_path = '{}/{}'.format(session_path, 'visualization')
         self.checkpoint_path = '{}/{}'.format(checkpoint_dir, 'chkp.tar')
+
+        if not os.path.exists(self.plot_path):
+            os.makedirs(self.plot_path)
 
         # load network parameters and optimizer if resuming from previous session
         if config['previous_session'] != "":
-            resume_path = "{}/{}/{}".format(result_path, config['previous_session'], 'chkp.tar')
+            resume_path = "{}/{}/{}".format(result_path, config['previous_session'], 'checkpoints/chkp.tar')
             self.resume_checkpoint(resume_path)
 
         # data loaders
@@ -64,7 +68,7 @@ class Trainer():
         :param epoch: Integer, current training epoch.
         """
         total_loss = {}
-        total_sq_error = torch.zeros(6)
+        total_sq_error = torch.zeros(1, 6)
 
         self.model.train()
 
@@ -80,16 +84,23 @@ class Trainer():
 
                     self.optimizer.zero_grad()
 
-                    loss = self.model(batch_sample, epoch)
-                    t += [time.time()]
+                    loss = {}
+                    try:
+                        loss = self.model(batch_sample, epoch)
+                        loss['LOSS'].backward()
+                    except Exception as e:
+                        self.model.print_loss(loss, epoch, i_batch)
+                        self.model.print_inliers(epoch, i_batch)
+                        print(e)
+                        continue
 
-                    loss['LOSS'].backward()
+                    t += [time.time()]
 
                     self.optimizer.step()
 
                     # record prediction error for each DOF
                     if epoch >= self.config['loss']['start_svd_epoch']:
-                        total_sq_error += torch.sum(self.model.get_pose_error().detach().cpu()**2, dim=0)
+                        total_sq_error += torch.sum(self.model.get_pose_error()**2, dim=0).unsqueeze(0).detach().cpu()
 
                     # record loss
                     for key in loss:
@@ -134,7 +145,7 @@ class Trainer():
         :param epoch: Integer, current training epoch.
         """
         total_loss = {}
-        total_sq_error = torch.zeros(6)
+        total_sq_error = torch.zeros(1,6)
 
         self.model.eval()
 
@@ -147,12 +158,19 @@ class Trainer():
 
                 for i_batch, batch_sample in enumerate(self.valid_loader):
 
-                    loss = self.model(batch_sample, epoch)
+                    try:
+                        loss = self.model(batch_sample, epoch)
+                    except Exception as e:
+                        self.model.print_loss(loss, epoch, i_batch)
+                        self.model.print_inliers(epoch, i_batch)
+                        print(e)
+                        continue
+
                     t += [time.time()]
 
                     # record prediction error for each DOF
                     if epoch >= self.config['loss']['start_svd_epoch']:
-                        total_sq_error += torch.sum(self.model.get_pose_error().detach().cpu()**2, dim=0)
+                        total_sq_error += torch.sum(self.model.get_pose_error()**2, dim=0).unsqueeze(0).detach().cpu()
 
                     # record loss
                     for key in loss:
@@ -213,7 +231,7 @@ class Trainer():
                     param_group['lr'] = self.config['optimizer']['lr'] * self.lr_decays[epoch]
                 print("Current epoch learning rate: {}".format(self.config['optimizer']['lr'] * self.lr_decays[epoch]))
 
-            if self.config['trainer']['validate']['on']:
+            if self.config['trainer']['validate']['on'] and (epoch >= self.config['loss']['start_svd_epoch']):
                 # check for validation set and early stopping
                 val_loss = self.valid_epoch(epoch)
                 stop_flag, loss_decrease_flag, self.min_val_loss = early_stopping.check_stop(val_loss, self.model,
@@ -230,9 +248,9 @@ class Trainer():
                             'loss': val_loss,
                             }, self.checkpoint_path)
 
-            plot_epoch_losses(self.epoch_loss_train, self.epoch_loss_valid, self.result_path)
             if epoch >= self.config['loss']['start_svd_epoch']:
-                plot_epoch_errors(self.epoch_error_train, self.epoch_error_valid, self.result_path)
+                plot_epoch_losses(self.epoch_loss_train, self.epoch_loss_valid, self.plot_path)
+                plot_epoch_errors(self.epoch_error_train, self.epoch_error_valid, self.plot_path)
 
     def resume_checkpoint(self, checkpoint_path):
         """

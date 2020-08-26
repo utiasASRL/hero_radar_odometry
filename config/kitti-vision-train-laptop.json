@@ -1,8 +1,8 @@
 {
-    "session_name": "train-debug-resume2",
-    "previous_session": "train-debug-resume",
+    "session_name": "train-debug-laptop",
+    "previous_session": "",
 
-    "home_dir": "/home/mgr",
+    "home_dir": "/home/asrl/research/kitti_local",
     "detect_anomaly": false,
 
     "networks": {
@@ -38,7 +38,7 @@
     },
 
     "dataset": {
-        "data_dir": "/home/mgr/data/kitti/dataset",
+        "data_dir": "/home/asrl/research/data/kitti",
         "seq": {
             "train": ["00"],
             "val": ["00"],
@@ -47,7 +47,7 @@
 	    "sensor": "camera",
         "images": {
             "height": 364,
-            "width": 1200,
+            "width": 1000,
             "input_channel": ["rgb"]
         },
         "disparity": {
@@ -76,7 +76,7 @@
 
 
     "train_loader": {
-        "batch_size": 7,
+        "batch_size": 1,
         "window_size": 2,
         "num_workers": 4
     },
@@ -91,7 +91,7 @@
         "max_epochs": 100,
         "validate": {
             "on": true,
-            "patience": 20
+            "patience": 10
         }
     }
 }

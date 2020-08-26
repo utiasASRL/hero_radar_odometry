@@ -44,8 +44,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/sample.json', type=str,
                       help='config file path (default: config/sample.json)')
-    parser.add_argument('--session_name', type=str, default='session', metavar='N',
-                        help='Session name')
+    # parser.add_argument('--session_name', type=str, default='session', metavar='N',
+    #                     help='Session name')
 
     args = parser.parse_args()
 
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         config = json.load(f)
 
     # set session name depending on input arg
-    config["session_name"] = args.session_name
+    # config["session_name"] = args.session_name
 
     # save copies of important files
     result_path, session_path, checkpoint_dir = _init_saving(args)
@@ -85,7 +85,7 @@ if __name__ == '__main__':
                                              window_size=config["train_loader"]["window_size"],
                                              seq_len=valid_dataset.seq_len,
                                              drop_last=True)
-    valid_loader = DataLoader(train_dataset,
+    valid_loader = DataLoader(valid_dataset,
                               batch_sampler=valid_sampler,
                               num_workers=config["train_loader"]["num_workers"],
                               pin_memory=True)

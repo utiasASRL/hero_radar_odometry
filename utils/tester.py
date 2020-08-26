@@ -7,7 +7,7 @@ import pickle
 import matplotlib.pyplot as plt
 
 from utils.lie_algebra import so3_to_rpy
-from utils.helper_func import plot_route, plot_versus, plot_error
+from utils.plot import plot_route, plot_versus, plot_error
 
 class IOStream:
     def __init__(self, path):
@@ -23,7 +23,7 @@ class IOStream:
 
 class Tester():
     """
-    Tester class
+    MatchTester class
     """
     def __init__(self, model, test_loader, config):
         # network
@@ -39,7 +39,7 @@ class Tester():
         # load network parameters and optimizer if resuming from previous session
         assert config['previous_session'] != "", "No previous session checkpoint provided!"
 
-        checkpoint_path = "{}/{}/{}".format('results', config['previous_session'], 'checkpoints/chkp.tar')
+        checkpoint_path = "{}/{}/{}/{}".format(config['home_dir'], 'results', config['previous_session'], 'checkpoints/chkp.tar')
         checkpoint = torch.load(checkpoint_path)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
@@ -50,12 +50,15 @@ class Tester():
 
         # config dictionary
         self.config = config
-        self.window_size = config['train_loader']['window_size']
+        self.window_size = config['test_loader']['window_size']
 
         # logging
-        self.result_path = os.path.join('results', config['session_name'])
+        self.result_path = os.path.join(config['home_dir'], 'results', config['session_name'])
         if not os.path.exists(self.result_path):
             os.makedirs(self.result_path)
+        self.plot_path = '{}/{}'.format(self.result_path, 'visualization')
+        if not os.path.exists(self.plot_path):
+            os.makedirs(self.plot_path)
         self.log_path = os.path.join(self.result_path, 'eval.log')
         self.textio = IOStream(self.log_path)
         self.test_loss = 0
@@ -64,63 +67,79 @@ class Tester():
         self.model.eval()
 
         # init saving lists
-        rotations_ab = [] # store R_21
-        translations_ab = [] # store t_21
-        rotations_ab_pred = [] # store R_21_pred
-        translations_ab_pred = [] # store t_21_pred
+        rotations_ba = [] # store R_ba
+        translations_ba = [] # store t_ba
+        rotations_ba_pred = [] # store R_ba_pred
+        translations_ba_pred = [] # store t_ba_pred
+        transforms_ia = []
+        transforms_ib = []
 
-        eulers_ab = [] # store euler_12
-        eulers_ab_pred = [] # store euler_12_pred
+        eulers_ba = [] # store euler_ba
+        eulers_ba_pred = [] # store euler_ba_pred
 
         with torch.no_grad():
             for i_batch, batch_sample in enumerate(self.test_loader):
 
                 # forward prop
-                loss = self.model(batch_sample)
+                try:
+                    loss = self.model(batch_sample, 0)
+                except Exception as e:
+                    self.model.print_loss(loss, 0, i_batch)
+                    self.model.print_inliers(0, i_batch)
+                    print(e)
+
+                if i_batch % 100 == 0:
+                    self.model.print_inliers(0, i_batch)
+
                 self.textio.cprint("loss:{}".format(loss['LOSS'].item()))
                 self.test_loss += loss['LOSS'].item()
 
                 # collect poses
                 save_dict = self.model.return_save_dict()
-                R_21_pred, t_21_pred = save_dict['R_pred'], save_dict['t_pred']
-                R_21, t_21 = save_dict['R_tgt_src'], save_dict['t_tgt_src']
-                euler_21 = so3_to_rpy(R_21)
-                euler_21_pred = so3_to_rpy(R_21_pred)
+                R_ba_pred, t_ba_pred = save_dict['R_tgt_src_pred'], save_dict['t_tgt_src_pred']
+                R_ba, t_ba = save_dict['R_tgt_src'], save_dict['t_tgt_src']
+                T_ia, T_ib = save_dict['T_i_src'], save_dict['T_i_tgt']
+                euler_ba = so3_to_rpy(R_ba)
+                euler_ba_pred = so3_to_rpy(R_ba_pred)
 
                 # append to list
-                rotations_ab.append(R_21.detach().cpu().numpy())
-                translations_ab.append(t_21.detach().cpu().numpy())
-                rotations_ab_pred.append(R_21_pred.detach().cpu().numpy())
-                translations_ab_pred.append(t_21_pred.detach().cpu().numpy())
+                rotations_ba.append(R_ba.detach().cpu().numpy())
+                translations_ba.append(t_ba.detach().cpu().numpy())
+                rotations_ba_pred.append(R_ba_pred.detach().cpu().numpy())
+                translations_ba_pred.append(t_ba_pred.detach().cpu().numpy())
+                transforms_ia.append(T_ia.detach().cpu().numpy())
+                transforms_ib.append(T_ib.detach().cpu().numpy())
 
-                eulers_ab.append(euler_21.detach().cpu().numpy())
-                eulers_ab_pred.append(euler_21_pred.detach().cpu().numpy())
+                eulers_ba.append(euler_ba.detach().cpu().numpy())
+                eulers_ba_pred.append(euler_ba_pred.detach().cpu().numpy())
 
-            # TODO this is a temporary fix for averaging out the test loss
-            self.test_loss = self.test_loss / (self.window_size * len(self.test_loader) + 1)
+        # TODO this is a temporary fix for averaging out the test loss
+        self.test_loss = self.test_loss / (self.window_size * len(self.test_loader) + 1)
 
-            # concat and convert to numpy array
-            rotations_ab = np.concatenate(rotations_ab, axis=0)
-            translations_ab = np.concatenate(translations_ab, axis=0)
-            rotations_ab_pred = np.concatenate(rotations_ab_pred, axis=0)
-            translations_ab_pred = np.concatenate(translations_ab_pred, axis=0)
+        # concat and convert to numpy array
+        rotations_ba = np.concatenate(rotations_ba, axis=0)        # N x 3 x 3
+        translations_ba = np.concatenate(translations_ba, axis=0)  # N x 3 x 1
+        rotations_ba_pred = np.concatenate(rotations_ba_pred, axis=0)
+        translations_ba_pred = np.concatenate(translations_ba_pred, axis=0)
+        transforms_ia = np.concatenate(transforms_ia, axis=0)      # N x 4 x 4
+        transforms_ib = np.concatenate(transforms_ib, axis=0)
 
-            eulers_ab = np.concatenate(eulers_ab, axis=0)
-            eulers_ab_pred = np.concatenate(eulers_ab_pred, axis=0)
+        eulers_ba = np.concatenate(eulers_ba, axis=0)  # N x 3
+        eulers_ba_pred = np.concatenate(eulers_ba_pred, axis=0)
 
-        test_r_mse_ab = np.mean((eulers_ab_pred - eulers_ab) ** 2)
-        test_r_rmse_ab = np.sqrt(test_r_mse_ab)
-        test_r_mae_ab = np.mean(np.abs(eulers_ab_pred - eulers_ab))
-        test_t_mse_ab = np.mean((translations_ab - translations_ab_pred) ** 2)
-        test_t_rmse_ab = np.sqrt(test_t_mse_ab)
-        test_t_mae_ab = np.mean(np.abs(translations_ab - translations_ab_pred))
+        test_r_mse_ba = np.mean((eulers_ba_pred - eulers_ba) ** 2)
+        test_r_rmse_ba = np.sqrt(test_r_mse_ba)
+        test_r_mae_ba = np.mean(np.abs(eulers_ba_pred - eulers_ba))
+        test_t_mse_ba = np.mean((translations_ba - translations_ba_pred) ** 2)
+        test_t_rmse_ba = np.sqrt(test_t_mse_ba)
+        test_t_mae_ba = np.mean(np.abs(translations_ba - translations_ba_pred))
 
         self.textio.cprint('==FINAL TEST==')
         self.textio.cprint('A--------->B')
         self.textio.cprint('EPOCH:: %d, Loss: %f, rot_MSE: %f, rot_RMSE: %f, '
                       'rot_MAE: %f, trans_MSE: %f, trans_RMSE: %f, trans_MAE: %f'
-                      % (-1, self.test_loss, test_r_mse_ab, test_r_rmse_ab, test_r_mae_ab,
-                         test_t_mse_ab, test_t_rmse_ab, test_t_mae_ab))
+                      % (-1, self.test_loss, test_r_mse_ba, test_r_rmse_ba, test_r_mae_ba,
+                         test_t_mse_ba, test_t_rmse_ba, test_t_mae_ba))
 
         ######################################################################
         ############## PLOT TRAJECTORY ##############
@@ -133,68 +152,44 @@ class Tester():
         # translations_ab -= translations_ab[0,:]
 
         # Compound poses
-        Ts_ib_pred = [np.identity(4), ]
-        T_ia_pred = np.identity(4)
-        T_ab_pred = np.identity(4)
-        Ts_ib = [np.identity(4), ]
-        T_ia = np.identity(4)
-        T_ab = np.identity(4)
-        for item in range(rotations_ab_pred.shape[0]):
+        T_ia_pred_list = [np.identity(4), ]
+        T_ib_pred = np.identity(4)
+        T_ba_pred = np.identity(4)
+        T_ia_list = [np.identity(4), ]
+        T_ia_list_extra = [np.identity(4), ]
+        T_ib = np.identity(4)
+        T_ba = np.identity(4)
+        for item in range(rotations_ba_pred.shape[0]):
             # compound predictions
-            R_ab_np_pred = rotations_ab_pred[item, :, :]
-            translation_ab_np_pred = translations_ab_pred[item, :]
-            T_ab_pred[:3, :3] = R_ab_np_pred
-            T_ab_pred[:3, 3] = translation_ab_np_pred
-            # T_ba_pred = np.linalg.inv(T_ab_pred)
-            # T_ba_pred = dataset.T_cam0_velo[0] @ T_ba_pred @ dataset.T_velo_cam0[0]
-            T_ib_pred = T_ia_pred @ T_ab_pred
-            T_ia_pred = T_ib_pred
-            Ts_ib_pred.append(T_ib_pred)
+            R_ba_np_pred = rotations_ba_pred[item, :, :]
+            translation_ba_np_pred = translations_ba_pred[item, :, 0] # Technically this is r_a_b_inb
+            T_ba_pred[:3, :3] = R_ba_np_pred
+            T_ba_pred[:3, 3] = translation_ba_np_pred
 
-            # compound ground truth
-            R_ab_np = rotations_ab[item, :, :]
-            # print(test_rotations_ab)
-            translation_ab_np = translations_ab[item, :]
-            translation_ab_np = translation_ab_np
-            T_ab[:3, :3] = R_ab_np
-            T_ab[:3, 3] = translation_ab_np
-            # T_ba = np.linalg.inv(T_ab)
-            # T_ba = dataset.T_cam0_velo[0] @ T_ba @ dataset.T_velo_cam0[0]
-            T_ib = T_ia @ T_ab
-            T_ia = T_ib
-            Ts_ib.append(T_ib)
-            # print("T_ab:{}".format(T_ab))
-            # print("R_ab_np:{}".format(R_ab_np))
-            # print("translation_ab_np:{}".format(translation_ab_np))
-        # transform the frame from velodyne to camera using calibration matrix in KITTI dataset
+            T_ia_pred = T_ib_pred @ T_ba_pred
+            T_ib_pred = T_ia_pred
+            T_ia_pred_list.append(-T_ia_pred)
+
+            # extract ground truth
+            T_ia_np = transforms_ia[item, :, :]
+            T_ia_list.append(T_ia_np)
+
         # this is only for evaluation purpose (plot_route)
-        Ts_ib_np_pred = np.array(Ts_ib_pred)
-        # print(Ts_ib_np_pred.shape)
-        # Ts_ib_np_pred = dataset.T_cam0_velo @ Ts_ib_np_pred @ dataset.T_velo_cam0
-        abs_translations_ab_pred = Ts_ib_np_pred[:,:3,3]
-        # print("euler_ab_np_pred:{}".format(euler_ab_np_pred))
-        # print("test_rotations_ab:{}".format(T_ab))
-        # print("test_translations_ab:{}".format(test_translations_ab))
+        T_ia_np_pred = np.array(T_ia_pred_list)
+        abs_translations_ia_pred = T_ia_np_pred[:,:3,3] # This is r_a_i_ini
 
         # same transform is applied to ground truth poses to revert from velodyne to camera frame
-        Ts_ib_np = np.array(Ts_ib)
-        # Ts_ib_np = dataset.T_cam0_velo @ Ts_ib_np @ dataset.T_velo_cam0
-        abs_translations_ab = Ts_ib_np[:,:3,3]
-
-        # scale up the translations
-        # print("before:{}".format(translations_ab))
-        # translations_ab = translations_ab * np.float32(args.scale)
-        # print("after:{}".format(translations_ab))
-        # translations_ab_pred = translations_ab_pred * np.float32(args.scale)
+        T_ia_np = np.array(T_ia_list)
+        abs_translations_ia = T_ia_np[:,:3,3]
 
         # save to file
         save_dict = {
-            'R_ab_gt': rotations_ab,
-            'R_ab_pred': rotations_ab_pred,
-            'translation_ab_gt': translations_ab,
-            'translation_ab_pred': translations_ab_pred,
-            'translation_gt': abs_translations_ab,
-            'translation_pred': abs_translations_ab_pred,
+            'R_ba_gt': rotations_ba,
+            'R_ba_pred': rotations_ba_pred,
+            'translation_ba_gt': translations_ba,
+            'translation_ba_pred': translations_ba_pred,
+            'translation_ib_gt': abs_translations_ia,
+            'translation_ib_pred': abs_translations_ia_pred,
         }
         save_fname = '{}/pose_pred.pickle'.format(self.result_path)
         with open(save_fname, 'wb') as f:
@@ -202,47 +197,38 @@ class Tester():
         print('======Save pose predictions to disk=======')
 
         # plot one color
-        assert abs_translations_ab.shape[0] == abs_translations_ab_pred.shape[0]
+        assert abs_translations_ia.shape[0] == abs_translations_ia_pred.shape[0]
         plt.clf()
-        plt.scatter([abs_translations_ab[0][0]], [abs_translations_ab[0][2]], label='sequence start', marker='s', color='k')
-        plot_route(abs_translations_ab, abs_translations_ab_pred, 'r', 'b')
+        plt.scatter([abs_translations_ia[0][0]], [abs_translations_ia[0][2]], label='sequence start', marker='s', color='k')
+        plot_route(abs_translations_ia, abs_translations_ia_pred, 'r', 'b')
         plt.legend()
         plt.title('')
-        save_dir = '{}/visualization'.format(self.result_path)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        save_name = '{}/route.png'.format(save_dir)
+        save_name = '{}/route.png'.format(self.plot_path)
         plt.savefig(save_name)
         print('======Plot trajectories to disk=======')
 
         # plot errors along each DOF
-        # print(test_eulers_ab.shape)
-        test_eulers_ab = eulers_ab
-        euler_ab_np_pred = eulers_ab_pred
-        # print(test_eulers_ab.shape)
-
         # save translation plots
-        save_name = '{}/abs_translation_error.png'.format(save_dir)
-        plot_error(abs_translations_ab, abs_translations_ab_pred,
+        save_name = '{}/abs_translation_error.png'.format(self.plot_path)
+        plot_error(abs_translations_ia, abs_translations_ia_pred,
                    titles=['x', 'y', 'z'], setting='abs', save_name=save_name)
 
-        save_name = '{}/rel_translation_error.png'.format(save_dir)
-        plot_error(translations_ab, translations_ab_pred,
+        save_name = '{}/rel_translation_error.png'.format(self.plot_path)
+        plot_error(translations_ba, translations_ba_pred,
                    titles=['x', 'y', 'z'], setting='rel', save_name=save_name)
 
-        save_name = '{}/rel_translation.png'.format(save_dir)
-        plot_versus(translations_ab, translations_ab_pred,
+        save_name = '{}/rel_translation.png'.format(self.plot_path)
+        plot_versus(translations_ba, translations_ba_pred,
                     titles=['x', 'y', 'z'], setting='rel', save_name=save_name)
 
         # save rotation plots
-        print(test_eulers_ab.shape, euler_ab_np_pred.shape)
-        save_name = '{}/rel_rotation_error.png'.format(save_dir)
-        plot_error(test_eulers_ab, euler_ab_np_pred,
-                   titles=['psi', 'theta', 'phi'], setting='rel', save_name=save_name)
-
-        save_name = '{}/rel_rotation.png'.format(save_dir)
-        plot_versus(test_eulers_ab, euler_ab_np_pred,
-                    titles=['psi', 'theta', 'phi'], setting='rel', save_name=save_name)
+        # save_name = '{}/rel_rotation_error.png'.format(save_dir)
+        # plot_error(eulers_ba.cpu(), euler_ba_pred.cpu(),
+        #            titles=['psi', 'theta', 'phi'], setting='rel', save_name=save_name)
+        #
+        # save_name = '{}/rel_rotation.png'.format(save_dir)
+        # plot_versus(eulers_ba, euler_ba_pred),
+        #             titles=['psi', 'theta', 'phi'], setting='rel', save_name=save_name)
         print('======Plot errors along DOF to disk=======')
 
 

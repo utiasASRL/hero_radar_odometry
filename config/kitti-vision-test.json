@@ -1,9 +1,8 @@
 {
-    "session_name": "train-debug-resume2",
-    "previous_session": "train-debug-resume",
+    "session_name": "test-debug2_resume",
+    "previous_session": "train-debug2_resume",
 
     "home_dir": "/home/mgr",
-    "detect_anomaly": false,
 
     "networks": {
         "match_type": "zncc",
@@ -11,6 +10,7 @@
         "unet": {
             "n_weight_score": 1,
             "bilinear": true,
+            "first_feature_dimension": 8,
             "first_feature_dimension": 8,
             "depth": 4
         },
@@ -67,24 +67,17 @@
     "loss": {
         "types": ["keypoint_2D", "svd"],
         "weights": {"keypoint_2D":  0.01, "keypoint_3D":  0.01, "svd": 10.0},
-        "start_svd_epoch": 2
+        "start_svd_epoch": 0
     },
 
     "record": {
-        "save_names": ["T_tgt_src", "T_tgt_src_pred", "inliers", "src_valid", "pseudo_valid", "weights"]
-    },
-
-
-    "train_loader": {
-        "batch_size": 7,
-        "window_size": 2,
-        "num_workers": 4
+        "save_names": ["T_tgt_src", "T_tgt_src_pred", "inliers", "src_valid", "pseudo_valid", "weights", "T_i_src", "T_i_tgt"]
     },
 
     "test_loader": {
         "batch_size": 1,
         "window_size": 2,
-        "num_workers": 4
+        "num_workers": 2
     },
 
     "trainer": {

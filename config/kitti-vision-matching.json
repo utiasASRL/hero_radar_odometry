@@ -1,9 +1,8 @@
 {
-    "session_name": "train-debug-resume2",
-    "previous_session": "train-debug-resume",
+    "session_name": "matchtest-debug2_resume",
+    "previous_session": "train-debug2_resume",
 
     "home_dir": "/home/mgr",
-    "detect_anomaly": false,
 
     "networks": {
         "match_type": "zncc",
@@ -27,7 +26,7 @@
         "outlier_rejection": {
             "on": true,
             "type": "2D",
-            "threshold": 50.0
+            "threshold": 20.0
         }
     },
 
@@ -67,31 +66,17 @@
     "loss": {
         "types": ["keypoint_2D", "svd"],
         "weights": {"keypoint_2D":  0.01, "keypoint_3D":  0.01, "svd": 10.0},
-        "start_svd_epoch": 2
+        "start_svd_epoch": 0
     },
 
     "record": {
-        "save_names": ["T_tgt_src", "T_tgt_src_pred", "inliers", "src_valid", "pseudo_valid", "weights"]
-    },
-
-
-    "train_loader": {
-        "batch_size": 7,
-        "window_size": 2,
-        "num_workers": 4
+        "save_names": ["T_tgt_src", "inliers", "src_valid", "pseudo_valid", "weights", "src_coords", "src_2D",
+                       "pseudo_2D", "pseudo_gt_2D", "weight_scores_src", "weight_scores_tgt"]
     },
 
     "test_loader": {
         "batch_size": 1,
         "window_size": 2,
-        "num_workers": 4
-    },
-
-    "trainer": {
-        "max_epochs": 100,
-        "validate": {
-            "on": true,
-            "patience": 20
-        }
+        "num_workers": 2
     }
 }

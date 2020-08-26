@@ -29,7 +29,6 @@ class EarlyStopping:
                 print('Early stopping: model saved at epoch {}'.format(self.epoch_min))
                 return True, self.counter == 0, self.val_loss_min
         else:
-            self.val_loss_min = val_loss
             self.save_checkpoint(val_loss, model, optimizer, model_file_name, epoch)
             self.counter = 0
 
