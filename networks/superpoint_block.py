@@ -26,6 +26,7 @@ class SuperpointBlock(nn.Module):
         self.n_channels += 1 if 'range' in self.input_channel else 0
 
         self.n_weight = config['networks']['unet']['n_weight_score']
+        self.weight_shuffle = config['networks']['unet']['super_weight_shuffle']
 
         # encoder
         self.inc = DoubleConv(self.n_channels, 64)    # 512 x 384 (out size after layer)
@@ -83,7 +84,7 @@ class SuperpointBlock(nn.Module):
 
         weight = self.decode_weight(x)              # B x 64 x H/8 x W/8
         weight = self.out_weight(weight)
-        if self.config['networks']['unet']['super_weight_shuffle']:
+        if self.weight_shuffle:
             weight = F.pixel_shuffle(weight, 8)          # B x 1 x H x W
         else:
             weight = F.interpolate(weight, size=(height, width), mode='bicubic', align_corners=True)
