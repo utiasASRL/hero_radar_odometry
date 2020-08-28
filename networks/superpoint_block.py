@@ -42,7 +42,10 @@ class SuperpointBlock(nn.Module):
         self.out_detector = OutConv(512, 64)
 
         self.decode_weight = DoubleConv(512, 512)
-        self.out_weight = OutConv(512, 64*self.n_weight)
+        if self.weight_shuffle:
+            self.out_weight = OutConv(512, 64*self.n_weight)
+        else:
+            self.out_weight = OutConv(512, self.n_weight)
 
         self.decode_desc = DoubleConv(512, 512)
         self.out_desc = OutConv(512, 256)
