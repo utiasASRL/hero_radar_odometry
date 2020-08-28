@@ -83,6 +83,9 @@ class SuperpointBlock(nn.Module):
 
         weight = self.decode_weight(x)              # B x 64 x H/8 x W/8
         weight = self.out_weight(weight)
-        weight = F.pixel_shuffle(weight, 8)          # B x 1 x H x W
+        if self.config['networks']['unet']['super_weight_shuffle']:
+            weight = F.pixel_shuffle(weight, 8)          # B x 1 x H x W
+        else:
+            weight = F.interpolate(weight, size=(height, width), mode='bicubic', align_corners=True)
 
         return detector, weight, desc

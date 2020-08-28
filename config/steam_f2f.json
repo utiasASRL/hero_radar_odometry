@@ -18,7 +18,8 @@
             "bilinear": true,
             "first_feature_dimension": 8,
             "depth": 4,
-            "leaky": true
+            "leaky": true,
+            "super_weight_shuffle": false
         },
         "keypoint_block": {
             "patch_height": 8,

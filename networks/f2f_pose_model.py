@@ -368,6 +368,33 @@ class F2FPoseModel(nn.Module):
 
         return keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size], keypoint_weights[::self.window_size], patch_mask
 
+    def forward_keypoints_single(self, data):
+        # parse data
+        geometry_img, images, T_iv, return_mask, canny_edge = data['geometry'], data['input'], data['T_iv'], \
+                                                              data['return_mask'], data['canny_edge']
+
+        # move to GPU
+        geometry_img = geometry_img.cuda()
+        images = images.cuda()
+        # T_iv = T_iv.cuda()
+        return_mask = return_mask.cuda()
+        canny_edge = canny_edge.cuda()
+
+        # Extract features, detector scores and weight scores
+        detector_scores, weight_scores, descs = self.unet_block(images, geometry_img)
+
+        # Use detector scores to compute keypoint locations in 3D along with their weight scores and descs
+        keypoint_coords, keypoint_descs, keypoint_weights, patch_mask = self.keypoint_block(geometry_img, return_mask, descs, detector_scores, weight_scores)
+
+        # sobel mask
+        if self.config['networks']['sobel_mask']:
+            patch_mask = self.sobel_mask(images, patch_mask, canny_edge)
+        nr_ids = torch.nonzero(patch_mask[0, :, :].squeeze(), as_tuple=False).squeeze()
+
+        return keypoint_coords[0, :, nr_ids].transpose(0, 1), keypoint_descs[0, :, nr_ids].transpose(0, 1), \
+               keypoint_weights[0, :, nr_ids].transpose(0, 1)
+
+
     def convertWeightMat(self, w):
         if w.size(1) == 1:
             # scalar weight

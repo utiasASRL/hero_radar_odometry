@@ -37,6 +37,9 @@ INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${Steam_INCLUDE
 PYTHON_ADD_MODULE(steampy_f2f steampy_f2f.cpp P2P3ErrorEval.cpp P2PLandmarkErrorEval.cpp)
 target_link_libraries(steampy_f2f PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
 
+PYTHON_ADD_MODULE(steampy_lm steampy_lm.cpp P2P3ErrorEval.cpp P2PLandmarkErrorEval.cpp)
+target_link_libraries(steampy_lm PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
+
 # regular
 add_executable(landmark_eval_test landmark_eval_test.cpp P2PLandmarkErrorEval.cpp)
 target_link_libraries(landmark_eval_test ${Boost_LIBRARIES} ${Steam_LIBRARIES} OpenMP::OpenMP_CXX)

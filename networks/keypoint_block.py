@@ -41,7 +41,6 @@ class KeypointBlock(nn.Module):
         """
 
         # logits_pts, scores, features = self.net(vertex)
-
         N = self.window_size*self.batch_size
 
         # 2D keypoints
