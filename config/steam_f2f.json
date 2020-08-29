@@ -7,6 +7,7 @@
         "dense_match": false,
         "base_net": "unet",
         "loss": "gt",
+        "dual_loss": true,
         "steam_pseudo": true,
         "pseudo_temp": 50.0,
         "sobel_mask": ["canny"],
@@ -29,7 +30,7 @@
             "align_corners": true
         },
         "keypoint_loss": {
-            "mah": false,
+            "mah": true,
             "error_thresh": 4.0
         }
     },

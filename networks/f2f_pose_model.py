@@ -122,7 +122,10 @@ class F2FPoseModel(nn.Module):
         # compute loss
         if self.config['networks']['loss'] == "gt":
             loss = self.loss(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
-                             keypoint_weights[::self.window_size], patch_mask, T_iv, R_oa)
+                             keypoint_weights[::self.window_size], patch_mask, T_iv, R_oa, False)
+            if self.config['networks']['dual_loss']:
+                loss += self.loss(keypoint_coords[1::self.window_size], keypoint_coords[::self.window_size],
+                                  keypoint_weights[1::self.window_size], patch_mask, T_iv, R_oa, True)
         elif self.config['networks']['loss'] == "steam":
             loss = self.loss_steam(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
                                    keypoint_weights[::self.window_size], patch_mask, R_oa)
@@ -132,7 +135,7 @@ class F2FPoseModel(nn.Module):
 
         return loss
 
-    def loss(self, src_coords, tgt_coords, weights, patch_mask, T_iv, R_oa):
+    def loss(self, src_coords, tgt_coords, weights, patch_mask, T_iv, R_oa, loss_flip):
         '''
         Compute loss
         :param src_coords: src keypoint coordinates
@@ -146,15 +149,25 @@ class F2FPoseModel(nn.Module):
         # loop over each batch
         for batch_i in range(src_coords.size(0)):
 
+            if loss_flip:
+                src_id = 2*batch_i + 1
+                tgt_id = 2*batch_i
+            else:
+                src_id = 2*batch_i
+                tgt_id = 2*batch_i + 1
+
             # mask
-            nr_ids1 = torch.nonzero(patch_mask[batch_i*self.window_size, :, :].squeeze(), as_tuple=False).squeeze()
-            nr_ids2 = torch.nonzero(patch_mask[batch_i*self.window_size+1, :, :].squeeze(), as_tuple=False).squeeze()
+            nr_ids1 = torch.nonzero(patch_mask[src_id, :, :].squeeze(), as_tuple=False).squeeze(1)
+            nr_ids2 = torch.nonzero(patch_mask[tgt_id, :, :].squeeze(), as_tuple=False).squeeze(1)
 
             # get src points
             points1 = src_coords[batch_i, :, nr_ids1].transpose(0, 1)
 
             # get tgt points
-            w12 = self.softmax_matcher_block.match_vals[batch_i, nr_ids1, :] # N x M
+            w12 = self.softmax_matcher_block.match_vals[batch_i, :, :]
+            if loss_flip:
+                w12 = w12.T
+            w12 = w12[nr_ids1, :] # N x M
             w12 = w12[:, nr_ids2]
             points2 = F.softmax(w12*self.config['networks']['pseudo_temp'], dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
 
@@ -176,7 +189,7 @@ class F2FPoseModel(nn.Module):
             _, ind1to2 = torch.max(w12, dim=0)  # M
             if self.config['networks']['match_consistency']:
                 mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
-                mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
+                mask_ind = torch.nonzero(mask, as_tuple=False).squeeze(1)
                 points1 = points1[mask_ind, :]
                 points2 = points2[mask_ind, :]
                 # w = w[mask_ind, :]
@@ -186,8 +199,6 @@ class F2FPoseModel(nn.Module):
                 mask_ind = torch.arange(points1.size(0))
 
             # get gt poses
-            src_id = 2*batch_i
-            tgt_id = 2*batch_i + 1
             T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
 
             if not self.config['networks']['steam_pseudo']:
@@ -203,11 +214,11 @@ class F2FPoseModel(nn.Module):
                 error = (points1_in_2 - points2e).unsqueeze(-1)
                 mah = error.transpose(1, 2)@Wmat@error
                 ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-                                    as_tuple=False).squeeze()
+                                    as_tuple=False).squeeze(1)
             else:
                 error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
                 ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-                                    as_tuple=False).squeeze()
+                                    as_tuple=False).squeeze(1)
 
             if ids.nelement() <= 1:
                 print("WARNING: ELEMENTS LESS THAN 1")
@@ -238,8 +249,8 @@ class F2FPoseModel(nn.Module):
 
             # mask
             # nr_ids = torch.nonzero(torch.sum(points1, dim=1), as_tuple=False).squeeze()
-            nr_ids1 = torch.nonzero(patch_mask[batch_i*self.window_size, :, :].squeeze(), as_tuple=False).squeeze()
-            nr_ids2 = torch.nonzero(patch_mask[batch_i*self.window_size+1, :, :].squeeze(), as_tuple=False).squeeze()
+            nr_ids1 = torch.nonzero(patch_mask[batch_i*self.window_size, :, :].squeeze(), as_tuple=False).squeeze(1)
+            nr_ids2 = torch.nonzero(patch_mask[batch_i*self.window_size+1, :, :].squeeze(), as_tuple=False).squeeze(1)
 
             # get src points
             points1 = src_coords[batch_i, :, nr_ids1].transpose(0, 1)
@@ -261,7 +272,7 @@ class F2FPoseModel(nn.Module):
             _, ind2to1 = torch.max(w12, dim=1)  # N
             _, ind1to2 = torch.max(w12, dim=0)  # M
             mask = torch.eq(ind1to2[ind2to1], torch.arange(ind2to1.__len__(), device=ind1to2.device))
-            mask_ind = torch.nonzero(mask, as_tuple=False).squeeze()
+            mask_ind = torch.nonzero(mask, as_tuple=False).squeeze(1)
             points1 = points1[mask_ind, :]
             points2 = points2[mask_ind, :]
             # w = w[mask_ind, :]
@@ -292,11 +303,11 @@ class F2FPoseModel(nn.Module):
                 error = (points1_in_2 - points2e).unsqueeze(-1)
                 mah = error.transpose(1, 2)@Wmat@error
                 ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-                                    as_tuple=False).squeeze()
+                                    as_tuple=False).squeeze(1)
             else:
                 error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
                 ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
-                                    as_tuple=False).squeeze()
+                                    as_tuple=False).squeeze(1)
 
             if ids.nelement() <= 1:
                 print("WARNING: ELEMENTS LESS THAN 1")
@@ -389,7 +400,7 @@ class F2FPoseModel(nn.Module):
         # sobel mask
         if self.config['networks']['sobel_mask']:
             patch_mask = self.sobel_mask(images, patch_mask, canny_edge)
-        nr_ids = torch.nonzero(patch_mask[0, :, :].squeeze(), as_tuple=False).squeeze()
+        nr_ids = torch.nonzero(patch_mask[0, :, :].squeeze(), as_tuple=False).squeeze(1)
 
         return keypoint_coords[0, :, nr_ids].transpose(0, 1), keypoint_descs[0, :, nr_ids].transpose(0, 1), \
                keypoint_weights[0, :, nr_ids].transpose(0, 1)
