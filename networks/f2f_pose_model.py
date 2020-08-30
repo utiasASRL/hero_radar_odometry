@@ -343,7 +343,7 @@ class F2FPoseModel(nn.Module):
 
         for b in torch.arange(self.batch_size):
             T_k0 = torch.zeros_like(T_0k[:self.window_size, :, :])
-            solver = WindowEstimatorPseudo(self.window_size, self.config['min_obs'], self.config['networks']['pseudo_temp'],
+            solver = WindowEstimatorPseudo(self.window_size, self.config['networks']['min_obs'], self.config['networks']['pseudo_temp'],
                                            self.config['networks']['keypoint_loss']['mah'])
             for win in torch.arange(self.window_size):
                 i = b*self.window_size + win
