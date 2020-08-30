@@ -402,6 +402,9 @@ class F2FPoseModel(nn.Module):
             patch_mask = self.sobel_mask(images, patch_mask, canny_edge)
         nr_ids = torch.nonzero(patch_mask[0, :, :].squeeze(), as_tuple=False).squeeze(1)
 
+        # normalize descriptors
+        keypoint_descs = F.normalize(keypoint_descs, dim=1)
+
         return keypoint_coords[0, :, nr_ids].transpose(0, 1), keypoint_descs[0, :, nr_ids].transpose(0, 1), \
                keypoint_weights[0, :, nr_ids].transpose(0, 1)
 
