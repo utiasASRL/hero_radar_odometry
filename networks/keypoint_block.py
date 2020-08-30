@@ -16,7 +16,7 @@ class KeypointBlock(nn.Module):
         self.temperature = config['networks']['keypoint_block']['softmax_temp']
 
         # data loader parameters
-        self.window_size = 2   # should always be 2
+        self.window_size = window_size
         self.batch_size = batch_size
 
         # image parameters

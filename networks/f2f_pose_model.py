@@ -15,6 +15,7 @@ from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
 from networks.svd_block import SVDBlock
 from networks.keypoint_block import KeypointBlock
+from utils.window_estimator_pseudo import WindowEstimatorPseudo
 
 # steam
 import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
@@ -25,7 +26,8 @@ class F2FPoseModel(nn.Module):
 
         # load configs
         self.config = config
-        self.window_size = 2 # TODO this is hard-fixed at the moment
+        self.window_size = window_size
+        self.batch_size = batch_size
         self.match_type = config["networks"]["match_type"] # zncc, l2, dp
 
         # network arch
@@ -110,6 +112,17 @@ class F2FPoseModel(nn.Module):
         # sobel mask
         if self.config['networks']['sobel_mask']:
             patch_mask = self.sobel_mask(images, patch_mask, canny_edge)
+
+        if self.config['networks']['loss'] == "window":
+            nr_ids = torch.nonzero(patch_mask[0, :, :].squeeze(), as_tuple=False).squeeze(1)
+
+            # normalize descriptors
+            keypoint_descs = F.normalize(keypoint_descs, dim=1)
+
+            loss = self.loss_window(keypoint_coords[:, :, nr_ids].transpose(1, 2),
+                                    keypoint_descs[:, :, nr_ids].transpose(1, 2),
+                                    keypoint_weights[:, :, nr_ids].transpose(1, 2), T_iv)
+            return loss
 
         # Match the points in src frame to points in target frame to generate pseudo points
         # first input is src. Computes pseudo with target
@@ -322,6 +335,22 @@ class F2FPoseModel(nn.Module):
             # loss -= torch.mean(3*w[ids, :])
             loss -= torch.mean(torch.sum(d[ids, :], 1))
 
+        return loss
+
+    def loss_window(self, coords, descs, weights, T_0k):
+        # loop through each batch window
+        loss = 0
+
+        for b in torch.arange(self.batch_size):
+            T_k0 = torch.zeros_like(T_0k[:self.window_size, :, :])
+            solver = WindowEstimatorPseudo(self.window_size, self.config['min_obs'], self.config['networks']['pseudo_temp'],
+                                           self.config['networks']['keypoint_loss']['mah'])
+            for win in torch.arange(self.window_size):
+                i = b*self.window_size + win
+                solver.add_frame(coords[i, :, :], descs[i, :, :], weights[i, :, :])
+                T_k0[win, :, :] = self.se3_inv(T_0k[i, :, :])@T_0k[b*self.window_size, :, :]
+
+            loss += solver.loss(T_k0)
         return loss
 
     def weighted_mse_loss(self, data, target, weight):

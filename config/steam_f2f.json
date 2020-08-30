@@ -5,10 +5,12 @@
     "networks": {
         "match_type": "dp",
         "dense_match": false,
-        "base_net": "unet",
-        "loss": "gt",
+        "base_net": "super",
+        "loss": "window",
+        "mins_obs": 3,
         "dual_loss": true,
         "steam_pseudo": true,
+        "window_gt": false,
         "pseudo_temp": 50.0,
         "sobel_mask": ["canny"],
         "sobel_int_thresh": 0.7,
@@ -64,8 +66,8 @@
     },
 
     "train_loader": {
-        "batch_size": 3,
-        "window_size": 2,
+        "batch_size": 2,
+        "window_size": 3,
         "num_workers": 0
     },
 

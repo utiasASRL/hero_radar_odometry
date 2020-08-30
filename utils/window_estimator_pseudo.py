@@ -10,12 +10,13 @@ class WindowEstimatorPseudo:
     """
 
     # Initialization
-    def __init__(self):
+    def __init__(self, window_size, min_solve_obs, sf_temp, mah_thresh):
         # config
         # TODO: use json config
-        self.window_size = 40
-        self.min_solve_obs = 2
-        self.sf_temp = 50.0
+        self.window_size = window_size
+        self.min_solve_obs = min_solve_obs
+        self.sf_temp = sf_temp
+        self.mah_thresh = mah_thresh
 
         # landmark variables
         self.lm_coords = torch.Tensor()
@@ -106,10 +107,10 @@ class WindowEstimatorPseudo:
         # add frame to deque
         self.mframes_deq.append(new_frame)
 
-        geq3 = torch.nonzero(self.lm_obs_count >= 3, as_tuple=False).squeeze()
-        geq4 = torch.nonzero(self.lm_obs_count >= 4, as_tuple=False).squeeze()
-        geq5 = torch.nonzero(self.lm_obs_count >= 5, as_tuple=False).squeeze()
-        print("# total landmarks: ", len(self.lm_obs_count), ", obs >= 3: ", geq3.nelement(), geq4.nelement(), geq5.nelement())
+        # geq3 = torch.nonzero(self.lm_obs_count >= 3, as_tuple=False).squeeze()
+        # geq4 = torch.nonzero(self.lm_obs_count >= 4, as_tuple=False).squeeze()
+        # geq5 = torch.nonzero(self.lm_obs_count >= 5, as_tuple=False).squeeze()
+        # print("# total landmarks: ", len(self.lm_obs_count), ", obs >= 3: ", geq3.nelement(), geq4.nelement(), geq5.nelement())
 
     def removeZeroLandmarks(self):
         # find landmarks with at least 1 observation
@@ -147,9 +148,11 @@ class WindowEstimatorPseudo:
         vel_list = []
         # loop through every frame
         for frame in self.mframes_deq:
-            match_list += [remap_ids[frame.lm_ids].detach().cpu().numpy()]
-            meas_list += [frame.meas.detach().cpu().numpy()]
-            weight_list += [frame.wmats.detach().cpu().numpy()]
+            temp_match_ids = remap_ids[frame.lm_ids]    # temp ids remapped for min obs
+            mask_ids = torch.nonzero(temp_match_ids >= 0, as_tuple=False).squeeze(1)
+            match_list += [temp_match_ids[mask_ids].detach().cpu().numpy()]
+            meas_list += [frame.meas[mask_ids].detach().cpu().numpy()]
+            weight_list += [frame.wmats[mask_ids].detach().cpu().numpy()]
             pose_list += [frame.pose]
             vel_list += [frame.vel]
 
@@ -163,6 +166,74 @@ class WindowEstimatorPseudo:
             frame.pose = poses[count, :, :]
             frame.vel = vels[count, :]
             count += 1
+
+    def loss(self, T_k0):
+        # determine landmarks with minimum observations
+        lm_ids = torch.nonzero(self.lm_obs_count >= self.min_solve_obs, as_tuple=False).squeeze(1)
+        remap_ids = -1*torch.ones(self.lm_obs_count.size(0), dtype=torch.long, device=self.lm_obs_count.device)
+        remap_ids[lm_ids] = torch.arange(lm_ids.size(0), dtype=torch.long, device=remap_ids.device)
+        lm_coords = self.lm_coords[lm_ids, :].detach().cpu().numpy()
+
+        meas_list = []
+        match_list = []
+        weight_list = []
+        pose_list = []
+        vel_list = []
+        l_sp_list = []
+        mask_ids_list = []
+        # loop through every frame
+        for k, frame in enumerate(self.mframes_deq):
+            temp_match_ids = remap_ids[frame.lm_ids]    # temp ids remapped for min obs
+            mask_ids = torch.nonzero(temp_match_ids >= 0, as_tuple=False).squeeze(1)
+            mask_ids_list += [mask_ids]
+            match_list += [temp_match_ids[mask_ids].detach().cpu().numpy()]
+            meas_list += [frame.meas[mask_ids].detach().cpu().numpy()]
+            weight_list += [frame.wmats[mask_ids].detach().cpu().numpy()]
+            pose_list += [frame.pose]
+            vel_list += [frame.vel]
+
+            # empty list object
+            if k == 0:
+                l_sp_list += [np.zeros((6+1, meas_list[-1].shape[0], 3), dtype=np.float32)]
+            else:
+                l_sp_list += [np.zeros((18+1, meas_list[-1].shape[0], 3), dtype=np.float32)]
+
+        poses = np.stack(pose_list, axis=0)
+        vels = np.stack(vel_list, axis=0)
+        steampy_lm.run_steam_lm_sp(meas_list, match_list, weight_list, poses, vels, lm_coords, l_sp_list)
+
+        loss = 0
+        for k, frame in enumerate(self.mframes_deq):
+
+            meas_k = frame.meas[mask_ids_list[k]]
+            l_sp = torch.from_numpy(l_sp_list[k]).cuda()
+            wmats_k = frame.wmats[mask_ids_list[k]]
+            wds_k = frame.wds[mask_ids_list[k]]
+
+            # error thresh
+            error = (meas_k - l_sp[0, :, :]).unsqueeze(-1)
+            mah = error.transpose(1, 2)@wmats_k@error
+            ids = torch.nonzero(mah.squeeze() < self.mah_thresh ** 2, as_tuple=False).squeeze(1)
+
+            # compute loss over sigmapoints
+            a = 1
+
+            # batch version
+            error = (meas_k[ids, :].unsqueeze(0) - l_sp[1:, ids, :]).unsqueeze(-1)
+            mah = error.transpose(2,3)@wmats_k[ids, :, :].unsqueeze(0)@error/(l_sp.size(0)-1)
+            loss += torch.sum(mah.squeeze())
+
+            # loop version
+            # out2 = torch.zeros(ids.size()).cuda()
+            # for l in torch.arange(l_sp.size(0)-1):
+            #     error = (meas_k[ids, :] - l_sp[1+l, ids, :]).unsqueeze(-1)
+            #     mah = error.transpose(1,2)@wmats_k[ids, :, :]@error/(l_sp.size(0)-1)
+            #     out2 += mah.squeeze()
+
+            # weights
+            loss -= torch.sum(wds_k[ids, :])
+
+        return loss
 
     def getFirstPose(self):
         return self.mframes_deq[0].pose, self.mframes_deq[0].frame_id
