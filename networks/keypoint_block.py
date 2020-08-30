@@ -63,7 +63,7 @@ class KeypointBlock(nn.Module):
         denom = torch.sum(numer, dim=1).unsqueeze(1)
         patch_mask = denom > 0
         zp0, zp1, zp2 = torch.nonzero(denom == 0, as_tuple=True)
-        denom[zp0,zp1,zp2] += 1e-9  # prevent divide by 0
+        denom[zp0,zp1,zp2] += 1.0  # prevent divide by 0
         # softmax_attention = F.softmax(detector_patches/self.temperature, dim=1)  # B x num_patch_elements x num_patches
         softmax_attention = numer/denom
 
