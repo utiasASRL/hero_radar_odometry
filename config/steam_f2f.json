@@ -1,6 +1,7 @@
 {
     "session_name": "temp",
     "previous_session": "",
+    "model_only": true,
 
     "networks": {
         "match_type": "dp",

@@ -39,7 +39,15 @@ class Trainer():
             os.makedirs(self.result_path)
 
         # load network parameters and optimizer if resuming from previous session
-        if config['previous_session'] != "":
+        if config['previous_session'] != "" and config['model_only']:
+            resume_path = "{}/{}/{}".format('results', config['previous_session'], 'chkp.tar')
+            checkpoint = torch.load(resume_path)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            config['previous_session'] = config['session_name']
+            config['model_only'] = False
+            with open("{}/config.json".format(self.result_path), "w") as json_outfile:
+                json.dump(config, json_outfile, indent=4)
+        elif config['previous_session'] != "" and not config['model_only']:
             resume_path = "{}/{}/{}".format('results', config['previous_session'], 'chkp.tar')
             self.resume_checkpoint(resume_path)
         else:

@@ -213,6 +213,7 @@ class WindowEstimatorPseudo:
                                     use_gt, cov_diag)
 
         loss = 0
+        sum_meas = 0
         for k, frame in enumerate(self.mframes_deq):
 
             meas_k = frame.meas[mask_ids_list[k]]
@@ -242,7 +243,9 @@ class WindowEstimatorPseudo:
 
             # weights
             loss -= torch.sum(wds_k[ids, :])
-
+            sum_meas += ids.size(0)
+        if sum_meas > 0:
+            loss = loss/sum_meas
         return loss
 
     def getFirstPose(self):

@@ -351,7 +351,7 @@ class F2FPoseModel(nn.Module):
                 T_k0[win, :, :] = self.se3_inv(T_0k[i, :, :])@T_0k[b*self.window_size, :, :]
 
             loss += solver.loss(T_k0, self.config['networks']['window_gt'], self.config['networks']['gt_cov_diag'])
-        return loss
+        return loss/self.batch_size
 
     def weighted_mse_loss(self, data, target, weight):
         # return 3.0*torch.mean(torch.exp(weight) * (data - target) ** 2)
