@@ -797,8 +797,10 @@ char const* run_steam_lm_spb(const p::object& meas_list, const p::object& match_
           // positive/negative sigmapoints
           T_sp = T_sp*T_i0_eigen;
           T_sp_inv = T_sp_inv*T_i0_eigen;
-          Eigen::Vector3d psp = mean_lm + lm_delta;
-          Eigen::Vector3d nsp = mean_lm - lm_delta;
+          // Eigen::Vector3d psp = mean_lm + lm_delta; 
+          // Eigen::Vector3d nsp = mean_lm - lm_delta;
+          Eigen::Vector3d psp = (landmark->getValue().head<3>() + lm_delta)/landmark->getValue()(3);
+          Eigen::Vector3d nsp = (landmark->getValue().head<3>() - lm_delta)/landmark->getValue()(3);
           psp = T_sp.topLeftCorner(3,3)*psp + T_sp.topRightCorner(3,1);
           nsp = T_sp_inv.topLeftCorner(3,3)*nsp + T_sp_inv.topRightCorner(3,1);
 
@@ -830,8 +832,10 @@ char const* run_steam_lm_spb(const p::object& meas_list, const p::object& match_
         double alpha = sqrt(double(n));
         for (int a = 0; a < n; ++a) {
           Eigen::Vector3d delta = L.col(a)*alpha;
-          Eigen::Vector3d psp = mean + delta;
-          Eigen::Vector3d nsp = mean - delta;
+          // Eigen::Vector3d psp = mean + delta;
+          // Eigen::Vector3d nsp = mean - delta;
+          Eigen::Vector3d psp = (landmark->getValue().head<3>() + delta)/landmark->getValue()(3);
+          Eigen::Vector3d nsp = (landmark->getValue().head<3>() - delta)/landmark->getValue()(3);
           for (int r = 0; r < 3; ++r) {
               l_sp_list[i][1+a][j][r] = float(psp(r));
               l_sp_list[i][1+a+n][j][r] = float(nsp(r));
