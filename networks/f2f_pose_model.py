@@ -350,7 +350,7 @@ class F2FPoseModel(nn.Module):
                 solver.add_frame(coords[i, :, :], descs[i, :, :], weights[i, :, :])
                 T_k0[win, :, :] = self.se3_inv(T_0k[i, :, :])@T_0k[b*self.window_size, :, :]
 
-            loss += solver.loss(T_k0)
+            loss += solver.loss(T_k0, self.config['networks']['window_gt'], self.config['networks']['gt_cov_diag'])
         return loss
 
     def weighted_mse_loss(self, data, target, weight):

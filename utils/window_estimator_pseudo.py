@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import time
 import numpy as np
 import collections
 import cpp_wrappers.cpp_steam.build.steampy_lm as steampy_lm
@@ -167,7 +168,7 @@ class WindowEstimatorPseudo:
             frame.vel = vels[count, :]
             count += 1
 
-    def loss(self, T_k0):
+    def loss(self, T_k0, use_gt, cov_diag_list):
         # determine landmarks with minimum observations
         lm_ids = torch.nonzero(self.lm_obs_count >= self.min_solve_obs, as_tuple=False).squeeze(1)
         remap_ids = -1*torch.ones(self.lm_obs_count.size(0), dtype=torch.long, device=self.lm_obs_count.device)
@@ -192,6 +193,9 @@ class WindowEstimatorPseudo:
             pose_list += [frame.pose]
             vel_list += [frame.vel]
 
+            if use_gt:
+                pose_list[-1] = T_k0[k, :, :].detach().cpu().numpy()
+
             # empty list object
             if k == 0:
                 l_sp_list += [np.zeros((6+1, meas_list[-1].shape[0], 3), dtype=np.float32)]
@@ -200,7 +204,13 @@ class WindowEstimatorPseudo:
 
         poses = np.stack(pose_list, axis=0)
         vels = np.stack(vel_list, axis=0)
-        steampy_lm.run_steam_lm_sp(meas_list, match_list, weight_list, poses, vels, lm_coords, l_sp_list)
+
+        cov_diag = np.asarray(cov_diag_list)
+
+        # steampy_lm.run_steam_lm_sp(meas_list, match_list, weight_list, poses, vels, lm_coords, l_sp_list
+        #                         use_gt, cov_diag)
+        steampy_lm.run_steam_lm_spb(meas_list, match_list, weight_list, poses, vels, lm_coords, l_sp_list,
+                                    use_gt, cov_diag)
 
         loss = 0
         for k, frame in enumerate(self.mframes_deq):

@@ -16,6 +16,7 @@ import torch.nn.functional as F
 # network
 from networks.f2f_pose_model import F2FPoseModel
 from utils.window_estimator import WindowEstimator
+from utils.window_estimator_pseudo import WindowEstimatorPseudo
 
 # steam
 import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
@@ -29,7 +30,7 @@ import cpp_wrappers.cpp_steam.build.steampy_f2f as steampy_f2f
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='results/ir_super2_w1_win4_mah4_p8_gt_sobi6v/config.json', type=str,
+    parser.add_argument('--config', default='results/ir_super3_w6_mah4_p8_win10_00_sobi6v/config.json', type=str,
                       help='config file path (default: config/steam_f2f.json)')
 
     args = parser.parse_args()
@@ -78,7 +79,9 @@ if __name__ == '__main__':
         net.keypoint_block.window_size = 1
 
         # window optimizer
-        solver = WindowEstimator()
+        # solver = WindowEstimator()
+        solver = WindowEstimatorPseudo(config['test_loader']['window_size'], config['networks']['min_obs'], config['networks']['pseudo_temp'],
+                                       config['networks']['keypoint_loss']['mah'])
 
         # load random pair
         for i_batch, sample_batch in enumerate(test_loader):
