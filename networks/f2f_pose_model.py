@@ -142,6 +142,9 @@ class F2FPoseModel(nn.Module):
         elif self.config['networks']['loss'] == "steam":
             loss = self.loss_steam(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
                                    keypoint_weights[::self.window_size], patch_mask, R_oa)
+        elif self.config['networks']['loss'] == 'gt1':
+            loss = self.loss1(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
+                              keypoint_weights[1::self.window_size], patch_mask, T_iv, R_oa, False)
         else:
             assert False, "Loss must be gt or steam"
 
@@ -226,6 +229,103 @@ class F2FPoseModel(nn.Module):
             points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
             if self.config["networks"]["keypoint_loss"]["mah"]:
                 error = (points1_in_2 - points2e).unsqueeze(-1)
+                mah = error.transpose(1, 2)@Wmat@error
+                ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
+                                    as_tuple=False).squeeze(1)
+            else:
+                error = torch.sum((points1_in_2 - points2) ** 2, dim=1)
+                ids = torch.nonzero(error < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
+                                    as_tuple=False).squeeze(1)
+
+            if ids.nelement() <= 1:
+                print("WARNING: ELEMENTS LESS THAN 1")
+                continue
+
+            loss += self.weighted_mse_loss(points1_in_2[ids, :],
+                                           points2[ids, :],
+                                           Wmat[ids, :, :])
+
+            # loss -= torch.mean(3*w[ids, :])
+            loss -= torch.mean(torch.sum(d[ids, :], 1))
+
+        return loss/batch_size
+
+    def loss1(self, src_coords, tgt_coords, weights, patch_mask, T_iv, R_oa):
+        '''
+        Compute loss
+        :param src_coords: src keypoint coordinates
+        :param tgt_coords: tgt keypoint coordinates
+        :param weights: weights for match pair
+        :param T_iv: groundtruth transform
+        :return:
+        '''
+        loss = 0
+
+        # loop over each batch
+        batch_size = src_coords.size(0)
+        for batch_i in range(src_coords.size(0)):
+
+            src_id = 2*batch_i
+            tgt_id = 2*batch_i + 1
+
+            # mask
+            nr_ids1 = torch.nonzero(patch_mask[src_id, :, :].squeeze(), as_tuple=False).squeeze(1)
+            nr_ids2 = torch.nonzero(patch_mask[tgt_id, :, :].squeeze(), as_tuple=False).squeeze(1)
+
+            # get points
+            points1 = src_coords[batch_i, :, nr_ids1].transpose(0, 1)
+
+            # match matrix after nr mask
+            w12 = self.softmax_matcher_block.match_vals[batch_i, :, :]
+            w12 = w12[nr_ids1, :] # N x M
+            w12 = w12[:, nr_ids2]
+
+            # compute pseudopoints for 1, matching to 2
+            points1 = F.softmax(w12.T*self.config['networks']['pseudo_temp'], dim=1)@points1
+            points2 = tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+
+            # get weights (of 2)
+            w = weights[batch_i, :, nr_ids2].transpose(0, 1)
+            Wmat, d = self.convertWeightMat(w)
+
+            # rotate cov back
+            if self.config['networks']['base_net'] == 'dual_super':
+                Wmat = R_oa[tgt_id, :, :]@Wmat@R_oa[tgt_id, :, :].T
+
+            if nr_ids1.nelement() <= 1 or nr_ids2.nelement() <= 1:
+                print("WARNING: IDS ELEMENTS LESS THAN 1")
+                print("batch: ", batch_i)
+                continue
+
+            # match consistency
+            _, ind2to1 = torch.max(w12, dim=1)  # N (size of 1)
+            _, ind1to2 = torch.max(w12, dim=0)  # M (size of 2)
+            if self.config['networks']['match_consistency']:
+                mask = torch.eq(ind2to1[ind1to2], torch.arange(ind1to2.__len__(), device=ind1to2.device))
+                mask_ind = torch.nonzero(mask, as_tuple=False).squeeze(1)
+                points1 = points1[mask_ind, :]
+                points2 = points2[mask_ind, :]
+                # w = w[mask_ind, :]
+                Wmat = Wmat[mask_ind, :, :]
+                d = d[mask_ind, :]
+            else:
+                mask_ind = torch.arange(points1.size(0))
+
+            # get gt poses
+            T_21 = self.se3_inv(T_iv[tgt_id, :, :])@T_iv[src_id, :, :]
+            # T_12 = self.se3_inv(T_iv[src_id, :, :])@T_iv[tgt_id, :, :]
+
+            # if not self.config['networks']['steam_pseudo']:
+            #     points2e = tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
+            #     points2e = points2e[ind2to1, :]
+            #     points2e = points2e[mask_ind, :]
+            # else:
+            # points2e = points2
+
+            # error rejection
+            points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
+            if self.config["networks"]["keypoint_loss"]["mah"]:
+                error = (points1_in_2 - points2).unsqueeze(-1)
                 mah = error.transpose(1, 2)@Wmat@error
                 ids = torch.nonzero(mah.squeeze() < self.config["networks"]["keypoint_loss"]["error_thresh"] ** 2,
                                     as_tuple=False).squeeze(1)
@@ -407,7 +507,7 @@ class F2FPoseModel(nn.Module):
                                                                  keypoint_descs[::self.window_size],
                                                                  keypoint_descs[1::self.window_size])
 
-        return keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size], keypoint_weights[::self.window_size], patch_mask
+        return keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size], keypoint_weights[1::self.window_size], patch_mask
 
     def forward_keypoints_single(self, data):
         # parse data
