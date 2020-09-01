@@ -52,7 +52,6 @@ class WindowEstimator:
             # drop landmarks with 0 observations
             self.removeZeroLandmarks()
 
-        # TODO: optional ransac b/w new frame and previous frame for inliers
 
         # match new frame to current landmarks
         prev_frame = self.mframes_deq[-1]
@@ -62,6 +61,11 @@ class WindowEstimator:
         mask2 = torch.eq(id_12[id_21], torch.arange(id_21.__len__(), device=descs.device))
         mask2_ind = torch.nonzero(mask2, as_tuple=False).squeeze(1)  # successful matches
         new_match_ids = -1*torch.ones(mask2.size(0), dtype=torch.long, device=mask2.device)
+
+        # TODO: optional ransac b/w new frame and previous frame for inliers
+        T_21_r, inliers = self.ransac_svd(prev_frame.coords[id_21[mask2_ind], :], coords[mask2_ind, :])
+        mask2_ind = mask2_ind[inliers]
+
 
         # existing landmarks
         existing_lm = torch.nonzero(prev_frame.match_ids[id_21[mask2_ind]] >= 0, as_tuple=False).squeeze(1)
@@ -89,6 +93,7 @@ class WindowEstimator:
         new_frame = MeasurementFrame(coords, descs, weights, new_match_ids, self.frame_counter)
         self.mframes_deq.append(new_frame)
         self.frame_counter += 1
+        new_frame.pose = T_21_r.detach().cpu().numpy()@prev_frame.pose # T_k0
 
         # drop landmarks with 0 observations
         # self.removeZeroLandmarks()
@@ -154,6 +159,69 @@ class WindowEstimator:
 
     def getFirstPose(self):
         return self.mframes_deq[0].pose, self.mframes_deq[0].frame_id
+
+    def ransac_svd(self, points1, points2):
+        reflect = torch.eye(3, device=points1.device)
+        reflect[2, 2] = -1
+        T_21 = torch.eye(4, device=points1.device)
+        pick_size = 5
+        total_points = points1.shape[0]
+        best_inlier_size = 0
+
+        for i in range(100):
+            # randomly select query
+            query = np.random.randint(0, high=total_points, size=pick_size)
+
+            # centered
+            mean1 = points1[query, :].mean(dim=0, keepdim=True)
+            mean2 = points2[query, :].mean(dim=0, keepdim=True)
+            diff1 = points1[query, :] - mean1
+            diff2 = points2[query, :] - mean2
+
+            # svd
+            H = torch.matmul(diff1.T, diff2)
+            u, s, v = torch.svd(H)
+            r = torch.matmul(v, u.T)
+            r_det = torch.det(r)
+            if r_det < 0:
+                v = torch.matmul(v, reflect)
+                r = torch.matmul(v, u.T)
+            R_21 = r
+            t_21 = torch.matmul(-r, mean1.T) + mean2.T
+
+            points2tran = points2@R_21 - (R_21.T@t_21).T
+            error = points1 - points2tran
+            error = torch.sum(error ** 2, 1)
+            inliers = torch.where(error < 0.09)
+            if inliers[0].size(0) > best_inlier_size:
+                best_inlier_size = inliers[0].size(0)
+                best_inlier_ids = inliers[0]
+
+            if best_inlier_size > 0.8*total_points:
+                break
+
+        # svd with inliers
+        query = best_inlier_ids
+        mean1 = points1[query, :].mean(dim=0, keepdim=True)
+        mean2 = points2[query, :].mean(dim=0, keepdim=True)
+        diff1 = points1[query, :] - mean1
+        diff2 = points2[query, :] - mean2
+
+        # svd
+        H = torch.matmul(diff1.T, diff2)
+        u, s, v = torch.svd(H)
+        r = torch.matmul(v, u.T)
+        r_det = torch.det(r)
+        if r_det < 0:
+            v = torch.matmul(v, reflect)
+            r = torch.matmul(v, u.T)
+        R_21 = r
+        t_21 = torch.matmul(-r, mean1.T) + mean2.T
+
+        T_21[:3, :3] = R_21
+        T_21[:3, 3:] = t_21
+
+        return T_21, query
 
 class MeasurementFrame:
     """

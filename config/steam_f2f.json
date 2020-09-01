@@ -1,6 +1,6 @@
 {
     "session_name": "temp",
-    "previous_session": "",
+    "previous_session": "ir_super2_w6_win2_e1_p8_gt_noval_decay1en4_sobi6v",
     "model_only": true,
 
     "networks": {
@@ -8,11 +8,11 @@
         "dense_match": false,
         "base_net": "super",
         "loss": "window",
-        "min_obs": 3,
+        "min_obs": 2,
         "dual_loss": true,
         "steam_pseudo": true,
         "window_gt": true,
-        "gt_cov_diag": [1e-4, 1e-4, 1e-4, 1e-5, 1e-5, 1e-5],
+        "gt_cov_diag": [1e-5, 1e-5, 1e-5, 1e-6, 1e-6, 1e-6],
         "pseudo_temp": 50.0,
         "sobel_mask": ["canny"],
         "sobel_int_thresh": 0.7,
@@ -34,8 +34,8 @@
             "align_corners": true
         },
         "keypoint_loss": {
-            "mah": true,
-            "error_thresh": 4.0
+            "mah": false,
+            "error_thresh": 1.0
         }
     },
 
@@ -69,7 +69,7 @@
 
     "train_loader": {
         "batch_size": 1,
-        "window_size": 9,
+        "window_size": 6,
         "num_workers": 0
     },
 

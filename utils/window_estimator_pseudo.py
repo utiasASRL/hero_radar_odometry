@@ -28,7 +28,7 @@ class WindowEstimatorPseudo:
         self.frame_counter = 0
 
     # Added new frame
-    def add_frame(self, coords, descs, weights):
+    def add_frame(self, coords, descs, weights, T_k0=torch.Tensor()):
         # if first frame
         if len(self.mframes_deq) == 0:
             # initialize landmarks
@@ -60,15 +60,27 @@ class WindowEstimatorPseudo:
 
         prev_frame = self.mframes_deq[-1]
         w_12 = prev_frame.descs@descs.T
-        _, id_12 = torch.max(w_12, dim=1)   # gives indices of 2 (size of 1)
-        _, id_21 = torch.max(w_12, dim=0)   # gives indices of 1 (size of 2)
+        mv_12, id_12 = torch.max(w_12, dim=1)   # gives indices of 2 (size of 1)
+        mv_21, id_21 = torch.max(w_12, dim=0)   # gives indices of 1 (size of 2)
         mask1 = torch.eq(id_21[id_12], torch.arange(id_12.__len__(), device=descs.device))
         mask1_ind = torch.nonzero(mask1, as_tuple=False).squeeze(1)  # ids of 1 that are successful matches
 
         w_12_sf = F.softmax(w_12*self.sf_temp, dim=1)
         meas = w_12_sf@coords
-        meas = meas[mask1_ind, :]
 
+        # ransac
+        if T_k0.size(0) == 0:
+            T_21_r, inliers = self.ransac_svd(prev_frame.coords[mask1_ind, :], meas[mask1_ind, :], self.mah_thresh)
+        else:
+            T_21_r = T_k0.detach().cpu().numpy()@self.se3_inv(prev_frame.pose.astype(np.float32))
+            inliers = self.gt_inliers(prev_frame.coords[mask1_ind, :], meas[mask1_ind, :],
+                                      torch.from_numpy(T_21_r).cuda(), self.mah_thresh)
+
+        if inliers.size(0) == 0:
+            assert False, "No inliers in frame"
+        mask1_ind = mask1_ind[inliers]
+
+        meas = meas[mask1_ind, :]
         meas_weights = w_12_sf@weights
         meas_weights = meas_weights[mask1_ind, :]
 
@@ -76,6 +88,10 @@ class WindowEstimatorPseudo:
         new_frame = MeasurementFrame(coords, descs, weights,
                                      -1*torch.ones(coords.size(0), device=coords.device, dtype=torch.long),
                                      self.frame_counter)
+        if T_k0.size(0) == 0:
+            new_frame.pose = T_21_r.detach().cpu().numpy()@prev_frame.pose # T_k0
+        else:
+            new_frame.pose = T_21_r@prev_frame.pose
         self.frame_counter += 1
 
         # check if any are of existing landmarks
@@ -222,12 +238,12 @@ class WindowEstimatorPseudo:
             wds_k = frame.wds[mask_ids_list[k]]
 
             # error thresh
-            error = (meas_k - l_sp[0, :, :]).unsqueeze(-1)
-            mah = error.transpose(1, 2)@wmats_k@error
-            ids = torch.nonzero(mah.squeeze() < self.mah_thresh ** 2, as_tuple=False).squeeze(1)
+            # error = (meas_k - l_sp[0, :, :]).unsqueeze(-1)
+            # mah = error.transpose(1, 2)@wmats_k@error
+            # ids = torch.nonzero(mah.squeeze() < self.mah_thresh ** 2, as_tuple=False).squeeze(1)
+            ids = torch.arange(meas_k.size(0))
 
             # compute loss over sigmapoints
-            a = 1
 
             # batch version
             error = (meas_k[ids, :].unsqueeze(0) - l_sp[1:, ids, :]).unsqueeze(-1)
@@ -265,6 +281,85 @@ class WindowEstimatorPseudo:
                                            2*torch.ones(new_lm_coords.size(0), device=new_lm_coords.device)), dim=0)
             return torch.arange(m, m + new_lm_coords.size(0), device=new_lm_coords.device)
 
+    def se3_inv(self, Tf):
+        Tinv = np.zeros_like(Tf)
+        Tinv[:3, :3] = Tf[:3, :3].T
+        Tinv[:3, 3:] = -Tf[:3, :3].T@Tf[:3, 3:]
+        Tinv[3, 3] = 1
+        return Tinv
+
+    def ransac_svd(self, points1, points2, thresh):
+        reflect = torch.eye(3, device=points1.device)
+        reflect[2, 2] = -1
+        T_21 = torch.eye(4, device=points1.device)
+        pick_size = 5
+        total_points = points1.shape[0]
+        best_inlier_size = 0
+
+        for i in range(100):
+            # randomly select query
+            query = np.random.randint(0, high=total_points, size=pick_size)
+
+            # centered
+            mean1 = points1[query, :].mean(dim=0, keepdim=True)
+            mean2 = points2[query, :].mean(dim=0, keepdim=True)
+            diff1 = points1[query, :] - mean1
+            diff2 = points2[query, :] - mean2
+
+            # svd
+            H = torch.matmul(diff1.T, diff2)
+            u, s, v = torch.svd(H)
+            r = torch.matmul(v, u.T)
+            r_det = torch.det(r)
+            if r_det < 0:
+                v = torch.matmul(v, reflect)
+                r = torch.matmul(v, u.T)
+            R_21 = r
+            t_21 = torch.matmul(-r, mean1.T) + mean2.T
+
+            points2tran = points2@R_21 - (R_21.T@t_21).T
+            error = points1 - points2tran
+            error = torch.sum(error ** 2, 1)
+            inliers = torch.where(error < thresh ** 2)
+            if inliers[0].size(0) > best_inlier_size:
+                best_inlier_size = inliers[0].size(0)
+                best_inlier_ids = inliers[0]
+
+            if best_inlier_size > 0.8*total_points:
+                break
+
+        # svd with inliers
+        query = best_inlier_ids
+        mean1 = points1[query, :].mean(dim=0, keepdim=True)
+        mean2 = points2[query, :].mean(dim=0, keepdim=True)
+        diff1 = points1[query, :] - mean1
+        diff2 = points2[query, :] - mean2
+
+        # svd
+        H = torch.matmul(diff1.T, diff2)
+        u, s, v = torch.svd(H)
+        r = torch.matmul(v, u.T)
+        r_det = torch.det(r)
+        if r_det < 0:
+            v = torch.matmul(v, reflect)
+            r = torch.matmul(v, u.T)
+        R_21 = r
+        t_21 = torch.matmul(-r, mean1.T) + mean2.T
+
+        T_21[:3, :3] = R_21
+        T_21[:3, 3:] = t_21
+
+        return T_21, query
+
+    def gt_inliers(self, points1, points2, T_21, thresh):
+        points1_in_2 = points1@T_21[:3, :3].T + T_21[:3, 3].unsqueeze(0)
+
+        error = points2 - points1_in_2
+        error = torch.sum(error ** 2, 1)
+        # inliers = torch.where(error < thresh ** 2)
+        inliers = torch.nonzero(error < thresh ** 2, as_tuple=False).squeeze(1)
+
+        return inliers
 
 class MeasurementFrame:
     """
@@ -278,8 +373,8 @@ class MeasurementFrame:
         self.weights = weights
         self.match_ids = match_ids
 
-        self.pose = np.eye(4)
-        self.vel = np.zeros((6))
+        self.pose = np.eye(4, dtype=np.float32)
+        self.vel = np.zeros((6), dtype=np.float32)
         self.frame_id = frame_id
 
         self.meas = torch.Tensor()
