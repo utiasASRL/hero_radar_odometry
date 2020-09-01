@@ -160,6 +160,7 @@ class F2FPoseModel(nn.Module):
         loss = 0
 
         # loop over each batch
+        batch_size = src_coords.size(0)
         for batch_i in range(src_coords.size(0)):
 
             if loss_flip:
@@ -244,7 +245,7 @@ class F2FPoseModel(nn.Module):
             # loss -= torch.mean(3*w[ids, :])
             loss -= torch.mean(torch.sum(d[ids, :], 1))
 
-        return loss
+        return loss/batch_size
 
     def loss_steam(self, src_coords, tgt_coords, weights, patch_mask, R_oa):
         '''
