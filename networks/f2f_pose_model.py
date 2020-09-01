@@ -135,10 +135,10 @@ class F2FPoseModel(nn.Module):
         # compute loss
         if self.config['networks']['loss'] == "gt":
             loss = self.loss(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
-                             keypoint_weights[::self.window_size], patch_mask, T_iv, R_oa, False)
+                             keypoint_weights[1::self.window_size], patch_mask, T_iv, R_oa, False)
             if self.config['networks']['dual_loss']:
                 loss += self.loss(keypoint_coords[1::self.window_size], keypoint_coords[::self.window_size],
-                                  keypoint_weights[1::self.window_size], patch_mask, T_iv, R_oa, True)
+                                  keypoint_weights[::self.window_size], patch_mask, T_iv, R_oa, True)
         elif self.config['networks']['loss'] == "steam":
             loss = self.loss_steam(keypoint_coords[::self.window_size], keypoint_coords[1::self.window_size],
                                    keypoint_weights[::self.window_size], patch_mask, R_oa)
@@ -185,7 +185,7 @@ class F2FPoseModel(nn.Module):
             points2 = F.softmax(w12*self.config['networks']['pseudo_temp'], dim=1)@tgt_coords[batch_i, :, nr_ids2].transpose(0, 1)
 
             # get weights
-            w = weights[batch_i, :, nr_ids1].transpose(0, 1)
+            w = F.softmax(w12*self.config['networks']['pseudo_temp'], dim=1)@weights[batch_i, :, nr_ids2].transpose(0, 1)
             Wmat, d = self.convertWeightMat(w)
 
             # rotate cov back
