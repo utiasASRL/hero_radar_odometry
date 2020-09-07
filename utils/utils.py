@@ -355,6 +355,6 @@ def T_inv(transformation_mat):
     T_inv = identity.repeat(batch_size, 1, 1).cuda()
     C = transformation_mat[:,:3,:3]
     t = transformation_mat[:,:3,3:]
-    T_inv[:,:3,:3] = C.transpose(2,1)
-    T_inv[:,:3,3:] = -C.transpose(2,1) @ t
+    T_inv[:,:3,:3] = C.transpose(2,1).contiguous()
+    T_inv[:,:3,3:] = -C.transpose(2,1).contiguous() @ t
     return T_inv

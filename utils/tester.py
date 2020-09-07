@@ -80,6 +80,9 @@ class Tester():
         with torch.no_grad():
             for i_batch, batch_sample in enumerate(self.test_loader):
 
+                # if i_batch > 400:
+                #     break
+
                 # forward prop
                 try:
                     loss = self.model(batch_sample, 0)
@@ -196,41 +199,39 @@ class Tester():
             pickle.dump(save_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
         print('======Save pose predictions to disk=======')
 
+        test_eulers_ba = eulers_ba
+        test_eulers_ba_pred = eulers_ba_pred
+
         # plot one color
-        assert abs_translations_ia.shape[0] == abs_translations_ia_pred.shape[0]
         plt.clf()
-        plt.scatter([abs_translations_ia[0][0]], [abs_translations_ia[0][2]], label='sequence start', marker='s', color='k')
-        plot_route(abs_translations_ia, abs_translations_ia_pred, 'r', 'b')
-        plt.legend()
-        plt.title('')
-        save_name = '{}/route.png'.format(self.plot_path)
-        plt.savefig(save_name)
+        assert abs_translations_ia.shape[0] == abs_translations_ia_pred.shape[0]
+        plot_route(abs_translations_ia, abs_translations_ia_pred, self.plot_path)
+
         print('======Plot trajectories to disk=======')
 
         # plot errors along each DOF
         # save translation plots
         save_name = '{}/abs_translation_error.png'.format(self.plot_path)
         plot_error(abs_translations_ia, abs_translations_ia_pred,
-                   titles=['x', 'y', 'z'], setting='abs', save_name=save_name)
+                   titles=['x (right)', 'y (down)', 'z (forward)'], setting='abs error', save_name=save_name)
 
         save_name = '{}/rel_translation_error.png'.format(self.plot_path)
         plot_error(translations_ba, translations_ba_pred,
-                   titles=['x', 'y', 'z'], setting='rel', save_name=save_name)
+                   titles=['x (right)', 'y (down)', 'z (forward)'], setting='error', save_name=save_name)
 
         save_name = '{}/rel_translation.png'.format(self.plot_path)
         plot_versus(translations_ba, translations_ba_pred,
-                    titles=['x', 'y', 'z'], setting='rel', save_name=save_name)
+                    titles=['x (right)', 'y (down)', 'z (forward)'], setting='error', save_name=save_name)
 
         # save rotation plots
-        # save_name = '{}/rel_rotation_error.png'.format(save_dir)
-        # plot_error(eulers_ba.cpu(), euler_ba_pred.cpu(),
-        #            titles=['psi', 'theta', 'phi'], setting='rel', save_name=save_name)
-        #
-        # save_name = '{}/rel_rotation.png'.format(save_dir)
-        # plot_versus(eulers_ba, euler_ba_pred),
-        #             titles=['psi', 'theta', 'phi'], setting='rel', save_name=save_name)
-        print('======Plot errors along DOF to disk=======')
+        save_name = '{}/rel_rotation_error.png'.format(self.plot_path)
+        plot_error(test_eulers_ba, test_eulers_ba_pred,
+                   titles=['rot_x (pitch)', 'rot_y (yaw)', 'rot_z (roll)'], setting='error', save_name=save_name)
 
+        save_name = '{}/rel_rotation.png'.format(self.plot_path)
+        plot_versus(test_eulers_ba, test_eulers_ba_pred,
+                    titles=['rot_x (pitch)', 'rot_y (yaw)', 'rot_z (roll)'], setting='error', save_name=save_name)
+        print('======Plot errors along DOF to disk=======')
 
         return loss
 

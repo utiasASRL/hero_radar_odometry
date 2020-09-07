@@ -70,12 +70,13 @@ class MatchTester:
         weight_scores_src = saved_data['weight_scores_src']
         weight_scores_tgt = saved_data['weight_scores_tgt']
         inliers = saved_data['inliers']
-        weights = saved_data['weights']
+        weights = saved_data['weights'] if (config['loss']['start_svd_epoch'] == 0) else torch.ones(inliers.size())
         src_valid = saved_data['src_valid']
         pseudo_valid = saved_data['pseudo_valid']
 
         # Test that stereo camera projection works correctly.
-        src_project_2D = self.stereo_cam.camera_model(src_coords, cam_calib)[:, 0:2, :].transpose(2, 1)  # BxNx2
+        src_project_2D = self.stereo_cam.camera_model(src_coords, cam_calib,
+                                                      start_ind=0, step=2)[:, 0:2, :].transpose(2, 1)  # BxNx2
 
         # Create images that we will use for visualization
         to_img = transforms.ToPILImage()

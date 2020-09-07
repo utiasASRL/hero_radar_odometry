@@ -23,6 +23,7 @@
 #
 
 # sys imports
+import copy
 import os
 import time
 from os import listdir
@@ -129,7 +130,7 @@ class KittiDataset(Dataset):
         T_iv = self.poses[s_ind][f_ind]
 
         # Get static transforms between camera frames
-        cam_calib = self.cam_calib[s_ind]
+        cam_calib = copy.deepcopy(self.cam_calib[s_ind])
 
         if self.sensor == 'velodyne':
             if self.config['dataset']['images']['preload']:
@@ -173,8 +174,8 @@ class KittiDataset(Dataset):
             cam_right_file = join(seq_path, 'image_3', self.frames[s_ind][f_ind] + '.png')
 
             # Load stereo image pair with associated disparity
-            input_image, disparity_image = load_camera_data(cam_left_file, cam_right_file,
-                                                            self.height, self.width, self.config)
+            input_image, disparity_image, cam_calib = load_camera_data(cam_left_file, cam_right_file,
+                                                                       cam_calib, self.config['dataset'])
            
             return {'geometry': disparity_image, 'input': input_image, 's_ind': s_ind, 'f_ind': f_ind, 'T_iv': T_iv,
                     'cam_calib': cam_calib}
@@ -253,9 +254,11 @@ class KittiDataset(Dataset):
             Returns
             -------
             dict
-                dict containing camera parameter matrices (K2, K3) as 3x3 numpy arrays, baseline (b), and transforms
-                (T_c2_c0, T_c3_c0) between camera frames as 4x4 numpy arrays
+                dict containing camera parameters (fu_l, fv_l, cu_l, cv_l, fu_r, fv_r, cu_r, cv_r), baseline (b),
+                matrices M and Q for projection and inverse camera model and finally transforms (T_c2_c0, T_c3_c0)
+                between camera frames as 4x4 numpy arrays
         """
+
         P2 = calib['P2']
         K2 = P2[0:3, 0:3]
         T_c2_c0 = np.eye(4)
@@ -266,7 +269,47 @@ class KittiDataset(Dataset):
         T_c3_c0 = np.eye(4)
         T_c3_c0[:3, 3] = P3[:3, 3] / P3[0, 0]  # Divide by focal length to get translation in meters
 
-        return {'K2': K2, 'K3': K3, 'T_c2_c0': T_c2_c0, 'T_c3_c0': T_c3_c0}
+        fu_l = K2[0, 0]
+        fv_l = K2[1, 1]
+        cu_l = K2[0, 2]
+        cv_l = K2[1, 2]
+
+        fu_r = K3[0, 0]
+        fv_r = K3[1, 1]
+        cu_r = K3[0, 2]
+        cv_r = K3[1, 2]
+
+        b = abs(T_c3_c0.dot(np.linalg.inv(T_c2_c0))[0, 3])
+
+        # Matrix needed to project 3D points into stereo camera coordinates
+        # [ul, vl, ur, vr]^T = (1/z) * M * [x, y, z, 1]^T (using left camera model)
+        #
+        # [fu,  0, cu,       0]
+        # [ 0, fv, cv,       0]
+        # [fu,  0, cu, -fu * b]
+        # [ 0, fv, cv,       0]
+        #
+        M = torch.tensor([[fu_l,  0.0, cu_l,         0.0],
+                          [ 0.0, fv_l, cv_l,         0.0],
+                          [fu_r,  0.0, cu_r, -(fu_r * b)],
+                          [ 0.0, fv_r, cv_r,         0.0]]).float()
+
+        # Matrix needed to transform image coordinates (from left frame) into 3D points
+        # [x, y, z, 1] = (1/d) * Q * [ul, vl, d, 1]^T
+        #
+        # [b,           0, 0, -b * cu]
+        # [0, b * fu / fv, 0, -b * cv]
+        # [0,           0, 0,  fu * b]
+        # [0,           0, 1,       0]
+        #
+        Q = torch.tensor([[  b,               0.0, 0.0, -(b * cu_l)],
+                          [0.0, b * (fu_l / fv_l), 0.0, -(b * cv_l)],
+                          [0.0,               0.0, 0.0,    fu_l * b],
+                          [0.0,               0.0, 1.0,         0.0]]).float()
+
+        return {'fu_l': fu_l, 'fv_l': fv_l, 'cu_l': cu_l, 'cv_l': cv_l,
+                'fu_r': fu_r, 'fv_r': fv_r, 'cu_r': cu_r, 'cv_r': cv_r,
+                'b': b, 'Q': Q, 'M': M, 'T_c2_c0': T_c2_c0, 'T_c3_c0': T_c3_c0}
 
     def parse_poses(self, filename, calibration):
         """ read poses file with per-scan poses from given filename

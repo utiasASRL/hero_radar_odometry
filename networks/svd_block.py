@@ -29,14 +29,14 @@ class SVDBlock(nn.Module):
         :return: rotation and translation from keypoint to pseudo
         '''
 
-        keypoints_centroid = (keypoints @ weight.transpose(2,1)) / torch.sum(weight, dim=2, keepdim=True) # Bx3x1
+        keypoints_centroid = (keypoints @ weight.transpose(2,1).contiguous()) / torch.sum(weight, dim=2, keepdim=True) # Bx3x1
         keypoints_centered = keypoints - keypoints_centroid # Bx3xN
 
-        pseudo_centroid = (pseudo @ weight.transpose(2,1)) / torch.sum(weight, dim=2, keepdim=True)
+        pseudo_centroid = (pseudo @ weight.transpose(2,1).contiguous()) / torch.sum(weight, dim=2, keepdim=True)
         pseudo_centered = pseudo - pseudo_centroid # Bx3xN
 
         w = torch.sum(weight, dim=2, keepdim=True) # Bx1x1
-        H = (1.0 / w) *  torch.matmul((keypoints_centered * weight), pseudo_centered.transpose(2,1))
+        H = (1.0 / w) *  torch.matmul((keypoints_centered * weight), pseudo_centered.transpose(2,1).contiguous())
 
         U, S, V = [], [], []
         R = []
@@ -61,7 +61,7 @@ class SVDBlock(nn.Module):
         S = torch.stack(S, dim=0)
         R = torch.stack(R, dim=0)
 
-        t = -R @ (keypoints_centroid - R.transpose(2,1) @ pseudo_centroid)
+        t = -R @ (keypoints_centroid - R.transpose(2,1).contiguous() @ pseudo_centroid)
         t = t.squeeze()
 
         return R, t

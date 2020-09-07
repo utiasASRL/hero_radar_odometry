@@ -13,7 +13,7 @@ class StereoCameraModel(nn.Module):
     def __init__(self):
         super(StereoCameraModel, self).__init__()
         # Initialize focal length and base line to 0
-        self.fl = 0.0
+        self.fu_l = 0.0
         self.b = 0.0
 
         # Matrices for camera model needed to projecting/reprojecting between
@@ -105,8 +105,8 @@ class StereoCameraModel(nn.Module):
                                           padding_mode='border')  # B x 1 x 1 x N
         point_disparities = point_disparities.reshape(batch_size, 1, n_points)  # [B, 1, N]
 
-        disp_min = (self.fl * self.b) / 600.0  # Farthest point 600 m
-        disp_max = (self.fl * self.b) / 0.1    # Closest point 0.1 m (the max disp is 96, so closes point is actually 4m)
+        disp_min = (self.fu_l * self.b) / 600.0  # Farthest point 600 m
+        disp_max = (self.fu_l * self.b) / 0.1    # Closest point 0.1 m (the max disp is 96, so closes point is actually 4m)
         valid_points = (point_disparities >= disp_min) & (point_disparities <= disp_max)  # [B, 1, N] point in range 0.1 to 333 m
 
         # Create the [ul, vl, d, 1] vector
@@ -128,7 +128,7 @@ class StereoCameraModel(nn.Module):
 
         return cam_coords, valid_points
 
-    def camera_model(self, cam_coords, cam_calib):
+    def camera_model(self, cam_coords, cam_calib, start_ind, step):
         """
         Project 3D points into an image.
         Args:
@@ -139,22 +139,23 @@ class StereoCameraModel(nn.Module):
         """
         batch_size = cam_coords.size(0)
 
-        K2, K3 = cam_calib['K2'].cuda(), cam_calib['K3'].cuda()
-        T_c2_c0 = cam_calib['T_c2_c0'][:batch_size, :, :].float().cuda()
-        T_c3_c0 = cam_calib['T_c3_c0'][:batch_size, :, :].float().cuda()
-        self.b = abs(T_c3_c0.bmm(se3_inv(T_c2_c0))[0, 0, 3])
-        self.fl = K2[0, 0, 0]
+        # K2, K3 = cam_calib['K2'].cuda(), cam_calib['K3'].cuda()
+        T_c2_c0 = cam_calib['T_c2_c0'][start_ind::step].float().cuda()
+        # T_c3_c0 = cam_calib['T_c3_c0'][start_ind:batch_size, :, :].float().cuda()
+        # self.b = abs(T_c3_c0.bmm(se3_inv(T_c2_c0))[0, 0, 3])
+        # self.fl = K2[0, 0, 0]
 
         if cam_coords.size(1) == 4:
             cam_coords = T_c2_c0.bmm(cam_coords)
         else:
             cam_coords = T_c2_c0[:, :, :3].bmm(cam_coords) + T_c2_c0[:, :, 3].unsqueeze(-1)
 
-        self.M, self.Q =  self.set_camera_model_matrices(K2[0, 0, 0], K2[0, 0, 2], K2[0, 1, 2],
-                                                         K3[0, 0, 0], K3[0, 0, 2], K3[0, 1, 2], self.b)
+        # self.M, self.Q =  self.set_camera_model_matrices(K2[0, 0, 0], K2[0, 0, 2], K2[0, 1, 2],
+        #                                                  K3[0, 0, 0], K3[0, 0, 2], K3[0, 1, 2], self.b)
 
         # Expand fixed matrices to the correct batch size
-        M = self.M.expand(batch_size, 4, 4).cuda()
+        # M = self.M.expand(batch_size, 4, 4).cuda()
+        M = cam_calib['M'][start_ind::step].cuda()
 
         # Get the camera coordinates in the target frame
         img_coords = self.camera_to_image(cam_coords, M)  # [B,4,N]
@@ -164,7 +165,7 @@ class StereoCameraModel(nn.Module):
 
         return img_coords
 
-    def inverse_camera_model(self, img_coords, disparity, cam_calib):
+    def inverse_camera_model(self, img_coords, disparity, cam_calib, start_ind, step):
         """
         Inverse warp a source image to the target image plane.
         Args:
@@ -178,17 +179,17 @@ class StereoCameraModel(nn.Module):
 
         batch_size, height, width = disparity.size()
 
-        K2, K3 = cam_calib['K2'].cuda(), cam_calib['K3'].cuda()
-        T_c2_c0 = cam_calib['T_c2_c0'][:batch_size, :, :].float().cuda()
-        T_c3_c0 = cam_calib['T_c3_c0'][:batch_size, :, :].float().cuda()
-        self.b = abs(T_c3_c0.bmm(se3_inv(T_c2_c0))[0, 0, 3])
-        self.fl = K2[0, 0, 0]
+        T_c2_c0 = cam_calib['T_c2_c0'][start_ind::step].float().cuda()
+        # T_c3_c0 = cam_calib['T_c3_c0'][start_ind::batch_size, :, :].float().cuda()
+        self.b = cam_calib['b'][0]  # Just need an approximate value to set rough limits on disparity
+        self.fu_l = cam_calib['fu_l'][0]  # Just need an approximate value to set rough limits on disparity
 
-        self.M, self.Q = self.set_camera_model_matrices(K2[0, 0, 0], K2[0, 0, 2], K2[0, 1, 2],
-                                                        K3[0, 0, 0], K3[0, 0, 2], K3[0, 1, 2], self.b)
+        # self.M, self.Q = self.set_camera_model_matrices(K2[0, 0, 0], K2[0, 0, 2], K2[0, 1, 2],
+        #                                                 K3[0, 0, 0], K3[0, 0, 2], K3[0, 1, 2], self.b)
 
         # Expand fixed matrices to the correct batch size
-        Q = self.Q.expand(batch_size, 4, 4).cuda()
+        # Q = self.Q.expand(batch_size, 4, 4).cuda()
+        Q = cam_calib['Q'][start_ind::step].cuda()
 
         # Get the camera coordinates in the target frame
         cam_coords, valid_points = self.image_to_camera(img_coords, disparity, Q)  # [B,4,N]
@@ -196,7 +197,7 @@ class StereoCameraModel(nn.Module):
         if (torch.sum(torch.isnan(cam_coords)) > 0) or (torch.sum(torch.isinf(cam_coords)) > 0):
             print('Warning: Nan or Inf values in camera coordinate tensor.')
 
-        T_c2_c0 = T_c2_c0.expand(batch_size, 4, 4).cuda()
+        # T_c2_c0 = T_c2_c0.expand(batch_size, 4, 4).cuda()
         cam_coords = se3_inv(T_c2_c0).bmm(cam_coords)
 
         return cam_coords[:, :3, :], valid_points

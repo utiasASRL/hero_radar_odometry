@@ -68,6 +68,8 @@ class SVDPoseModel(nn.Module):
         images = images.cuda() if self.config['dataset']['sensor'] == 'velodyne' else images[:, :3, :, :].cuda()
         T_iv = T_iv.cuda()
 
+        _, _, height, width = images.size()
+
         # Extract features, detector scores and weight scores
         detector_scores, weight_scores, descs = self.unet_block(images)
 
@@ -101,15 +103,14 @@ class SVDPoseModel(nn.Module):
         # Match the points in src frame to points in target frame to generate pseudo points
         if self.config['networks']['dense_match']:
             # Dense 2D image coordinates
-            height = self.config['dataset']['images']['height']
-            width = self.config['dataset']['images']['width']
             v_coord, u_coord = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
             v_coord = v_coord.reshape(height * width).float()  # HW
             u_coord = u_coord.reshape(height * width).float()
             image_coords = torch.stack((u_coord, v_coord), dim=1)  # HW x 2
+            # print(image_coords.size())
             tgt_2D_dense = image_coords.unsqueeze(0).expand(self.batch_size, height * width, 2).cuda()
 
-            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(
+            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid, max_softmax = self.softmax_matcher_block(
                                                                                   geometry_img[1::self.window_size],
                                                                                   geometry_img[1::self.window_size],
                                                                                   tgt_2D_dense,
@@ -118,9 +119,10 @@ class SVDPoseModel(nn.Module):
                                                                                   src_descs,
                                                                                   descs[1::self.window_size],
                                                                                   descs[1::self.window_size],
-                                                                                  cam_calib)
+                                                                                  cam_calib,
+                                                                                  self.window_size)
         else:
-            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid = self.softmax_matcher_block(
+            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid, max_softmax = self.softmax_matcher_block(
                                                                                   geometry_img[1::self.window_size],
                                                                                   keypoint_coords[1::self.window_size],
                                                                                   keypoints_2D[1::self.window_size],
@@ -129,7 +131,8 @@ class SVDPoseModel(nn.Module):
                                                                                   src_descs,
                                                                                   keypoint_descs[1::self.window_size],
                                                                                   descs[1::self.window_size],
-                                                                                  cam_calib)
+                                                                                  cam_calib,
+                                                                                  self.window_size)
 
         # # UNCOMMENT this line to do keypoint matching instead of dense matching
         # pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
@@ -148,10 +151,20 @@ class SVDPoseModel(nn.Module):
 
         # Compute ground truth coordinates for the pseudo points
         pseudo_gt_coords = R_tgt_src.bmm(src_coords) + t_tgt_src.unsqueeze(-1)
+        # print('src_coord: {}'.format(src_coords.size()))
+        # print('pseudo_gt_coord: {}'.format(pseudo_gt_coords.size()))
         if self.config['dataset']['sensor'] == 'velodyne':
             pseudo_gt_2D = compute_2D_from_3D(pseudo_gt_coords, self.config)
         else:
-            pseudo_gt_2D = self.stereo_cam.camera_model(pseudo_gt_coords, cam_calib)[:, 0:2, :].transpose(2,1) # BxNx2
+            pseudo_gt_2D = self.stereo_cam.camera_model(pseudo_gt_coords, cam_calib, start_ind=1,
+                                                        step=self.window_size)[:, 0:2, :].transpose(2,1).contiguous() # BxNx2
+
+        # print('pseudo_2D')
+        # print(pseudo_2D)
+        # print('pseudo_gt_coords')
+        # print(pseudo_gt_coords)
+        # print('pseudo_gt_2D')
+        # print(pseudo_gt_2D)
 
         # Outlier rejection based on error between predicted pseudo point and ground truth
         inlier_valid = torch.ones(src_valid.size()).type_as(src_valid)
@@ -164,10 +177,16 @@ class SVDPoseModel(nn.Module):
             elif self.config['networks']['outlier_rejection']['type'] == '2D':
                 # Find outliers with large keypoint errors in 2D
                 err = torch.norm(pseudo_2D - pseudo_gt_2D, dim=2)  # B x N
+                # print("err")
+                # print(err)
                 inlier_valid = err < self.config['networks']['outlier_rejection']['threshold']
                 inlier_valid = inlier_valid.unsqueeze(1) # B x 1 x N
             else:
                 assert False, "Outlier rejection type must be 2D or 3D"
+
+        pseudo_gt_valid = (pseudo_gt_2D[:, :, 0] > 0.0) & (pseudo_gt_2D[:, :, 0] < width) & \
+                          (pseudo_gt_2D[:, :, 1] > 0.0) & (pseudo_gt_2D[:, :, 1] < height)  # B x N
+        pseudo_gt_valid = pseudo_gt_valid.unsqueeze(1)
 
         ###############
         # Compute loss
@@ -204,7 +223,7 @@ class SVDPoseModel(nn.Module):
                     keypoint_loss *= self.config['loss']['weights']['keypoint_3D']
                 else:
                     valid = src_valid & inlier_valid                                                # B x 1 x N
-                    valid = valid.transpose(2, 1).expand(self.batch_size, inlier_valid.size(2), 2)  # B x N x 2
+                    valid = valid.transpose(2, 1).contiguous().expand(self.batch_size, inlier_valid.size(2), 2)  # B x N x 2
                     keypoint_loss = self.Keypoint_2D_loss(pseudo_2D[valid], pseudo_gt_2D[valid])
                     keypoint_loss *= self.config['loss']['weights']['keypoint_2D']
 
@@ -271,6 +290,7 @@ class SVDPoseModel(nn.Module):
             self.save_dict['inliers'] = inlier_valid if 'inliers' in self.save_names else None
             self.save_dict['src_valid'] = src_valid if 'src_valid' in self.save_names else None
             self.save_dict['pseudo_valid'] = pseudo_valid if 'pseudo_valid' in self.save_names else None
+            self.save_dict['pseudo_gt_valid'] = pseudo_gt_valid if 'pseudo_valid' in self.save_names else None
             self.save_dict['T_i_src'] = T_i_src if 'T_i_src' in self.save_names else None
             self.save_dict['T_i_tgt'] = T_i_tgt if 'T_i_tgt' in self.save_names else None
 
@@ -289,6 +309,7 @@ class SVDPoseModel(nn.Module):
             self.save_dict['pseudo_gt_2D'] = pseudo_gt_2D if 'pseudo_gt_2D' in self.save_names else None
             self.save_dict['weight_scores_src'] = weight_scores[::self.window_size] if 'weight_scores_src' in self.save_names else None
             self.save_dict['weight_scores_tgt'] = weight_scores[1::self.window_size] if 'weight_scores_tgt' in self.save_names else None
+            self.save_dict['max_softmax'] = max_softmax if 'max_softmax' in self.save_names else None
 
         return loss_dict
 
@@ -338,7 +359,7 @@ class SVDPoseModel(nn.Module):
         alpha = rel_w
         identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).cuda()
         loss_fn = torch.nn.MSELoss()
-        R_loss = alpha * loss_fn(R_pred.transpose(2,1) @ R, identity)
+        R_loss = alpha * loss_fn(R_pred.transpose(2,1).contiguous() @ R, identity)
         t_loss = 1.0 * loss_fn(t_pred, t)
         #     print(R_loss, t_loss)
         svd_loss = R_loss + t_loss
@@ -378,17 +399,28 @@ class SVDPoseModel(nn.Module):
 
         return se3_log(T_tgt_src) - se3_log(T_tgt_src_pred)
 
-    def print_inliers(self, epoch, iter):
+    def get_inliers(self, epoch):
 
-        msg = 'epoch: {} i: {}\ninliers:      {}\nsrc_valid:    {}\npseudo_valid: {}\n'.format(epoch, iter,
-                                                            torch.sum(self.save_dict['inliers'], dim=2).squeeze(),
-                                                            torch.sum(self.save_dict['src_valid'], dim=2).squeeze(),
-                                                            torch.sum(self.save_dict['pseudo_valid'], dim=2).squeeze())
+        num_inliers = torch.sum(self.save_dict['inliers'])
+        num_nonzero_weights = 0
 
         if epoch >= self.config['loss']['start_svd_epoch']:
-            msg += 'weights:      {}\n'.format(torch.sum(self.save_dict['weights'] > 0.0, dim=2).squeeze())
+            num_nonzero_weights = torch.sum(self.save_dict['weights'] > 0.0)
 
-        print(msg)
+        return num_inliers, num_nonzero_weights
+
+    def print_inliers(self, epoch, iter):
+        print('epoch: {} i: {}'.format(epoch, iter))
+        print('inliers:         {}'.format(torch.sum(self.save_dict['inliers'], dim=2).squeeze()))
+        print('src_valid:       {}'.format(torch.sum(self.save_dict['src_valid'], dim=2).squeeze()))
+        print('pseudo_valid:    {}'.format(torch.sum(self.save_dict['pseudo_valid'], dim=2).squeeze()))
+        print('pseudo_gt_valid: {}'.format(torch.sum(self.save_dict['pseudo_gt_valid'], dim=2).squeeze()))
+
+        if 'max_softmax' in self.save_dict:
+            print('max_softmax:     {}'.format(self.save_dict['max_softmax']))
+
+        if epoch >= self.config['loss']['start_svd_epoch']:
+            print('weights:         {}'.format(torch.sum(self.save_dict['weights'] > 0.0, dim=2).squeeze()))
 
     def save_intermediate_outputs(self):
         if len(self.save_dict) > 0 and not self.overwrite_flag:

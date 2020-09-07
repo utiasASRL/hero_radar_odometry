@@ -25,8 +25,8 @@ class KeypointBlock(nn.Module):
         self.batch_size = batch_size
 
         # image parameters
-        self.height = config['dataset']['images']['height']
-        self.width = config['dataset']['images']['width']
+        self.height = config['dataset']['images']['height_scaled']
+        self.width = config['dataset']['images']['width_scaled']
 
         # 2D coordinates
         v_coords, u_coords = torch.meshgrid([torch.arange(0, self.height),
@@ -95,11 +95,12 @@ class KeypointBlock(nn.Module):
                 expected_y = torch.sum(y_windows * softmax_attention, dim=1)                # N x num_patches
                 expected_z = torch.sum(z_windows * softmax_attention, dim=1)                # N x num_patches
                 keypoint_coords = torch.stack([expected_x, expected_y, expected_z], dim=2)  # N x num_patches x 3
-                keypoint_coords = keypoint_coords.transpose(1, 2)                           # N x 3 x num_patches
+                keypoint_coords = keypoint_coords.transpose(1, 2).contiguous()              # N x 3 x num_patches
 
             else:
                 # Compute 3D points with camera model, points are in cam0 frame, N x 3 x numpatches, N x 1 x num_patches
-                keypoint_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img, cam_calib)
+                keypoint_coords, valid_pts = self.stereo_cam.inverse_camera_model(keypoints_2D, geometry_img, cam_calib,
+                                                                                  start_ind=0, step=1)
 
             # compute keypoint descriptors
             keypoint_descs = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear',

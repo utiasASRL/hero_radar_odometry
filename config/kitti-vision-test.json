@@ -1,12 +1,12 @@
 {
-    "session_name": "test-debug2_resume",
-    "previous_session": "train-debug2_resume",
+    "session_name": "test-dense-3D-5-resume-1-5",
+    "previous_session": "train-dense-3D-5-resume",
 
     "home_dir": "/home/mgr",
 
     "networks": {
         "match_type": "zncc",
-        "dense_match": false,
+        "dense_match": true,
         "unet": {
             "n_weight_score": 1,
             "bilinear": true,
@@ -26,8 +26,8 @@
         },
         "outlier_rejection": {
             "on": true,
-            "type": "2D",
-            "threshold": 50.0
+            "type": "3D",
+            "threshold": 1.5
         }
     },
 
@@ -46,8 +46,10 @@
         },
 	    "sensor": "camera",
         "images": {
-            "height": 364,
-            "width": 1200,
+            "height": 370,
+            "width": 800,
+            "height_scaled": 370,
+            "width_scaled": 800,
             "input_channel": ["rgb"]
         },
         "disparity": {
@@ -65,7 +67,7 @@
     },
 
     "loss": {
-        "types": ["keypoint_2D", "svd"],
+        "types": ["keypoint_3D", "svd"],
         "weights": {"keypoint_2D":  0.01, "keypoint_3D":  0.01, "svd": 10.0},
         "start_svd_epoch": 0
     },

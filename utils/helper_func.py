@@ -280,7 +280,7 @@ def compute_disparity(left_img, right_img, config):
     # f * b ~= 388, closest dist ~= 388 / 96 = 4.04
     # The ground is farther than 4.04, but this captures
     # sign posts that mostly seem to be the closes objects.
-    stereo = cv2.StereoSGBM_create(**config['dataset']['disparity'])
+    stereo = cv2.StereoSGBM_create(**config['disparity'])
 
     disp = stereo.compute(left_img, right_img)
     disp = disp.astype(np.float32) / 16.0
@@ -289,28 +289,155 @@ def compute_disparity(left_img, right_img, config):
 
     return disp
 
-def load_camera_data(left_img_file, right_img_file, height, width, config):
+def load_camera_data(left_img_file, right_img_file, cam_calib, config):
     
     left_img = Image.open(left_img_file)
     right_img = Image.open(right_img_file)
 
-    width_actual, height_actual = left_img.size # PIL image size 
+    img_param = config['images']
+
+    width_actual, height_actual = left_img.size # PIL image size
 
     # Crop images so they are all of the same size.
-    if (height_actual > height) or (width_actual > width):
-        i = random.randint(0, height_actual - height) 
-        j = random.randint(0, width_actual - width)
+    if (height_actual > img_param['height']) or (width_actual > img_param['width']):
+        left_img = transforms.functional.center_crop(left_img, (img_param['height'], img_param['width']))
+        right_img = transforms.functional.center_crop(right_img, (img_param['height'], img_param['width']))
 
-        left_img = transforms.functional.crop(left_img, i, j, height, width)
-        right_img = transforms.functional.crop(right_img, i, j, height, width)
-       
+        # adjust camera parameters
+        cam_calib = update_calib_optical_centre(cam_calib, (width_actual - img_param['width']) / 2,
+                                                           (height_actual - img_param['height']) / 2)
+
+    if (img_param['height_scaled'] < img_param['height']) or (img_param['width_scaled'] < img_param['width']):
+        resize_transform = transforms.Resize((img_param['height_scaled'], img_param['width_scaled']))
+
+        left_img = resize_transform(left_img)
+        right_img = resize_transform(right_img)
+
+        # adjust camera parameters
+        cam_calib = update_calib_scale(cam_calib, img_param['width_scaled'] / img_param['width'],
+                                                  img_param['height_scaled'] / img_param['height'])
+
     left_img_uint8 = np.uint8(left_img.copy())
     right_img_uint8 = np.uint8(right_img.copy())
         
     disparity_img = compute_disparity(left_img_uint8, right_img_uint8, config)
+    # disparity_img = disparity_img * (img_param['width_scaled'] / img_param['width'])
 
     to_tensor = transforms.ToTensor()
     left_img = to_tensor(left_img).numpy()
     right_img = to_tensor(right_img).numpy()
 
-    return np.vstack((left_img, right_img)), disparity_img
+    return np.vstack((left_img, right_img)), disparity_img, cam_calib
+
+def update_calib_optical_centre(cam_calib, diff_cu, diff_cv):
+    """ adjust camera optical centre when cropping image
+
+        Returns
+        -------
+        dict
+            dict containing updated camera parameters
+    """
+    fu_l = cam_calib['fu_l']
+    fv_l = cam_calib['fv_l']
+    cu_l = cam_calib['cu_l'] - diff_cu
+    cv_l = cam_calib['cv_l'] - diff_cv
+
+    fu_r = cam_calib['fu_r']
+    fv_r = cam_calib['fv_r']
+    cu_r = cam_calib['cu_r'] - diff_cu
+    cv_r = cam_calib['cv_r'] - diff_cv
+
+    cam_calib['cu_l'] = cu_l
+    cam_calib['cv_l'] = cv_l
+
+    cam_calib['cu_r'] = cu_r
+    cam_calib['cv_r'] = cv_r
+
+    b = cam_calib['b']
+
+    # Matrix needed to project 3D points into stereo camera coordinates
+    # [ul, vl, ur, vr]^T = (1/z) * M * [x, y, z, 1]^T (using left camera model)
+    #
+    # [fu,  0, cu,       0]
+    # [ 0, fv, cv,       0]
+    # [fu,  0, cu, -fu * b]
+    # [ 0, fv, cv,       0]
+    #
+    cam_calib['M'] = torch.tensor([[fu_l, 0.0, cu_l, 0.0],
+                                   [0.0, fv_l, cv_l, 0.0],
+                                   [fu_r, 0.0, cu_r, -(fu_r * b)],
+                                   [0.0, fv_r, cv_r, 0.0]]).float()
+
+    # Matrix needed to transform image coordinates (from left frame) into 3D points
+    # [x, y, z, 1] = (1/d) * Q * [ul, vl, d, 1]^T
+    #
+    # [b,           0, 0, -b * cu]
+    # [0, b * fu / fv, 0, -b * cv]
+    # [0,           0, 0,  fu * b]
+    # [0,           0, 1,       0]
+    #
+    cam_calib['Q'] = torch.tensor([[  b,               0.0, 0.0, -(b * cu_l)],
+                                   [0.0, b * (fu_l / fv_l), 0.0, -(b * cv_l)],
+                                   [0.0,               0.0, 0.0,    fu_l * b],
+                                   [0.0,               0.0, 1.0,         0.0]]).float()
+
+    return cam_calib
+
+def update_calib_scale(cam_calib, scale_u, scale_v):
+    """ multiple camera parameters with a scale when resizing image
+
+        Returns
+        -------
+        dict
+            dict containing updated camera parameters
+    """
+
+    fu_l = scale_u * cam_calib['fu_l']
+    fv_l = scale_v * cam_calib['fv_l']
+    cu_l = scale_u * cam_calib['cu_l']
+    cv_l = scale_v * cam_calib['cv_l']
+
+    fu_r = scale_u * cam_calib['fu_r']
+    fv_r = scale_v * cam_calib['fv_r']
+    cu_r = scale_u * cam_calib['cu_r']
+    cv_r = scale_v * cam_calib['cv_r']
+
+    cam_calib['fu_l'] = fu_l
+    cam_calib['fv_l'] = fv_l
+    cam_calib['cu_l'] = cu_l
+    cam_calib['cv_l'] = cv_l
+
+    cam_calib['fu_r'] = fu_r
+    cam_calib['fv_r'] = fv_r
+    cam_calib['cu_r'] = cu_r
+    cam_calib['cv_r'] = cv_r
+
+    b = cam_calib['b']
+
+    # Matrix needed to project 3D points into stereo camera coordinates
+    # [ul, vl, ur, vr]^T = (1/z) * M * [x, y, z, 1]^T (using left camera model)
+    #
+    # [fu,  0, cu,       0]
+    # [ 0, fv, cv,       0]
+    # [fu,  0, cu, -fu * b]
+    # [ 0, fv, cv,       0]
+    #
+    cam_calib['M'] = torch.tensor([[fu_l, 0.0, cu_l, 0.0],
+                                   [0.0, fv_l, cv_l, 0.0],
+                                   [fu_r, 0.0, cu_r, -(fu_r * b)],
+                                   [0.0, fv_r, cv_r, 0.0]]).float()
+
+    # Matrix needed to transform image coordinates (from left frame) into 3D points
+    # [x, y, z, 1] = (1/d) * Q * [ul, vl, d, 1]^T
+    #
+    # [b,           0, 0, -b * cu]
+    # [0, b * fu / fv, 0, -b * cv]
+    # [0,           0, 0,  fu * b]
+    # [0,           0, 1,       0]
+    #
+    cam_calib['Q'] = torch.tensor([[  b,               0.0, 0.0, -(b * cu_l)],
+                                   [0.0, b * (fu_l / fv_l), 0.0, -(b * cv_l)],
+                                   [0.0,               0.0, 0.0,    fu_l * b],
+                                   [0.0,               0.0, 1.0,         0.0]]).float()
+
+    return cam_calib

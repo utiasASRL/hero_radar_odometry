@@ -12,6 +12,8 @@ from datasets.custom_sampler import *
 from datasets.kitti import *
 from networks.svd_pose_model import SVDPoseModel
 
+torch.backends.cudnn.benchmark = True
+
 def _init_saving(args):
     # parse args
     config_fname = args.config
