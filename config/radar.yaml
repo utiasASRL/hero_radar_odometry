@@ -1,0 +1,17 @@
+data_dir: '/raid/krb/oxford-radar-robotcar-dataset/'
+
+min_range: 58	# min range of radar points (bin)
+radar_resolution: 0.0432	# resolution of radar bins in meters per bin
+
+cart_resolution: 0.3456	# meters per pixel
+cart_pixel_width: 724	# height and width of cartesian image in pixels
+
+remove_motion: true
+remove_doppler: true
+
+# Train - Val - Test Split (Sequence Range):
+train_split: [0, 21]
+validation_split: [22, 24]
+test_split: [25, 31]
+
+window_size: 10
