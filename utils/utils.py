@@ -271,7 +271,21 @@ def normalize_coords(coords_2D, batch_size, height, width):
     # WARNING: grid_sample expects the normalized coordinates as (u, v)
     return torch.stack([u_norm, v_norm], dim=2)  # B x N x 2
 
-def get_norm_descriptors(feature_map, sample=False, keypoints=None):
+def sample_desc(feature_map, keypoints):
+
+    batch_size, channels, height, width = feature_map.size()
+
+    # Get descriptors only for keypoints
+    # Normalize 2D coordinates for sampling [-1, 1]
+    keypoints_norm = normalize_coords(keypoints, batch_size, height, width).unsqueeze(1) # B x 1 x N x 2
+
+    # Sample descriptors for the chosen test keypoints in the src image
+    descriptors = F.grid_sample(feature_map, keypoints_norm, mode='bilinear')  # B x C x 1 x N
+    descriptors = descriptors.reshape(batch_size, channels, keypoints.size(1)) # B x C x N
+    
+    return descriptors
+
+def get_norm_desc(feature_map, sample=False, keypoints=None):
 
     batch_size, channels, height, width = feature_map.size()
 
@@ -341,6 +355,6 @@ def T_inv(transformation_mat):
     T_inv = identity.repeat(batch_size, 1, 1).cuda()
     C = transformation_mat[:,:3,:3]
     t = transformation_mat[:,:3,3:]
-    T_inv[:,:3,:3] = C.transpose(2,1)
-    T_inv[:,:3,3:] = -C.transpose(2,1) @ t
+    T_inv[:,:3,:3] = C.transpose(2,1).contiguous()
+    T_inv[:,:3,3:] = -C.transpose(2,1).contiguous() @ t
     return T_inv

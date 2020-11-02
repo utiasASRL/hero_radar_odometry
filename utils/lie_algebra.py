@@ -426,7 +426,7 @@ def se3_inv(T):
         T = T.unsqueeze(0)
 
     #Batch invert Nx4x4 SE(3) matrices
-    Rt = T[:, 0:3, 0:3].transpose(1,2)
+    Rt = T[:, 0:3, 0:3].transpose(1,2).contiguous()
     t = T[:, 0:3, 3:4]
 
     T_inv = T.clone()
@@ -578,7 +578,7 @@ def se3_inv_adjoint(T):
         T = T.unsqueeze(dim=0)
 
     C = T[:, :3, :3]
-    C_T = torch.transpose(C, 1, 2)
+    C_T = torch.transpose(C, 1, 2).contiguous()
     Jrho_wedge = so3_wedge(T[:, :3, 3].view(-1, 3))
 
     inv_adj_T = T.new_zeros((T.shape[0], 6,6))

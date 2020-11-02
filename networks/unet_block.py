@@ -1,75 +1,45 @@
 """ The UNet network, code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py """
-import sys
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
 
 from networks.layers import DoubleConv, OutConv, Down, Up
-# from visualization.plots import Plotting
 
 class UNetBlock(nn.Module):
     def __init__(self, config):
         super(UNetBlock, self).__init__()
-        # TODO relying on hard-coded config params
 
         # n_channels
-        self.n_channels = 0
-        self.input_channel = config["dataset"]["images"]["input_channel"]
-        self.n_channels += 3 if 'vertex' in self.input_channel else 0
-        self.n_channels += 1 if 'intensity' in self.input_channel else 0
-        self.n_channels += 1 if 'range' in self.input_channel else 0
+        input_channel = config['dataset']['images']['input_channel']
+        n_channels = 0
+        n_channels += 3 if 'vertex' in input_channel else 0
+        n_channels += 1 if 'intensity' in input_channel else 0
+        n_channels += 1 if 'range' in input_channel else 0
+        n_channels += 3 if 'rgb' in input_channel else 0
 
-        self.n_weight_score = config["networks"]["unet"]["n_weight_score"] # this specifies num_classes for output
-        self.bilinear = config["networks"]["unet"]["bilinear"]
-        self.first_feature_dimension = config["networks"]["unet"]["first_feature_dimension"]
-        self.depth = config["networks"]["unet"]["depth"]
-
-        self.inc = DoubleConv(self.n_channels, self.first_feature_dimension)    # 512 x 384 (out size after layer)
+        n_weight_score = config["networks"]["unet"]["n_weight_score"] # this specifies num_classes for output
+        bilinear = config["networks"]["unet"]["bilinear"]
+        first_feature_dimension = config["networks"]["unet"]["first_feature_dimension"]
 
         # down
-        # self.down = nn.ModuleList()
-        # for i in range(self.depth):
-        #     in_dim = self.first_feature_dimension * (i + 1)
-        #     out_dim = self.first_feature_dimension * (i + 2)
-        #     self.down.append(Down(in_dim, out_dim))
-        self.down1 = Down(self.first_feature_dimension, self.first_feature_dimension * 2)                # 256 x 192
-        self.down2 = Down(self.first_feature_dimension * 2, self.first_feature_dimension * 4)               # 128 x 96
-        self.down3 = Down(self.first_feature_dimension * 4, self.first_feature_dimension * 8)               # 64 x 48
-        self.down4 = Down(self.first_feature_dimension * 8, self.first_feature_dimension * 16)              # 32 x 24
+        self.inc = DoubleConv(n_channels, first_feature_dimension)
+        self.down1 = Down(first_feature_dimension, first_feature_dimension * 2)
+        self.down2 = Down(first_feature_dimension * 2, first_feature_dimension * 4)
+        self.down3 = Down(first_feature_dimension * 4, first_feature_dimension * 8)
+        self.down4 = Down(first_feature_dimension * 8, first_feature_dimension * 16)
 
-        # up 1
-        # self.up1 = nn.ModuleList()
-        # for i in range(self.depth):
-        #     in_factor = 2 ** (self.depth - i) + 2 ** (self.depth - i - 1)
-        #     out_factor = 2 ** (self.depth - i - 1)
-        #     in_dim = self.first_feature_dimension * in_factor
-        #     out_dim = self.first_feature_dimension * out_factor
-        #     self.up1.append(Up(in_dim, out_dim))
-        self.up1_pts = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
-        self.up2_pts = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
-        self.up3_pts = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
-        self.up4_pts = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
-        self.outc_pts = OutConv(self.first_feature_dimension, 1)
+        self.up1_pts = Up(first_feature_dimension * (16 + 8), first_feature_dimension * 8, bilinear)
+        self.up2_pts = Up(first_feature_dimension * (8 + 4), first_feature_dimension * 4, bilinear)
+        self.up3_pts = Up(first_feature_dimension * (4 + 2), first_feature_dimension * 2, bilinear)
+        self.up4_pts = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
+        self.outc_pts = OutConv(first_feature_dimension, 1)
 
-        # up 2
-        # self.up2 = nn.ModuleList()
-        # for i in range(self.depth):
-        #     in_factor = 2 ** (self.depth - i) + 2 ** (self.depth - i - 1)
-        #     out_factor = 2 ** (self.depth - i - 1)
-        #     in_dim = self.first_feature_dimension * in_factor
-        #     out_dim = self.first_feature_dimension * out_factor
-        #     self.up2.append(Up(in_dim, out_dim))
-        self.up1_score = Up(self.first_feature_dimension * (16 + 8), self.first_feature_dimension * 8, self.bilinear)
-        self.up2_score = Up(self.first_feature_dimension * (8 + 4), self.first_feature_dimension * 4, self.bilinear)
-        self.up3_score = Up(self.first_feature_dimension * (4 + 2), self.first_feature_dimension * 2, self.bilinear)
-        self.up4_score = Up(self.first_feature_dimension * (2 + 1), self.first_feature_dimension * 1, self.bilinear)
-        self.outc_score = OutConv(self.first_feature_dimension, self.n_weight_score)
+        self.up1_score = Up(first_feature_dimension * (16 + 8), first_feature_dimension * 8, bilinear)
+        self.up2_score = Up(first_feature_dimension * (8 + 4), first_feature_dimension * 4, bilinear)
+        self.up3_score = Up(first_feature_dimension * (4 + 2), first_feature_dimension * 2, bilinear)
+        self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
+        self.outc_score = OutConv(first_feature_dimension, n_weight_score)
 
     def forward(self, x):
         batch_size, _, height, width = x.size()

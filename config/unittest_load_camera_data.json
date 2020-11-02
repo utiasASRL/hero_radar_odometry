@@ -11,8 +11,9 @@
             "val": ["08"],
             "test": ["09"]
         },
-	"sensor": "camera",
+	    "sensor": "camera",
         "images": {
+
             "height": 364,
             "width": 1200
         },
