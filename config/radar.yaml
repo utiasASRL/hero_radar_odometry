@@ -10,8 +10,8 @@ remove_motion: true
 remove_doppler: true
 
 # Train - Val - Test Split (Sequence Range):
-train_split: [0, 21]
-validation_split: [22, 24]
-test_split: [25, 31]
+train_split: [0, 22]
+validation_split: [22, 25]
+test_split: [25, 32]
 
 window_size: 10
