@@ -2,15 +2,14 @@ from torch.utils.data import Sampler, SubsetRandomSampler, SequentialSampler
 from itertools import accumulate
 
 class SequentialWindowBatchSampler(Sampler):
-    r"""Wraps another sampler to yield a mini-batch of windowed indices.
+    """Wraps another sampler to yield a mini-batch of windowed indices.
     Args:
         batch_size (int): Size of mini-batch.
         window_size (int): Size of each window.
         valid_frames (list) List of valid window frames.
     """
 
-    def __init__(self, batch_size, window_size, seq_len, drop_last):
-        # TODO: compute valid frames from seq_len
+    def __init__(self, batch_size, window_size, seq_len, drop_last=True):
         self.valid_frames = []
         seq_len_cumsum = list(accumulate([0] + seq_len))
         for j, len_j in enumerate(seq_len_cumsum[1:]):
@@ -22,8 +21,6 @@ class SequentialWindowBatchSampler(Sampler):
     def __iter__(self):
         batch = []
         for idx in range(len(self.valid_frames)):
-            # for k in range(self.window_size):
-            #     batch.append(idx + k)
             batch += [idx + k for k in range(self.window_size)]
             if len(batch) == self.batch_size*self.window_size:
                 yield batch

@@ -1,7 +1,10 @@
+# Author: Keenan Burnett
 import os
 import torch
 import numpy as np
-from torch.utils.data import Dataset, Dataloader
+from torch.utils.data import Dataset, DataLoader
+from datasets.custom_sampler import *
+from datasets.sequential_sampler import *
 
 def get_sequences(path, prefix='2019'):
     sequences = [f for f in os.listdir(path) if prefix in f].sort()
@@ -62,10 +65,12 @@ class OxfordDataset(Dataset):
         self.sequences = get_sequences_split(sequences, split)
         self.seq_idx_range = []
         self.frames = []
+        self.seq_len = []
         for seq in self.sequences:
             seq_frames = get_frames(data_dir + seq + "/radar/")
             seq_frames = get_frames_with_gt(seq_frames, data_dir + seq + "/gt/radar_odometry.csv")
             self.seq_idx_range[seq] = [len(frames), len(frames) + len(seq_frames)]
+            self.seq_len.append(len(seq_frames))
             self.frames.extend(seq_frames)
 
     def get_sequences_split(sequences, split):
@@ -94,6 +99,17 @@ class OxfordDataset(Dataset):
         cart = radar_polar_to_cartesian(azimuths, fft_data, config['radar_resolution'], config['cart_resolution'],
             config['cart_pixel_width'])
         time = int(self.frames[idx].split('.')[0])
-        transform = get_groundtruth_odometry(time, self.data_dir + seq + "/gt/radar_odometry.csv")
         # Get ground truth transform between this frame and the next
-        sample = {'input': cart, 'T_21': transform}
+        transform = get_groundtruth_odometry(time, self.data_dir + seq + "/gt/radar_odometry.csv")
+        return {'input': cart, 'T_21': transform}
+
+def get_dataloader(config):
+    vconfig = config
+    vconfig['batch_size'] = 1
+    train_data = OxfordDataset(config, 'train')
+    valid_data = OxfordDataset(vconfig, 'validation')
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_len)
+    valid_sampler = SequentialWindowBatchSampler(batch_size = 1, config['window_size'], valid_dataset.seq_len)
+    train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
+    valid_loader = DataLoader(valid_dataset, batch_sampler=valid_sampler, num_workers=config['num_workers'])
+    return train_loader, valid_loader

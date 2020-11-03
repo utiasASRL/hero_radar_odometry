@@ -18,7 +18,6 @@ class UNetBlock(nn.Module):
         n_channels += 1 if 'range' in input_channel else 0
         n_channels += 3 if 'rgb' in input_channel else 0
 
-        n_weight_score = config["networks"]["unet"]["n_weight_score"] # this specifies num_classes for output
         bilinear = config["networks"]["unet"]["bilinear"]
         first_feature_dimension = config["networks"]["unet"]["first_feature_dimension"]
 
@@ -39,7 +38,7 @@ class UNetBlock(nn.Module):
         self.up2_score = Up(first_feature_dimension * (8 + 4), first_feature_dimension * 4, bilinear)
         self.up3_score = Up(first_feature_dimension * (4 + 2), first_feature_dimension * 2, bilinear)
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
-        self.outc_score = OutConv(first_feature_dimension, n_weight_score)
+        self.outc_score = OutConv(first_feature_dimension, 1)
 
     def forward(self, x):
         batch_size, _, height, width = x.size()
@@ -73,6 +72,6 @@ class UNetBlock(nn.Module):
         f5 = F.interpolate(x5, size=(height, width), mode='bilinear')
 
         feature_list = [f1, f2, f3, f4, f5]
-        features = torch.cat(feature_list, dim=1)
+        descriptors = torch.cat(feature_list, dim=1)
 
-        return logits_pts, score, features
+        return logits_pts, score, descriptors

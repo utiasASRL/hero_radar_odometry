@@ -292,4 +292,3 @@ class Trainer():
         self.min_val_loss = checkpoint['loss']
 
         print("Resume training from epoch {}".format(self.start_epoch))
-

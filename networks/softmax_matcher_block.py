@@ -17,16 +17,13 @@ from utils.utils import zn_desc, sample_desc, get_scores
 class SoftmaxMatcherBlock(nn.Module):
     def __init__(self, config):
         super(SoftmaxMatcherBlock, self).__init__()
-        # TODO take the dense match logic outside this block
         self.config = config
         self.match_type = config["networks"]["match_type"]  # zncc, l2, dp
         self.softmax_temperature = config['networks']['matcher_block']['softmax_temperature']
-
-        # stereo camera model
-        self.stereo_cam = StereoCameraModel()
+        self.window_size = config["window_size"]
 
     def forward(self, geometry_img, tgt_coords, tgt_2D, tgt_weights, tgt_weights_dense, src_desc_norm, tgt_desc,
-                tgt_desc_dense, cam_calib, window_size):
+                tgt_desc_dense):
         '''
         Descriptors are assumed to be not normalized
         :param tgt_coords: Bx3xM

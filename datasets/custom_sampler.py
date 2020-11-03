@@ -2,7 +2,7 @@ from torch.utils.data import Sampler, SubsetRandomSampler
 from itertools import accumulate
 
 class RandomWindowBatchSampler(Sampler):
-    r"""Wraps another sampler to yield a mini-batch of windowed indices.
+    """Wraps another sampler to yield a mini-batch of windowed indices.
     Args:
         batch_size (int): Size of mini-batch.
         window_size (int): Size of each window.
