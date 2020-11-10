@@ -1,85 +1,48 @@
-import random
-import time
 import os
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
-from PIL import Image
 import numpy as np
 
 from utils.lie_algebra import se3_inv, se3_log, se3_exp, so3_log
 from utils.utils import zn_desc, T_inv
-from utils.helper_func import compute_2D_from_3D
-from utils.stereo_camera_model import StereoCameraModel
 from networks.unet_block import UNetBlock
 from networks.softmax_matcher_block import SoftmaxMatcherBlock
 from networks.svd_weight_block import SVDWeightBlock
 from networks.svd_block import SVD
 from networks.keypoint_block_radar import KeypointBlock
 
-class SVDPoseModel(nn.Module):
+class SVDPoseModel(torch.nn.Module):
     def __init__(self, config):
         super(SVDPoseModel, self).__init__()
-
         # load configs
         self.config = config
         self.window_size = config['window_size']
-        self.match_type = config['networks']['match_type'] # zncc, l2, dp
-
         # network arch
         self.unet_block = UNetBlock(self.config)
-
         self.keypoint_block = KeypointBlock(self.config)
-
         self.softmax_matcher_block = SoftmaxMatcherBlock(self.config)
-
         self.svd_weight_block = SVDWeightBlock(self.config)
-
         self.svd_block = SVD()
-
         self.sigmoid = torch.nn.Sigmoid()
 
-        self.save_dict = {}
-        self.save_names = self.config['save_names']
-
-
-
-    def forward(self, data, epoch):
-        '''
-        Estimate transform between two frames
-        :param data: dictionary containing outputs of getitem function
-        :return:
-        '''
-        radar_frames = data['input']
+    def forward(self, data):
+        input = data['input']
         T_21 = data['T_21']
 
         if self.config['gpuid'] != "cpu":
-            radar_frames.cuda()
+            input.cuda()
             T_21.cuda()
 
-        bsz, _, height, width = radar_frames.size()
+        bsz, _, height, width = input.size()
         self.batch_size = bsz / self.window_size
 
-        detector_scores, weight_scores, descs = self.unet_block(radar_frames)
-
+        detector_scores, weight_scores, descs = self.unet_block(input)
         weight_scores = self.sigmoid(weight_scores)
-
         # Use detector scores to compute keypoint locations along with their weight scores and descriptors
-        keypoints_2D, keypoint_descs, keypoint_weights = self.keypoint_block(descs, detector_scores, weight_scores)
-
-        src_2D = keypoints_2D[::self.window_size]
-        src_weights = keypoint_weights[::self.window_size]
-
+        keypoint_coords, keypoint_descs, keypoint_weights = self.keypoint_block(descs, detector_scores, weight_scores)
         # Normalize src desc based on match type
-        if self.match_type == 'zncc':
-            src_descs = zn_desc(keypoint_descs[::self.window_size])
-        elif self.match_type == 'dp':
-            src_descs = F.normalize(keypoint_descs[::self.window_size], dim=1)
-        else:
-            assert False, "Cannot normalize because match type is NOT supported"
-
+        src_descs = zn_desc(keypoint_descs[::self.window_size])
         # TODO: loop if we have more than two frames as input (for cycle loss)
 
         v_coord, u_coord = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
@@ -90,28 +53,12 @@ class SVDPoseModel(nn.Module):
         if self.config['gpuid'] != "cpu":
             tgt_2D_dense.cuda()
         # Match the points in src frame to points in target frame to generate pseudo points
-        if self.config['networks']['dense_match']:
-            # Dense 2D image coordinates
-            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid, max_softmax = self.softmax_matcher_block(
-                                                                                  geometry_img[1::self.window_size],
-                                                                                  geometry_img[1::self.window_size],
-                                                                                  self.tgt_2D_dense,
-                                                                                  weight_scores[1::self.window_size],
-                                                                                  weight_scores[1::self.window_size],
-                                                                                  src_descs,
-                                                                                  descs[1::self.window_size],
-                                                                                  descs[1::self.window_size])
-        else:
-            pseudo_coords, pseudo_weights, pseudo_descs, pseudo_2D, pseudo_valid, max_softmax = self.softmax_matcher_block(
-                                                                                  geometry_img[1::self.window_size],
-                                                                                  keypoint_coords[1::self.window_size],
-                                                                                  keypoints_2D[1::self.window_size],
-                                                                                  keypoint_weights[1::self.window_size],
-                                                                                  weight_scores[1::self.window_size],
-                                                                                  src_descs,
-                                                                                  keypoint_descs[1::self.window_size],
-                                                                                  descs[1::self.window_size])
-
+        pseudo_coords, pseudo_weights, pseudo_descs = self.softmax_matcher_block(keypoint_coords[::self.window_size],
+                                                                                 keypoint_coords[1::self.window_size],
+                                                                                 keypoint_weights[1::self.window_size],
+                                                                                 keypoint_descs[::self.window_size],
+                                                                                 keypoint_descs[1::self.window_size]
+                                                                                 src_descs)
         # Compute ground truth transform
         T_i_src = T_iv[::self.window_size]
         T_i_tgt = T_iv[1::self.window_size]
@@ -326,16 +273,6 @@ class SVDPoseModel(nn.Module):
         svd_loss = R_loss + t_loss
         return svd_loss, R_loss, t_loss
 
-    # def print_loss(self, loss, epoch, iter):
-    #     message = 'e{:03d}-i{:04d} => LOSS={:.6f} KL={:.6f} SL={:.6f} SRL={:.6f} STL={:.6f}'.format(epoch,
-    #                                                                           iter,
-    #                                                                           loss['LOSS'].item(),
-    #                                                                           loss['KEY_LOSS'].item(),
-    #                                                                           loss['SVD_LOSS'].item(),
-    #                                                                           loss['SVD_R_LOSS'].item(),
-    #                                                                           loss['SVD_t_LOSS'].item())
-    #     print(message)
-
     def print_loss(self, loss, epoch, iter):
         message = 'epoch: {} i: {} => '.format(epoch, iter)
 
@@ -345,29 +282,15 @@ class SVDPoseModel(nn.Module):
         print(message + '\n', flush=True)
 
     def get_pose_error(self):
-
         T_tgt_src = self.save_dict['T_tgt_src']
         T_tgt_src_pred = self.save_dict['T_tgt_src_pred']
-
-        # R_tgt_src = self.save_dict['R_tgt_src']
-        # R_tgt_src_pred = self.save_dict['R_tgt_src_pred']
-        # t_tgt_src = self.save_dict['t_tgt_src']
-        # t_tgt_src_pred = self.save_dict['t_tgt_src_pred']
-        #
-        # error = torch.zeros(self.batch_size, 6).cuda()
-        # error[:, :3] = so3_log(R_tgt_src_pred) - so3_log(R_tgt_src)
-        # error[:, 3:] = t_tgt_src_pred - t_tgt_src
-
         return se3_log(T_tgt_src) - se3_log(T_tgt_src_pred)
 
     def get_inliers(self, epoch):
-
         num_inliers = torch.sum(self.save_dict['inliers'])
         num_nonzero_weights = 0
-
         if epoch >= self.config['loss']['start_svd_epoch']:
             num_nonzero_weights = torch.sum(self.save_dict['weights'] > 0.0)
-
         return num_inliers, num_nonzero_weights
 
     def print_inliers(self, epoch, iter):

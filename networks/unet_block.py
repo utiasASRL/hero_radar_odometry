@@ -1,12 +1,11 @@
 """ The UNet network, code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py """
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from networks.layers import DoubleConv, OutConv, Down, Up
 
-class UNetBlock(nn.Module):
+class UNetBlock(torch.nn.Module):
     def __init__(self, config):
         super(UNetBlock, self).__init__()
 

@@ -26,8 +26,6 @@
         "matcher_block": {
             "softmax_temperature": 0.01
         },
-        "match_type": "zncc",
-        "dense_match": true,
         "outlier_rejection": {
             "on": true,
             "type": "3D",
