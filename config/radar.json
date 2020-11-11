@@ -18,17 +18,14 @@
             "first_feature_dimension": 8,
         },
         "keypoint_block": {
-            "patch_height": 16,
-            "patch_width": 16,
+            "patch_size": 16,
             "softmax_temp": 1.0,
-            "grid_sample": true
         },
         "matcher_block": {
-            "softmax_temperature": 0.01
+            "softmax_temp": 0.01
         },
         "outlier_rejection": {
             "on": true,
-            "type": "3D",
             "threshold": 4.0
         }
     },
@@ -36,11 +33,9 @@
     "weight_decay": 0,
     "clip_norm": 1.0,
     "loss": {
-        "types": ["keypoint_3D", "svd"],
-        "weights": {"keypoint_2D":  0.01, "keypoint_3D":  1.0, "svd": 10.0},
-        "start_svd_epoch": 2
+        "types": ["keypoint_2D", "svd"],
+        "weights": {"keypoint_2D":  0.01, "svd": 10.0},
     },
-    "save_names": ["T_tgt_src", "T_tgt_src_pred", "inliers", "src_valid", "pseudo_valid", "weights"],
     "batch_size": 2,
     "window_size": 2,
     "num_workers": 2,

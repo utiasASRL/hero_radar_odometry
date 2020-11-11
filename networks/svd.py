@@ -69,10 +69,12 @@ class SVDBlock(nn.Module):
 
 """ Code from: https://github.com/WangYueFt/dcp/blob/master/model.py """
 class SVD(nn.Module):
-    def __init__(self):
+    def __init__(self, config):
         super(SVD, self).__init__()
+        self.window_size = config['window_size']
 
-    def forward(self, src_coords, tgt_coords, weights):
+    def forward(self, keypoint_coords, tgt_coords, weights):
+        src_coords = keypoint_coords[::self.window_size]
         batch_size, _, n_points = src_coords.size()  # B x 3 x N
 
         # Compute weighted centroids (elementwise multiplication/division)

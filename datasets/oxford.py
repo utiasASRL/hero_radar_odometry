@@ -5,6 +5,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from datasets.custom_sampler import *
 from datasets.sequential_sampler import *
+from datasets.radar import *
 
 def get_sequences(path, prefix='2019'):
     sequences = [f for f in os.listdir(path) if prefix in f].sort()
@@ -51,7 +52,7 @@ def get_groundtruth_odometry(radar_time, gt_path):
         for line in lines:
             line = line.split(',')
             if int(line[9]) == radar_time:
-                T = get_transform(float(line[2]), float(line[3]), float(line[7])) # T_1_2 (from next time to current)
+                T = get_transform(float(line[2]), float(line[3]), float(line[7])) # (from next time to current)
                 return get_inverse_tf(T) # T_2_1 (from current time step to the next time step)
     assert(0), "ground truth transform not found"
 

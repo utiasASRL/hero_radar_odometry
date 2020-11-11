@@ -1,11 +1,9 @@
 """ The UNet network, code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py """
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-
 from networks.layers import DoubleConv, OutConv, Down, Up
 
-class UNetBlock(torch.nn.Module):
+class UNet(torch.nn.Module):
     def __init__(self, config):
         super(UNetBlock, self).__init__()
 
@@ -38,6 +36,7 @@ class UNetBlock(torch.nn.Module):
         self.up3_score = Up(first_feature_dimension * (4 + 2), first_feature_dimension * 2, bilinear)
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, 1)
+        self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
         batch_size, _, height, width = x.size()
@@ -59,6 +58,7 @@ class UNetBlock(torch.nn.Module):
         x2_up_score = self.up3_score(x3_up_score, x2)
         x1_up_score = self.up4_score(x2_up_score, x1)
         score = self.outc_score(x1_up_score)
+        score = self.sigmoid(score)
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to

@@ -1,157 +1,52 @@
 import os
-import sys
-import time
+from time import time
 import torch
 import numpy as np
+from tensorboardX import SummaryWriter
 
-from utils.early_stopping import EarlyStopping
-from utils.lie_algebra import so3_to_rpy
-from utils.plot import plot_epoch_losses, plot_epoch_errors
+class Monitor():
+    def __init__(self, model, log_dir, valid_loader, gpuid, config):
+        self.model = model
+        self.log_dir = log_dir
+        self.valid_loader = valid_loader
+        self.gpuid = gpuid
+        self.config = config
+        self.dt = 0
+        self.current_time = 0
+        self.counter = 0
+        print('Monitor running and saving to {}'.format(log_dir))
+        self.writer = SummaryWriter(log_dir)
+
+    def step(self):
+        asdf
+
+    def vis(self):
+        batch_list = [bi, batch in enumerate(self.valid_loader)]
+        ixes = np.linspace(0, len(batch_list) - 1, config['vis_num']).astype(np.int32)
+        batch_list = [batch_list[ix] for ix in ixes]
+        for bi, batch in batch_list:
+            # TODO: run the model to visualize the output
+            # Visualize the detector scores
+            # Visualize the point matching quality
+            loss = self.model()
 
 class Trainer():
-    """
-    Trainer class
-    """
-    def __init__(self, model, train_loader, valid_loader, config, result_path, session_path, checkpoint_dir):
-        # network
+
+    def __init__(self, model, train_loader, valid_loader, config, pretrain_path=None):
         self.model = model
+        self.model.to(config['gpuid'])
 
-        # move the network to GPU
-        if torch.cuda.is_available():
-            self.device = torch.device("cuda:0")
-        else:
-            self.device = torch.device("cpu")
-        self.model.to(self.device)
+        if pretrain_path is not None:
+            checkpoint = torch.load(checkpoint_path)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.start_epoch = checkpoint['epoch'] + 1
+            print("Resume training from epoch {}".format(self.start_epoch))
 
-        # optimizer
-        if config['optimizer']['type'] == 'Adam':
-            self.optimizer = torch.optim.Adam(model.parameters(), lr=config['optimizer']['lr'],
-                                              weight_decay=config['optimizer']['weight_decay'])
-        elif config['optimizer']['type'] == 'SGD':
-            self.optimizer = torch.optim.SGD(model.parameters(),lr=config['optimizer']['lr'],
-                                             weight_decay=config['optimizer']['weight_decay'],
-                                             momentum=config['optimizer']['momentum'])
-
-        self.start_epoch = 0
-        self.min_val_loss = np.Inf
-        self.result_path = session_path
-        self.plot_path = '{}/{}'.format(session_path, 'visualization')
-        self.checkpoint_path = '{}/{}'.format(checkpoint_dir, 'chkp.tar')
-
-        if not os.path.exists(self.plot_path):
-            os.makedirs(self.plot_path)
-
-        # load network parameters and optimizer if resuming from previous session
-        if config['previous_session'] != "":
-            resume_path = "{}/{}/{}".format(result_path, config['previous_session'], 'checkpoints/chkp.tar')
-            self.resume_checkpoint(resume_path)
-
-        # data loaders
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
         self.train_loader = train_loader
         self.valid_loader = valid_loader
-
-        # store avg loss and errors fro epochs
-        self.epoch_loss_train = {}
-        self.epoch_error_train = None
-        self.epoch_loss_valid = {}
-        self.epoch_error_valid = None
-
-        # config dictionary
         self.config = config
-        self.max_epochs = self.config['trainer']['max_epochs']
-        # self.lr_decay_ee = self.config['optimizer']['lr_decay_ee']
-        self.lr_decays = {}  # {i: 0.1 ** (1 / self.lr_decay_ee) for i in range(1, self.max_epochs)}
-
-    def train_epoch(self, epoch):
-        """
-        Training logic for an epoch
-        :param epoch: Integer, current training epoch.
-        """
-        total_loss = {}
-        total_sq_error = torch.zeros(1, 6)
-        total_inliers = 0
-        total_nonzero_weights = 0
-
-        self.model.train()
-
-        t = [time.time()]
-        last_display = time.time()
-        start = time.time()
-
-        count = 0
-        with torch.enable_grad():
-            with torch.autograd.set_detect_anomaly(self.config['detect_anomaly']):
-
-                for i_batch, batch_sample in enumerate(self.train_loader):
-
-                    self.optimizer.zero_grad()
-
-                    loss = {}
-                    try:
-                        loss = self.model(batch_sample, epoch)
-                        loss['LOSS'].backward()
-                    except Exception as e:
-                        self.model.print_loss(loss, epoch, i_batch)
-                        self.model.print_inliers(epoch, i_batch)
-                        print(e)
-                        continue
-
-                    t += [time.time()]
-
-                    self.optimizer.step()
-
-                    # record number of inliers
-                    num_inliers, num_nonzero_weights = self.model.get_inliers(epoch)
-                    total_inliers += num_inliers
-                    total_nonzero_weights += num_nonzero_weights
-
-                    # record prediction error for each DOF
-                    if epoch >= self.config['loss']['start_svd_epoch']:
-                        total_sq_error += torch.sum(self.model.get_pose_error()**2, dim=0).unsqueeze(0).detach().cpu()
-
-                    # record loss
-                    for key in loss:
-                        if key in total_loss:
-                            total_loss[key] += loss[key].item()
-                        else:
-                            total_loss[key] = loss[key].item()
-
-                    # Console print (only one per second)
-                    if (t[-1] - last_display) > 60.0:
-                        last_display = t[-1]
-                        self.model.print_loss(loss, epoch, i_batch)
-                        self.model.print_inliers(epoch, i_batch)
-
-                    count += 1
-
-        # Get and print summary statistics for the epoch
-        print('\nTraining epoch: {}'.format(epoch))
-
-        avg_inliers = total_inliers / float(count * self.config['train_loader']['batch_size'])
-        avg_nonzero_weights = total_nonzero_weights / float(count * self.config['train_loader']['batch_size'])
-
-        for key in total_loss:
-            avg_loss = total_loss[key] / count
-            if key in self.epoch_loss_train:
-                self.epoch_loss_train[key].append(avg_loss)
-            else:
-                self.epoch_loss_train[key] = [avg_loss]
-            print('{}: {:.6f}'.format(key, avg_loss))
-
-        num_samples = count * self.config['train_loader']['batch_size']
-        rms_error = torch.sqrt(total_sq_error / num_samples)
-        if self.epoch_error_train is None:
-            self.epoch_error_train = rms_error
-        else:
-            self.epoch_error_train = np.concatenate((self.epoch_error_train, rms_error), axis=0)
-
-        print('Avg error:          {}'.format(rms_error))
-        print('Avg inliers:        {}'.format(avg_inliers))
-        print('Avg nonzero weight: {}'.format(avg_nonzero_weights))
-        print('Time:               {}'.format(time.time() - start))
-        print('\n')
-
-        return self.epoch_loss_train['LOSS'][-1]
 
     def valid_epoch(self, epoch):
         """
@@ -238,57 +133,67 @@ class Trainer():
         return self.epoch_loss_valid['LOSS'][-1]
 
     def train(self):
-        """
-        Full training loop
-        """
-        # validation and early stopping
-        early_stopping = None
-        if self.config['trainer']['validate']['on']:
-            early_stopping = EarlyStopping(patience=self.config['trainer']['validate']['patience'],
-                                           val_loss_min=self.min_val_loss)
-            early_stopping.check_stop(np.Inf, self.model, self.optimizer, self.checkpoint_path, 0)
+        for epoch in range(self.start_epoch, self.config['max_epochs']):
+            self.model.train()
 
-        for epoch in range(self.start_epoch, self.config['trainer']['max_epochs']):
+            for i_batch, batch_sample in enumerate(self.train_loader):
 
-            train_loss = self.train_epoch(epoch)
+                self.optimizer.zero_grad()
+                loss = self.model(batch_sample, epoch)
+                if loss.requires_grad:
+                    loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_norm'])
+                self.optimizer.step()
 
-            if epoch in self.lr_decays:
-                for param_group in self.optimizer.param_groups:
-                    # param_group['lr'] *= config.lr_decays[self.epoch]
-                    param_group['lr'] = self.config['optimizer']['lr'] * self.lr_decays[epoch]
-                print("Current epoch learning rate: {}".format(self.config['optimizer']['lr'] * self.lr_decays[epoch]))
+                # record number of inliers
+                num_inliers, num_nonzero_weights = self.model.get_inliers(epoch)
+                total_inliers += num_inliers
+                total_nonzero_weights += num_nonzero_weights
 
-            if self.config['trainer']['validate']['on'] and (epoch >= self.config['loss']['start_svd_epoch']):
-                # check for validation set and early stopping
-                # val_loss = self.valid_epoch(epoch)
-                stop_flag, loss_decrease_flag, self.min_val_loss = early_stopping.check_stop(train_loss, self.model,
-                                                                        self.optimizer, self.checkpoint_path, epoch)
+                # record prediction error for each DOF
+                if epoch >= self.config['loss']['start_svd_epoch']:
+                    total_sq_error += torch.sum(self.model.get_pose_error()**2, dim=0).unsqueeze(0).detach().cpu()
 
-                if stop_flag:
-                    break
+                # record loss
+                for key in loss:
+                    if key in total_loss:
+                        total_loss[key] += loss[key].item()
+                    else:
+                        total_loss[key] = loss[key].item()
+
+                # Console print (only one per second)
+                if (t[-1] - last_display) > 60.0:
+                    last_display = t[-1]
+                    self.model.print_loss(loss, epoch, i_batch)
+                    self.model.print_inliers(epoch, i_batch)
+
+                count += 1
+
+            # Get and print summary statistics for the epoch
+            print('\nTraining epoch: {}'.format(epoch))
+
+            avg_inliers = total_inliers / float(count * self.config['train_loader']['batch_size'])
+            avg_nonzero_weights = total_nonzero_weights / float(count * self.config['train_loader']['batch_size'])
+
+            for key in total_loss:
+                avg_loss = total_loss[key] / count
+                if key in self.epoch_loss_train:
+                    self.epoch_loss_train[key].append(avg_loss)
+                else:
+                    self.epoch_loss_train[key] = [avg_loss]
+                print('{}: {:.6f}'.format(key, avg_loss))
+
+            num_samples = count * self.config['train_loader']['batch_size']
+            rms_error = torch.sqrt(total_sq_error / num_samples)
+            if self.epoch_error_train is None:
+                self.epoch_error_train = rms_error
             else:
-                # save out every epoch if no validation
-                val_loss = None
-                torch.save({'epoch': epoch,
-                            'model_state_dict': self.model.state_dict(),
-                            'optimizer_state_dict': self.optimizer.state_dict(),
-                            'loss': val_loss,
-                            }, self.checkpoint_path)
+                self.epoch_error_train = np.concatenate((self.epoch_error_train, rms_error), axis=0)
 
-            if epoch >= self.config['loss']['start_svd_epoch']:
-                plot_epoch_losses(self.epoch_loss_train, self.epoch_loss_train, self.plot_path)
-                plot_epoch_errors(self.epoch_error_train, self.epoch_error_train, self.plot_path)
-
-    def resume_checkpoint(self, checkpoint_path):
-        """
-        Resume from saved checkpoint
-        :param checkpoint_path: Modol filename and path to be resumed
-        """
-
-        checkpoint = torch.load(checkpoint_path)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.start_epoch = checkpoint['epoch'] + 1
-        self.min_val_loss = checkpoint['loss']
-
-        print("Resume training from epoch {}".format(self.start_epoch))
+            print('Avg error:          {}'.format(rms_error))
+            print('Avg inliers:        {}'.format(avg_inliers))
+            print('Avg nonzero weight: {}'.format(avg_nonzero_weights))
+            print('Time:               {}'.format(time.time() - start))
+            print('\n')
+            torch.save({'epoch': epoch, 'model_state_dict': self.model.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict()}, self.checkpoint_path)
