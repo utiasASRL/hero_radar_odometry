@@ -37,10 +37,10 @@ class Keypoint(torch.nn.Module):
         keypoint_desc = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear', align_corners=False)
         keypoint_desc = keypoint_desc.reshape(N, descriptors.size(1), keypoint_coords.size(1))  # N x C x num_patches
 
-        keypoint_weights = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear', align_corners=False)
-        keypoint_weights = keypoint_weights.reshape(N, weight_scores.size(1), keypoint_coords.size(1)) # N x 1 x num_patches
+        keypoint_scores = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear', align_corners=False)
+        keypoint_scores = keypoint_scores.reshape(N, weight_scores.size(1), keypoint_coords.size(1)) # N x 1 x num_patches
 
-        return keypoint_coords, keypoint_weights, keypoint_desc
+        return keypoint_coords, keypoint_scores, keypoint_desc
 
     def normalize_coords(self, coords_2D, batch_size, width, height):
         # B x N x 2
