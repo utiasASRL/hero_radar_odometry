@@ -5,9 +5,9 @@ import numpy as np
 
 from utils.lie_algebra import se3_log
 from networks.unet import UNet
+from networks.keypoint import Keypoint
 from networks.softmax_matcher import SoftmaxMatcher
 from networks.svd import SVD
-from networks.keypoint import Keypoint
 
 class SVDPoseModel(torch.nn.Module):
     def __init__(self, config):
@@ -16,7 +16,8 @@ class SVDPoseModel(torch.nn.Module):
         self.config = config
         self.window_size = config['window_size']
         self.outlier_rejection = config['networks']['outlier_rejection']['on']
-        self.outlier_threshold = self.config['networks']['outlier_rejection']['threshold']
+        self.outlier_threshold = config['networks']['outlier_rejection']['threshold']
+        self.gpuid = config['gpuid']
 
         self.unet = UNet(self.config)
         self.keypoint = Keypoint(self.config)
@@ -24,15 +25,8 @@ class SVDPoseModel(torch.nn.Module):
         self.svd = SVD(self.config)
 
     def forward(self, data):
-        input = data['input']
-        T_21 = data['T_21']
-
-        if self.config['gpuid'] != "cpu":
-            input.cuda()
-            T_21.cuda()
-
-        bsz, _, height, width = input.size()
-        self.batch_size = bsz / self.window_size
+        input = data['input'].to(self.gpuid)
+        T_21 = data['T_21'].to(self.gpuid)
 
         detector_scores, weight_scores, desc = self.unet(input)
 
@@ -82,7 +76,7 @@ class SVDPoseModel(torch.nn.Module):
     def SVD_loss(self, R, R_pred, t, t_pred, rel_w=10.0):
         batch_size = R.size(0)
         alpha = rel_w
-        identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).cuda()
+        identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(self.gpuid)
         loss_fn = torch.nn.MSELoss()
         R_loss = alpha * loss_fn(R_pred.transpose(2,1).contiguous() @ R, identity)
         t_loss = 1.0 * loss_fn(t_pred, t)
