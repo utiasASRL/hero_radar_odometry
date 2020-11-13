@@ -41,10 +41,4 @@ class SVD(torch.nn.Module):
         t_tgt_src_insrc = src_centroid - torch.bmm(R_tgt_src.transpose(2, 1).contiguous(), tgt_centroid)  # B x 3 x 1
         t_src_tgt_intgt = -R_tgt_src.bmm(t_tgt_src_insrc)
 
-        # Create translation matrix
-        zeros = torch.zeros(batch_size, 1, 3).type_as(V)        # B x 1 x 3
-        one = torch.ones(batch_size, 1, 1).type_as(V)           # B x 1 x 1
-        trans_cols = torch.cat([t_src_tgt_intgt, one], dim=1)   # B x 4 x 1
-        rot_cols = torch.cat([R_tgt_src, zeros], dim=1)         # B x 4 x 3
-
-        return T_tgt_src, R_tgt_src, t_src_tgt_intgt
+        return R_tgt_src, t_src_tgt_intgt

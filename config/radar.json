@@ -39,12 +39,11 @@
     "batch_size": 2,
     "window_size": 2,
     "num_workers": 2,
-    "max_epochs": 100,
-
+    "max_iterations": 200000,
     "print_rate": 10,
     "log_rate": 10,
     "vis_rate": 1000,
     "save_rate": 5000,
-    "eval_rate": 5000,
+    "val_rate": 5000,
     "vis_num": 4,
 }
