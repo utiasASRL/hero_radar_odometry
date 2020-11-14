@@ -1,5 +1,6 @@
 """ The UNet network, code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py """
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from networks.layers import DoubleConv, OutConv, Down, Up
 
@@ -8,13 +9,7 @@ class UNet(torch.nn.Module):
         super(UNet, self).__init__()
 
         # n_channels
-        input_channel = config['dataset']['images']['input_channel']
-        n_channels = 0
-        n_channels += 3 if 'vertex' in input_channel else 0
-        n_channels += 1 if 'intensity' in input_channel else 0
-        n_channels += 1 if 'range' in input_channel else 0
-        n_channels += 3 if 'rgb' in input_channel else 0
-
+        n_channels = config['input_channels']
         bilinear = config["networks"]["unet"]["bilinear"]
         first_feature_dimension = config["networks"]["unet"]["first_feature_dimension"]
 
@@ -37,6 +32,16 @@ class UNet(torch.nn.Module):
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, 1)
         self.sigmoid = torch.nn.Sigmoid()
+
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         batch_size, _, height, width = x.size()

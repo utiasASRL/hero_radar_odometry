@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 from tensorboardX import SummaryWriter
@@ -17,19 +18,21 @@ class Monitor(object):
         self.dt = 0
         self.current_time = 0
         self.vis_batches = self.get_vis_batches()
+        if not os.path.exists(self.log_dir):
+            os.mkdir(self.log_dir)
         self.writer = SummaryWriter(self.log_dir)
         print('monitor running and saving to {}'.format(self.log_dir))
 
     def get_vis_batches(self):
         return np.linspace(0, len(self.valid_loader.dataset) - 1, self.config['vis_num']).astype(np.int32)
 
-    def step(self, batchi, loss, R_loss, t_loss, batch, R_tgt_src_pred, t_tgt_src_pred):
+    def step(self, batchi, loss, R_loss, t_loss, batch, out):
         self.counter += 1
         self.dt = time() - self.current_time
         self.current_time = time()
 
         if self.counter % self.config['print_rate'] == 0:
-            print('Batch: {} | Loss: {} | Step time: {}'.format(batchi, loss.detach().cpu().item(), self.dt))
+            print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, loss.detach().cpu().item(), self.dt))
 
         if self.counter % self.config['log_rate'] == 0:
             self.writer.add_scalar('train/loss', loss.detach().cpu().item(), self.counter)
@@ -51,9 +54,10 @@ class Monitor(object):
                 torch.save(self.model.state_dict(), mname)
                 self.model.train()
 
-    def vis(self, batch):
-        pass
-        # TODO
+    def vis(self, batchi, batch, out):
+        self.writer.add_image('val/input/{}'.format(batchi), batch['input'].squeeze())
+        self.writer.add_image('val/scores/{}'.format(batchi), out['scores'].squeeze())
+        # TODO: write visualization code for keypoint matching and transformation
 
     def validation(self):
         time_used = []
@@ -62,15 +66,12 @@ class Monitor(object):
         valid_t_loss = 0
         for batchi, batch in enumerate(self.valid_loader):
             ts = time()
-            R_tgt_src_pred, t_tgt_src_pred = model(batch)
             if (batchi + 1) % self.config['print_rate'] == 0:
                 print("Eval Batch {}: {:.2}s".format(batchi, np.mean(time_used[-self.config['print_rate']:])))
-
+            out = self.model(batch)
             if batchi in self.vis_batches:
-                self.vis(batch)
-
-            R_tgt_src_pred, t_tgt_src_pred = model(batch)
-            loss, R_loss, t_loss = supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, self.config)
+                self.vis(batchi, batch, out)
+            loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, self.config)
             valid_loss += loss.detach().cpu().item()
             valid_R_loss += R_loss.detach().cpu().item()
             valid_t_loss += t_loss.detach().cpu().item()

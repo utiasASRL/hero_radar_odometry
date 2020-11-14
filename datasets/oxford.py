@@ -17,22 +17,26 @@ def get_frames(path, extension='.png'):
     frames.sort()
     return frames
 
+def check_if_frame_has_gt(frame, gt_lines):
+    for i in range(len(gt_lines) - 1, -1, -1):
+        line = gt_lines[i].split(',')
+        if frame == int(line[9]):
+            return True
+    return False
+
 def get_frames_with_gt(frames, gt_path):
     # For the Oxford Dataset we do a search from the end backwards because some
     # of the sequences don't have GT as the end, but they all have GT at the beginning.
     frames_out = frames
     with open(gt_path, 'r') as f:
+        f.readline()
         lines = f.readlines()
         for i in range(len(frames) - 1, -1, -1):
-            frame = frames[i].split('.')[0]
-            found = False
-            for j in range(len(lines) - 1, -1, -1):
-                if frame in lines[j]:
-                    found = True
-            if not found:
-                frames_out.pop()
-            else:
+            frame = int(frames[i].split('.')[0])
+            if check_if_frame_has_gt(frame, lines):
                 break
+            else:
+                frames_out.pop()
     return frames_out
 
 def get_inverse_tf(T):
@@ -61,7 +65,7 @@ def get_groundtruth_odometry(radar_time, gt_path):
             if int(line[9]) == radar_time:
                 T = get_transform(float(line[2]), float(line[3]), float(line[7])) # (from next time to current)
                 return get_inverse_tf(T) # T_2_1 (from current time step to the next time step)
-    assert(0), "ground truth transform not found"
+    assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
 class OxfordDataset(Dataset):
     """Oxford Radar Robotcar Dataset """
@@ -96,7 +100,7 @@ class OxfordDataset(Dataset):
         for seq in self.sequences:
             if self.seq_idx_range[seq][0] <= idx and idx < self.seq_idx_range[seq][1]:
                 return seq
-        assert(0), "sequence for this idx not found"
+        assert(0), 'sequence for idx {} not found in {}'.format(idx, seq_idx_range)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):

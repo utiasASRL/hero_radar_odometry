@@ -30,12 +30,12 @@ if __name__ == '__main__':
 
     for batchi, batch in enumerate(train_loader):
         optimizer.zero_grad()
-        R_tgt_src_pred, t_tgt_src_pred = model(batch)
-        loss, R_loss, t_loss = supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config)
+        out = model(batch)
+        loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, config)
         if loss.requires_grad:
             loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
         optimizer.step()
-        monitor.step(batchi, loss, R_loss, t_loss, batch, R_tgt_src_pred, t_tgt_src_pred)
+        monitor.step(batchi, loss, R_loss, t_loss, batch, out)
         if batchi >= config['max_iterations']:
             break
