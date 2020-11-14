@@ -4,6 +4,7 @@ from tensorboardX import SummaryWriter
 from time import time
 
 from datasets.sequential_sampler import *
+from networks.svd_pose_model import *
 
 class Monitor(object):
     def __init__(self, model, valid_loader, config):
@@ -69,7 +70,7 @@ class Monitor(object):
                 self.vis(batch)
 
             R_tgt_src_pred, t_tgt_src_pred = model(batch)
-            loss, R_loss, t_loss = supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch)
+            loss, R_loss, t_loss = supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, self.config)
             valid_loss += loss.detach().cpu().item()
             valid_R_loss += R_loss.detach().cpu().item()
             valid_t_loss += t_loss.detach().cpu().item()

@@ -10,13 +10,15 @@ class SVD(torch.nn.Module):
 
     def forward(self, keypoint_coords, tgt_coords, weights):
         src_coords = keypoint_coords[::self.window_size]
-        batch_size, _, n_points = src_coords.size()  # B x 2 x N
-        if src_coords.size(1) < 3:
-            pad = 3 - src_coords.size(1)
-            F.pad(src_coords, [0, 0, 0, 1])
-        if keypoint_coords.size(1) < 3:
-            pad = 3 - keypoint_coords.size(1)
-            F.pad(keypoint_coords, [0, 0, 0, 1])
+        batch_size, n_points, _ = src_coords.size()  # B x N x 2
+        if src_coords.size(2) < 3:
+            pad = 3 - src_coords.size(2)
+            src_coords = F.pad(src_coords, [0, pad, 0, 0])
+        if tgt_coords.size(2) < 3:
+            pad = 3 - tgt_coords.size(2)
+            tgt_coords = F.pad(tgt_coords, [0, pad, 0, 0])
+        src_coords = src_coords.transpose(2, 1)
+        tgt_coords = tgt_coords.transpose(2, 1)
 
         # Compute weighted centroids (elementwise multiplication/division)
         src_centroid = torch.sum(src_coords * weights, dim=2, keepdim=True) / torch.sum(weights, dim=2, keepdim=True)  # B x 3 x 1

@@ -34,19 +34,19 @@ class SVDPoseModel(torch.nn.Module):
 
         return R_tgt_src_pred, t_tgt_src_pred
 
-def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch):
-    T_21 = batch['T_21'].to(self.gpuid)
+def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
+    T_21 = batch['T_21'].to(config['gpuid'])
     # Get ground truth transforms
-    T_tgt_src = T_21[::self.window_size]
+    T_tgt_src = T_21[::config['window_size']]
     R_tgt_src = T_tgt_src[:,:3,:3]
     t_tgt_src = T_tgt_src[:,:3, 3]
-    svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src.unsqueeze(-1), t_tgt_src_pred)
+    svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src.unsqueeze(-1), t_tgt_src_pred, config['gpuid'])
     return svd_loss, R_loss, t_loss
 
-def SVD_loss(R, R_pred, t, t_pred, rel_w=10.0):
+def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', rel_w=10.0):
     batch_size = R.size(0)
     alpha = rel_w
-    identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(self.gpuid)
+    identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
     loss_fn = torch.nn.MSELoss()
     R_loss = alpha * loss_fn(R_pred.transpose(2,1).contiguous() @ R, identity)
     t_loss = 1.0 * loss_fn(t_pred, t)

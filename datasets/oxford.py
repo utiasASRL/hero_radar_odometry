@@ -36,7 +36,7 @@ def get_frames_with_gt(frames, gt_path):
     return frames_out
 
 def get_inverse_tf(T):
-    T2 = np.identity(4)
+    T2 = np.identity(4, dtype=np.float32)
     R = T[0:3, 0:3]
     t = T[0:3, 3].reshape(3, 1)
     T2[0:3, 0:3] = R.transpose()
@@ -46,7 +46,7 @@ def get_inverse_tf(T):
 
 def get_transform(x, y, theta):
     R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
-    T = np.identity(4)
+    T = np.identity(4, dtype=np.float32)
     T[0:2, 0:2] = R
     T[0, 3] = x
     T[1, 3] = y
@@ -106,10 +106,11 @@ class OxfordDataset(Dataset):
         timestamps, azimuths, _, fft_data, _ = load_radar(frame)
         cart = radar_polar_to_cartesian(azimuths, fft_data, self.config['radar_resolution'], self.config['cart_resolution'],
             self.config['cart_pixel_width'])
+        cart = np.expand_dims(cart, axis=0) # 1 x H x W
         time = int(self.frames[idx].split('.')[0])
         # Get ground truth transform between this frame and the next
-        transform = get_groundtruth_odometry(time, self.data_dir + seq + "/gt/radar_odometry.csv")
-        return {'input': cart, 'T_21': transform}
+        T_21 = get_groundtruth_odometry(time, self.data_dir + seq + "/gt/radar_odometry.csv")
+        return {'input': cart, 'T_21': T_21}
 
 def get_dataloader(config):
     vconfig = config

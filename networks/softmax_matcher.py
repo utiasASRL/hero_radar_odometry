@@ -19,16 +19,16 @@ class SoftmaxMatcher(nn.Module):
         '''
         # TODO: loop if window_size is greater than 2 (for cycle loss)
         bsz, encoder_dim, n_points = keypoint_desc.size()
-        batch_size = bsz / self.window_size
+        batch_size = int(bsz / self.window_size)
         _, _, height, width = desc_dense.size()
 
         src_desc = keypoint_desc[::self.window_size] # B x C x N
         src_desc = F.normalize(src_desc, dim=1)
 
         tgt_desc_dense = desc_dense[1::self.window_size] # B x C x H x W
-        tgt_desc_dense = F.normalize(tgt_desc_dense.view(batch_size, encoder_dim, -1), dim=1) # B x C x HW
+        tgt_desc_unrolled = F.normalize(tgt_desc_dense.view(batch_size, encoder_dim, -1), dim=1) # B x C x HW
 
-        match_vals = torch.matmul(src_desc.transpose(2, 1).contiguous(), tgt_desc_dense) # B x N x HW
+        match_vals = torch.matmul(src_desc.transpose(2, 1).contiguous(), tgt_desc_unrolled) # B x N x HW
         soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # B x N x HW
 
         v_coord, u_coord = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
@@ -41,13 +41,13 @@ class SoftmaxMatcher(nn.Module):
             soft_match_vals.transpose(2, 1).contiguous()).transpose(2, 1).contiguous()  # BxNx2
 
         # GET SCORES for pseudo point locations
-        pseudo_norm = normalize_coords(pseudo_coords, height, width).unsqueeze(1)               # B x 1 x N x 2
+        pseudo_norm = self.normalize_coords(pseudo_coords, height, width).unsqueeze(1)          # B x 1 x N x 2
         tgt_scores_dense = scores_dense[1::self.window_size]
         pseudo_scores = F.grid_sample(tgt_scores_dense, pseudo_norm, mode='bilinear')           # B x 1 x 1 x N
-        pseduo_scores = pseduo_scores.reshape(batch_size, 1, n_points)                          # B x 1 x N
-        # GET DESCRIPTORS for pseduo point locations
+        pseudo_scores = pseudo_scores.reshape(batch_size, 1, n_points)                          # B x 1 x N
+        # GET DESCRIPTORS for pseudo point locations
         pseudo_desc = F.grid_sample(tgt_desc_dense, pseudo_norm, mode='bilinear')               # B x C x 1 x N
-        pseudo_desc = pseudo_desc.reshape(batch_size, channels, n_points)                       # B x C x N
+        pseudo_desc = pseudo_desc.reshape(batch_size, encoder_dim, n_points)                    # B x C x N
 
         desc_match_score = torch.sum(src_desc * pseudo_desc, dim=1, keepdim=True) / float(encoder_dim) # Bx1xN
         src_scores = keypoint_scores[::self.window_size]
@@ -58,7 +58,7 @@ class SoftmaxMatcher(nn.Module):
     def normalize_coords(self, coords_2D, width, height):
         # Normalizes coords_2D to be within [-1, 1]
         # coords_2D: B x N x 2
-        batch_size = coords_2D.shape(0)
+        batch_size = coords_2D.size(0)
         u_norm = (2 * coords_2D[:, :, 0].reshape(batch_size, -1) / (width - 1)) - 1
         v_norm = (2 * coords_2D[:, :, 1].reshape(batch_size, -1) / (height - 1)) - 1
         return torch.stack([u_norm, v_norm], dim=2)  # B x num_patches x 2

@@ -4,7 +4,7 @@ import json
 
 from utils.trainer import Trainer
 from datasets.oxford import *
-from networks.svd_pose_model import SVDPoseModel
+from networks.svd_pose_model import *
 from utils.monitor import Monitor
 
 if __name__ == '__main__':
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     for batchi, batch in enumerate(train_loader):
         optimizer.zero_grad()
         R_tgt_src_pred, t_tgt_src_pred = model(batch)
-        loss, R_loss, t_loss = supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch)
+        loss, R_loss, t_loss = supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config)
         if loss.requires_grad:
             loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
