@@ -5,7 +5,7 @@ from networks.layers import DoubleConv, OutConv, Down, Up
 
 class UNet(torch.nn.Module):
     def __init__(self, config):
-        super(UNetBlock, self).__init__()
+        super(UNet, self).__init__()
 
         # n_channels
         input_channel = config['dataset']['images']['input_channel']

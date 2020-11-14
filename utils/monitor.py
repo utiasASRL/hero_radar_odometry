@@ -1,11 +1,14 @@
 import torch
+import numpy as np
 from tensorboardX import SummaryWriter
 from time import time
 
-class Monitor(Object):
-    def __init__(self, model, log_dir, valid_loader, config):
+from datasets.sequential_sampler import *
+
+class Monitor(object):
+    def __init__(self, model, valid_loader, config):
         self.model = model
-        self.log_dir = log_dir
+        self.log_dir = config['log_dir']
         self.valid_loader = valid_loader
         self.config = config
         self.gpuid = config['gpuid']
@@ -13,12 +16,11 @@ class Monitor(Object):
         self.dt = 0
         self.current_time = 0
         self.vis_batches = self.get_vis_batches()
-        self.writer = SummaryWriter(log_dir)
-        print('monitor running and saving to {}'.format(log_dir))
+        self.writer = SummaryWriter(self.log_dir)
+        print('monitor running and saving to {}'.format(self.log_dir))
 
     def get_vis_batches(self):
-        ixes = np.linspace(0, len(self.valid_loader.dataset) - 1, self.conf['vis_num']).astype(np.int32)
-        return [SequentialWindowBatchSampler([self.valid_loader.dataset[ix]]) for ix in ixes]
+        return np.linspace(0, len(self.valid_loader.dataset) - 1, self.config['vis_num']).astype(np.int32)
 
     def step(self, batchi, loss, R_loss, t_loss, batch, R_tgt_src_pred, t_tgt_src_pred):
         self.counter += 1
@@ -34,12 +36,6 @@ class Monitor(Object):
             self.writer.add_scalar('train/t_loss', t_loss.detach().cpu().item(), self.counter)
             self.writer.add_scalar('train/step_time', self.dt, self.counter)
 
-        if self.counter % self.config['vis_rate'] == 0:
-            with torch.no_grad():
-                self.model.eval()
-                self.vis()
-                self.model.train()
-
         if self.counter % self.config['val_rate'] == 0:
             with torch.no_grad():
                 self.model.eval()
@@ -54,10 +50,9 @@ class Monitor(Object):
                 torch.save(self.model.state_dict(), mname)
                 self.model.train()
 
-    def vis(self):
-        for batchi, batch in enumerate(self.vis_batches):
-            pass
-            # TODO
+    def vis(self, batch):
+        pass
+        # TODO
 
     def validation(self):
         time_used = []
@@ -70,6 +65,9 @@ class Monitor(Object):
             if (batchi + 1) % self.config['print_rate'] == 0:
                 print("Eval Batch {}: {:.2}s".format(batchi, np.mean(time_used[-self.config['print_rate']:])))
 
+            if batchi in self.vis_batches:
+                self.vis(batch)
+
             R_tgt_src_pred, t_tgt_src_pred = model(batch)
             loss, R_loss, t_loss = supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch)
             valid_loss += loss.detach().cpu().item()
@@ -77,7 +75,7 @@ class Monitor(Object):
             valid_t_loss += t_loss.detach().cpu().item()
             time_used.append(time() - ts)
 
-        self.writer.add_scalar('val/loss', valid_loss), self.counter)
-        self.writer.add_scalar('val/R_loss', valid_loss), self.counter)
-        self.writer.add_scalar('val/t_loss', valid_loss), self.counter)
+        self.writer.add_scalar('val/loss', valid_loss, self.counter)
+        self.writer.add_scalar('val/R_loss', valid_R_loss, self.counter)
+        self.writer.add_scalar('val/t_loss', valid_t_loss, self.counter)
         self.writer.add_scalar('val/avg_time_per_batch', sum(time_used)/len(time_used), self.counter)

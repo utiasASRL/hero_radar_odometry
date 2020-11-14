@@ -4,7 +4,7 @@ import torch.nn.functional as F
 class Keypoint(torch.nn.Module):
 
     def __init__(self, config):
-        super(KeypointBlock, self).__init__()
+        super(Keypoint, self).__init__()
         self.patch_size = config['networks']['keypoint_block']['patch_size']
         self.temperature = config['networks']['keypoint_block']['softmax_temp']
 

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class SoftmaxMatcher(nn.Module):
     def __init__(self, config):
-        super(SoftmaxMatcherBlock, self).__init__()
+        super(SoftmaxMatcher, self).__init__()
         self.softmax_temp = config["networks"]["matcher_block"]["softmax_temp"]
         self.window_size = config["window_size"]
         self.gpuid = config["gpuid"]

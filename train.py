@@ -4,12 +4,13 @@ import json
 
 from utils.trainer import Trainer
 from datasets.oxford import *
-from networks.svd_pose import SVDPoseModel
+from networks.svd_pose_model import SVDPoseModel
 from utils.monitor import Monitor
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/radar.json', type=str, help='config file path')
+    parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
     args = parser.parse_args()
     with open(args.config) as f:
         config = json.load(f)
@@ -18,12 +19,12 @@ if __name__ == '__main__':
 
     model = SVDPoseModel(config).to(config['gpuid'])
 
-    if pretrain_path is not None:
-        model.load_state_dict(torch.load(pretrain_path), strict=False)
+    if args.pretrain is not None:
+        model.load_state_dict(torch.load(args.pretrain), strict=False)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
 
-    monitor = Monitor(model, log_dir, valid_loader, config)
+    monitor = Monitor(model, valid_loader, config)
 
     model.train()
 

@@ -1,25 +1,25 @@
 {
-    "data_dir": "/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "./runs/date",
-    "gpuid": "cuda:0",
+    "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
+    "log_dir": "/workspace/Documents/logs/2020-11-13/",
+    "gpuid": "cuda:1",
     "min_range": 58,
     "radar_resolution": 0.0432,
     "cart_resolution": 0.3456,
     "cart_pixel_width": 512,
     "remove_motion": false,
     "remove_doppler": false,
-    "train_split": [0, 22],
-    "validation_split": [22, 25],
+    "train_split": [0, 1],
+    "validation_split": [22, 23],
     "test_split": [25, 32],
     "dataset": {"images": {"input_channel": ["intensity"]}, "sensor": "radar"},
     "networks": {
         "unet": {
             "bilinear": true,
-            "first_feature_dimension": 8,
+            "first_feature_dimension": 8
         },
         "keypoint_block": {
             "patch_size": 16,
-            "softmax_temp": 1.0,
+            "softmax_temp": 1.0
         },
         "matcher_block": {
             "softmax_temp": 0.01
@@ -34,7 +34,7 @@
     "clip_norm": 1.0,
     "loss": {
         "types": ["keypoint_2D", "svd"],
-        "weights": {"keypoint_2D":  0.01, "svd": 10.0},
+        "weights": {"keypoint_2D":  0.01, "svd": 10.0}
     },
     "batch_size": 2,
     "window_size": 2,
@@ -42,8 +42,7 @@
     "max_iterations": 200000,
     "print_rate": 10,
     "log_rate": 10,
-    "vis_rate": 1000,
     "save_rate": 5000,
     "val_rate": 5000,
-    "vis_num": 4,
+    "vis_num": 4
 }
