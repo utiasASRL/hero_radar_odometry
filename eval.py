@@ -7,8 +7,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from utils.tester import Tester
-from datasets.sequential_sampler import SequentialWindowBatchSampler
-from datasets.kitti import *
+from datasets.custom_sampler import SequentialWindowBatchSampler
+from datasets.oxford import *
 from networks.svd_pose_model import SVDPoseModel
 
 if __name__ == '__main__':
@@ -53,4 +53,3 @@ if __name__ == '__main__':
 
     # print('Forcing exit now')
     # os.kill(os.getpid(), signal.SIGINT)
-

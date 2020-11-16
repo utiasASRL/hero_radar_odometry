@@ -35,10 +35,10 @@
     "batch_size": 40,
     "window_size": 2,
     "num_workers": 2,
-    "max_iterations": 200000,
+    "max_iterations": 150000,
     "print_rate": 10,
     "log_rate": 10,
     "save_rate": 5000,
     "val_rate": 5000,
-    "vis_num": 4
+    "vis_num": 5
 }

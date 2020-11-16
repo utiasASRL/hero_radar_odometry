@@ -4,7 +4,6 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from datasets.custom_sampler import *
-from datasets.sequential_sampler import *
 from datasets.radar import *
 
 def get_sequences(path, prefix='2019'):
