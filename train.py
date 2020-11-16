@@ -1,8 +1,6 @@
-import os
 import argparse
 import json
 
-from utils.trainer import Trainer
 from datasets.oxford import *
 from networks.svd_pose_model import *
 from utils.monitor import Monitor
@@ -15,7 +13,7 @@ if __name__ == '__main__':
     with open(args.config) as f:
         config = json.load(f)
 
-    train_loader, valid_loader = get_dataloader(config)
+    train_loader, valid_loader, _ = get_dataloaders(config)
 
     model = SVDPoseModel(config).to(config['gpuid'])
 

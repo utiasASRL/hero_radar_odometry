@@ -115,13 +115,16 @@ class OxfordDataset(Dataset):
         T_21 = get_groundtruth_odometry(time, self.data_dir + seq + "/gt/radar_odometry.csv")
         return {'input': cart, 'T_21': T_21}
 
-def get_dataloader(config):
+def get_dataloaders(config):
     vconfig = config
     vconfig['batch_size'] = 1
     train_dataset = OxfordDataset(config, 'train')
     valid_dataset = OxfordDataset(vconfig, 'validation')
+    test_dataset = OxfordDataset(vconfig, 'test')
     train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_len)
     valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_len)
+    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_len)
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
     valid_loader = DataLoader(valid_dataset, batch_sampler=valid_sampler, num_workers=config['num_workers'])
-    return train_loader, valid_loader
+    test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, num_workers=config['num_workers'])
+    return train_loader, valid_loader, test_loader
