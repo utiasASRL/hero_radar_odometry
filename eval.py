@@ -1,9 +1,10 @@
 import argparse
 import json
+import torch
 from time import time
 
 from datasets.oxford import get_dataloaders
-from networks.svd_pose_model import SVDPoseModel
+from networks.svd_pose_model import SVDPoseModel, supervised_loss
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

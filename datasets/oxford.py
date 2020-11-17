@@ -116,7 +116,7 @@ class OxfordDataset(Dataset):
         return {'input': cart, 'T_21': T_21}
 
 def get_dataloaders(config):
-    vconfig = config
+    vconfig = dict(config)
     vconfig['batch_size'] = 1
     train_dataset = OxfordDataset(config, 'train')
     valid_dataset = OxfordDataset(vconfig, 'validation')
