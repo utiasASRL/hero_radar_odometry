@@ -4,8 +4,7 @@ import numpy as np
 from tensorboardX import SummaryWriter
 from time import time
 
-from datasets.sequential_sampler import *
-from networks.svd_pose_model import *
+from networks.svd_pose_model import SVDPoseModel
 
 class Monitor(object):
     def __init__(self, model, valid_loader, config):

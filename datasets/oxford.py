@@ -3,8 +3,8 @@ import os
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
-from datasets.custom_sampler import *
-from datasets.radar import *
+from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBatchSampler
+from datasets.radar import load_radar, radar_polar_to_cartesian
 
 def get_sequences(path, prefix='2019'):
     sequences = [f for f in os.listdir(path) if prefix in f]

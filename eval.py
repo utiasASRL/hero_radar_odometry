@@ -1,8 +1,8 @@
 import argparse
 import json
 
-from datasets.oxford import *
-from networks.svd_pose_model import *
+from datasets.oxford import get_dataloaders
+from networks.svd_pose_model import SVDPoseModel
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
