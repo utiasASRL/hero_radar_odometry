@@ -1,5 +1,6 @@
 import argparse
 import json
+from time import time
 
 from datasets.oxford import *
 from networks.svd_pose_model import *
@@ -25,12 +26,10 @@ if __name__ == '__main__':
     valid_t_loss = 0
     for batchi, batch in enumerate(test_loader):
         ts = time()
-        if (batchi + 1) % self.config['print_rate'] == 0:
-            print("Eval Batch {}: {:.2}s".format(batchi, np.mean(time_used[-self.config['print_rate']:])))
-        out = self.model(batch)
-        if batchi in self.vis_batches:
-            self.vis(batchi, batch, out)
-        loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, self.config)
+        if (batchi + 1) % config['print_rate'] == 0:
+            print("Eval Batch {}: {:.2}s".format(batchi, np.mean(time_used[-config['print_rate']:])))
+        out = model(batch)
+        loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, config)
         valid_loss += loss.detach().cpu().item()
         valid_R_loss += R_loss.detach().cpu().item()
         valid_t_loss += t_loss.detach().cpu().item()
