@@ -4,7 +4,7 @@ import numpy as np
 from tensorboardX import SummaryWriter
 from time import time
 
-from networks.svd_pose_model import SVDPoseModel
+from networks.svd_pose_model import SVDPoseModel, supervised_loss
 
 class Monitor(object):
     def __init__(self, model, valid_loader, config):
