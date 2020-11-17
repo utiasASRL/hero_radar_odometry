@@ -1,8 +1,8 @@
 import argparse
 import json
 
-from datasets.oxford import *
-from networks.svd_pose_model import *
+from datasets.oxford import get_dataloaders
+from networks.svd_pose_model import SVDPoseModel
 from utils.monitor import Monitor
 
 if __name__ == '__main__':
