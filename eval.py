@@ -1,6 +1,7 @@
 import argparse
 import json
 import torch
+import numpy as np
 from time import time
 
 from datasets.oxford import get_dataloaders

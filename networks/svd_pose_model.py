@@ -48,7 +48,8 @@ def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     batch_size = R.size(0)
     identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
     loss_fn = torch.nn.SmoothL1Loss()
-    R_loss = alpha * loss_fn(R_pred.transpose(2, 1).contiguous() @ R, identity)
+    # R_loss = alpha * loss_fn(R_pred.transpose(2, 1).contiguous() @ R, identity)
+    R_loss = alpha * loss_fn(R_pred @ R, identity)
     t_loss = 1.0 * loss_fn(t_pred, t)
     svd_loss = R_loss + t_loss
     return svd_loss, R_loss, t_loss
