@@ -7,8 +7,10 @@ class SVD(torch.nn.Module):
     def __init__(self, config):
         super(SVD, self).__init__()
         self.window_size = config['window_size']
+        self.cart_pixel_width = config['cart_pixel_width']
+        self.cart_resolution = config['cart_resolution']
 
-    def forward(self, keypoint_coords, tgt_coords, weights):
+    def forward(self, keypoint_coords, tgt_coords, weights, convert_from_pixels=True):
         src_coords = keypoint_coords[::self.window_size]
         batch_size, n_points, _ = src_coords.size()  # B x N x 2
         if src_coords.size(2) < 3:
@@ -17,6 +19,9 @@ class SVD(torch.nn.Module):
         if tgt_coords.size(2) < 3:
             pad = 3 - tgt_coords.size(2)
             tgt_coords = F.pad(tgt_coords, [0, pad, 0, 0])
+        if convert_from_pixels:
+            src_coords = self.convert_to_radar_frame(src_coords)
+            tgt_coords = self.convert_to_radar_frame(tgt_coords)
         src_coords = src_coords.transpose(2, 1)
         tgt_coords = tgt_coords.transpose(2, 1)
 
@@ -44,3 +49,13 @@ class SVD(torch.nn.Module):
         t_src_tgt_intgt = -R_tgt_src.bmm(t_tgt_src_insrc)
 
         return R_tgt_src, t_src_tgt_intgt
+
+    def convert_to_radar_frame(self, pixel_coords):
+        if (self.cart_pixel_width % 2) == 0:
+            cart_min_range = (self.cart_pixel_width / 2 - 0.5) * self.cart_resolution
+        else:
+            cart_min_range = self.cart_pixel_width // 2 * self.cart_resolution
+        metric_coords = pixel_coords
+        metric_coords[:,:,0] = cart_min_range - self.cart_resolution * pixel_coords[:,:,1]
+        metric_coords[:,:,1] = self.cart_resolution * pixel_coords[:,:,0] - cart_min_range
+        return metric_coords

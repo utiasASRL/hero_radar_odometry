@@ -16,11 +16,11 @@ class TestSVD(unittest.TestCase):
         out = torch.bmm(R_gt, src.transpose(2,1)).transpose(2, 1) + t_gt
         weights = torch.ones(B, 1, N)
 
-        config = {'window_size': 2}
+        config = {'window_size': 2, 'cart_pixel_width': 1024, 'cart_resolution': 0.25}
         model = SVD(config)
         model.eval()
 
-        R, t = model.forward(src, out, weights)
+        R, t = model.forward(src, out, weights, convert_from_pixels=False)
 
         R_err = torch.sum(R[:,:2,:2] - R_gt)
         t_err = torch.sum(t - t_gt)
