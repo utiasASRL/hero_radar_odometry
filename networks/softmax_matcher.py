@@ -28,7 +28,7 @@ class SoftmaxMatcher(nn.Module):
         tgt_desc_dense = desc_dense[1::self.window_size] # B x C x H x W
         tgt_desc_unrolled = F.normalize(tgt_desc_dense.view(batch_size, encoder_dim, -1), dim=1) # B x C x HW
 
-        match_vals = torch.matmul(src_desc.transpose(2, 1).contiguous(), tgt_desc_unrolled) # B x N x HW
+        match_vals = torch.matmul(src_desc.transpose(2, 1), tgt_desc_unrolled) # B x N x HW
         soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # B x N x HW
 
         v_coord, u_coord = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
@@ -37,8 +37,8 @@ class SoftmaxMatcher(nn.Module):
         coords = torch.stack((u_coord, v_coord), dim=1)  # HW x 2
         tgt_coords_dense = coords.unsqueeze(0).expand(batch_size, height * width, 2).to(self.gpuid) # B x HW x 2
 
-        pseudo_coords = torch.matmul(tgt_coords_dense.transpose(2, 1).contiguous(),
-            soft_match_vals.transpose(2, 1).contiguous()).transpose(2, 1).contiguous()  # BxNx2
+        pseudo_coords = torch.matmul(tgt_coords_dense.transpose(2, 1),
+            soft_match_vals.transpose(2, 1)).transpose(2, 1)  # BxNx2
 
         # GET SCORES for pseudo point locations
         pseudo_norm = self.normalize_coords(pseudo_coords, height, width).unsqueeze(1)          # B x 1 x N x 2

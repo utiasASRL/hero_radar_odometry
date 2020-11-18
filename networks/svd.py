@@ -1,8 +1,6 @@
 import torch
 import torch.nn.functional as F
 
-""" Code from: https://github.com/WangYueFt/dcp/blob/master/model.py """
-""" https://igl.ethz.ch/projects/ARAP/svd_rot.pdf """
 class SVD(torch.nn.Module):
     def __init__(self, config):
         super(SVD, self).__init__()
@@ -14,6 +12,10 @@ class SVD(torch.nn.Module):
         else:
             self.cart_min_range = self.cart_pixel_width // 2 * self.cart_resolution
         self.gpuid = config['gpuid']
+        B = config['batch_size']
+        N = (self.cart_pixel_width // config['patch_size'])**2
+        self.R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
+        self.t = torch.tensor([[self.cart_min_range],[-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
 
     def forward(self, keypoint_coords, tgt_coords, weights, convert_from_pixels=True):
         src_coords = keypoint_coords[::self.window_size]
@@ -27,36 +29,31 @@ class SVD(torch.nn.Module):
         if tgt_coords.size(2) < 3:
             pad = 3 - tgt_coords.size(2)
             tgt_coords = F.pad(tgt_coords, [0, pad, 0, 0])
-        src_coords = src_coords.transpose(2, 1)
+        src_coords = src_coords.transpose(2, 1) # B x 3 x N
         tgt_coords = tgt_coords.transpose(2, 1)
 
         # Compute weighted centroids (elementwise multiplication/division)
-        src_centroid = torch.sum(src_coords * weights, dim=2, keepdim=True) / torch.sum(weights, dim=2, keepdim=True)  # B x 3 x 1
-        tgt_centroid = torch.sum(tgt_coords * weights, dim=2, keepdim=True) / torch.sum(weights, dim=2, keepdim=True)
+        w = torch.sum(weights, dim=2, keepdim=True)
+        src_centroid = torch.sum(src_coords * weights, dim=2, keepdim=True) / w  # B x 3 x 1
+        tgt_centroid = torch.sum(tgt_coords * weights, dim=2, keepdim=True) / w
 
         src_centered = src_coords - src_centroid  # B x 3 x N
         tgt_centered = tgt_coords - tgt_centroid
 
-        W = torch.diag_embed(weights.reshape(batch_size, n_points))  # B x N x N
-        w = torch.sum(weights, dim=2).unsqueeze(2)                   # B x 1 x 1
+        W = torch.bmm(tgt_centered * weights, src_centered.transpose(2, 1)) / w  # B x 3 x 3
 
-        H = (1.0 / w) * torch.bmm(tgt_centered, torch.bmm(W, src_centered.transpose(2, 1).contiguous()))  # B x 3 x 3
-
-        U, S, V = torch.svd(H)
+        U, _, V = torch.svd(W)
 
         det_UV = torch.det(U) * torch.det(V)
         ones = torch.ones(batch_size, 2).type_as(V)
-        diag = torch.diag_embed(torch.cat((ones, det_UV.unsqueeze(1)), dim=1))  # B x 3 x 3
+        S = torch.diag_embed(torch.cat((ones, det_UV.unsqueeze(1)), dim=1))  # B x 3 x 3
 
         # Compute rotation and translation (T_tgt_src)
-        R_tgt_src = torch.bmm(U, torch.bmm(diag, V.transpose(2, 1).contiguous()))  # B x 3 x 3
-        t_tgt_src_insrc = src_centroid - torch.bmm(R_tgt_src.transpose(2, 1).contiguous(), tgt_centroid)  # B x 3 x 1
+        R_tgt_src = torch.bmm(U, torch.bmm(S, V.transpose(2, 1)))  # B x 3 x 3
+        t_tgt_src_insrc = src_centroid - torch.bmm(R_tgt_src.transpose(2, 1), tgt_centroid)  # B x 3 x 1
         t_src_tgt_intgt = -R_tgt_src.bmm(t_tgt_src_insrc)
 
         return R_tgt_src, t_src_tgt_intgt
 
     def convert_to_radar_frame(self, pixel_coords):
-        B, N, _ = pixel_coords.size()
-        R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
-        t = torch.tensor([[self.cart_min_range],[-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
-        return (torch.bmm(R, pixel_coords.transpose(2, 1).contiguous()) + t).transpose(2, 1)
+        return (torch.bmm(self.R, pixel_coords.transpose(2, 1)) + self.t).transpose(2, 1)

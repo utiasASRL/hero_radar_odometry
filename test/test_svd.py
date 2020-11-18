@@ -17,7 +17,8 @@ class TestSVD(unittest.TestCase):
         out = torch.bmm(R_gt, src.transpose(2,1)).transpose(2, 1) + t_gt
         weights = torch.ones(B, 1, N)
 
-        config = {'window_size': 2, 'cart_pixel_width': 1024, 'cart_resolution': 0.25, 'gpuid': 'cpu'}
+        config = {'window_size': 2, 'cart_pixel_width': 640, 'cart_resolution': 0.3456, 'gpuid': 'cpu',
+            'batch_size': 1, 'patch_size': 32}
         model = SVD(config)
         model.eval()
 
@@ -52,7 +53,7 @@ class TestSVD(unittest.TestCase):
             tgt[0, k, 1] = src[0, k, 0] * cart_resolution - cart_min_range
             tgt[0, k, 0] = cart_min_range - src[0, k, 1] * cart_resolution
         config = {'window_size': 2, 'cart_pixel_width': cart_pixel_width, 'cart_resolution': cart_resolution,
-            'gpuid': 'cpu'}
+            'gpuid': 'cpu', 'batch_size': 1, 'patch_size': 32}
         model = SVD(config)
         model.eval()
         tgt2 = model.convert_to_radar_frame(src)
