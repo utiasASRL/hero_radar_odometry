@@ -51,8 +51,5 @@ class TestMatching(unittest.TestCase):
 
         self.assertTrue(outliers / N < 0.001)
 
-
-# Ideas for more tests: add noise, false positives, false negatives?
-
 if __name__ == '__main__':
     unittest.main()
