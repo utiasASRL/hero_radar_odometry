@@ -25,18 +25,19 @@ def draw_batch(batch, out, config):
     radar_img = convert_plt_to_tensor()
 
     # Draw keypoint matches
-    src = out['srt'][0].squeeze().detach().cpu().numpy()
+    src = out['src'][0].squeeze().detach().cpu().numpy()
     tgt = out['tgt'][0].squeeze().detach().cpu().numpy()
     match_weights = out['match_weights'][0].squeeze().detach().cpu().numpy()
 
     nms = config['vis_keypoint_nms']
     max_w = np.max(match_weights)
+    plt.imshow(radar, cmap='gray')
     for i in range(src.shape[0]):
         if match_weights[i] < nms * max_w:
             continue
-        plt.plot(src[i, 0], src[i, 1], tgt[i, 0], tgt[i, 1], c='w')
-        plt.scatter(src[i, 0], src[i, 1], c='g')
-        plt.scatter(tgt[i, 0], tgt[i, 1], c='r')
+        plt.plot(src[i, 0], src[i, 1], tgt[i, 0], tgt[i, 1], c='w', linewidth=2)
+        plt.scatter(src[i, 0], src[i, 1], c='g', s=5)
+        plt.scatter(tgt[i, 0], tgt[i, 1], c='r', s=5)
     match_img = convert_plt_to_tensor()
 
     # Draw scores
