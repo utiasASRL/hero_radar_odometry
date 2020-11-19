@@ -1,7 +1,7 @@
 {
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2020-11-18/",
-    "gpuid": "cuda:1",
+    "log_dir": "/workspace/Documents/logs/2020-11-19/",
+    "gpuid": "cuda:3",
     "min_range": 58,
     "radar_resolution": 0.0432,
     "cart_resolution": 0.3456,
@@ -37,7 +37,7 @@
     "vis_num": 5,
     "vis_keypoint_nms": 0.01,
     "augmentation": {
-        "augment": true,
-        "rot_max": 3.141592653589793,
+        "augment": false,
+        "rot_max": 3.141592653589793
     }
 }

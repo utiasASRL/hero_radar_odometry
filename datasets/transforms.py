@@ -13,7 +13,7 @@ def augmentBatch(batch, config):
         img = input[i].squeeze()
         rot = np.random.uniform(-rot_max, rot_max)
         M = cv2.getRotationMatrix2D((W / 2, H / 2), rot * 180 / np.pi, 1.0)
-        input[i] = cv2.warpAffine(img, M, (W, H), interpolation = cv2.INTER_CUBIC).reshape(C, H, W)
+        input[i] = cv2.warpAffine(img, M, (W, H), flags=cv2.INTER_CUBIC).reshape(C, H, W)
         T = get_transform(0, 0, rot)
         T_21[i - 1] = np.matmul(T, T_21[i - 1])
         T_21[i] = np.matmul(T_21[i], get_inverse_tf(T))

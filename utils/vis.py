@@ -35,9 +35,9 @@ def draw_batch(batch, out, config):
     for i in range(src.shape[0]):
         if match_weights[i] < nms * max_w:
             continue
-        plt.plot(src[i, 0], src[i, 1], tgt[i, 0], tgt[i, 1], c='w', linewidth=2)
-        plt.scatter(src[i, 0], src[i, 1], c='g', s=5)
-        plt.scatter(tgt[i, 0], tgt[i, 1], c='r', s=5)
+        plt.plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1]], c='w', linewidth=2, zorder=2)
+        plt.scatter(src[i, 0], src[i, 1], c='g', s=5, zorder=3)
+        plt.scatter(tgt[i, 0], tgt[i, 1], c='r', s=5, zorder=4)
     match_img = convert_plt_to_tensor()
 
     # Draw scores
