@@ -12,10 +12,6 @@ class SVD(torch.nn.Module):
         else:
             self.cart_min_range = self.cart_pixel_width // 2 * self.cart_resolution
         self.gpuid = config['gpuid']
-        B = config['batch_size'] // config['window_size']
-        N = (self.cart_pixel_width // config['networks']['keypoint_block']['patch_size'])**2
-        self.R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
-        self.t = torch.tensor([[self.cart_min_range],[-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
 
     def forward(self, keypoint_coords, tgt_coords, weights, convert_from_pixels=True):
         src_coords = keypoint_coords[::self.window_size]
@@ -56,4 +52,7 @@ class SVD(torch.nn.Module):
         return R_tgt_src.transpose(2, 1), t_src_tgt_intgt
 
     def convert_to_radar_frame(self, pixel_coords):
-        return (torch.bmm(self.R, pixel_coords.transpose(2, 1)) + self.t).transpose(2, 1)
+        B, N, _ = pixel_coords.size()
+        R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
+        t = torch.tensor([[self.cart_min_range],[-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
+        return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
