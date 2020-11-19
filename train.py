@@ -6,6 +6,7 @@ from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
 from utils.utils import supervised_loss
 from utils.monitor import Monitor
+from datasets.transforms import augmentBatch
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -29,6 +30,8 @@ if __name__ == '__main__':
     model.train()
 
     for batchi, batch in enumerate(train_loader):
+        if config['augmentation']['augment']:
+            batch = augmentBatch(batch, config)
         optimizer.zero_grad()
         out = model(batch)
         loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, config)

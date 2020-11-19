@@ -3,3 +3,4 @@ numpy==1.18.1
 tensorboardX==2.1
 matplotlib
 PIL
+opencv-python

@@ -90,12 +90,11 @@ class OxfordDataset(Dataset):
             idx = idx.tolist()
         seq = self.get_seq_from_idx(idx)
         frame = self.data_dir + seq + "/radar/" + self.frames[idx]
-        timestamps, azimuths, _, fft_data, _ = load_radar(frame)
-        cart = radar_polar_to_cartesian(azimuths, fft_data, self.config['radar_resolution'], self.config['cart_resolution'],
-            self.config['cart_pixel_width'])
-        cart = np.expand_dims(cart, axis=0) # 1 x H x W
-        time = int(self.frames[idx].split('.')[0])
+        _, azimuths, _, polar, _ = load_radar(frame)
+        cart = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
+            self.config['cart_resolution'], self.config['cart_pixel_width'])    # 1 x H x W
         # Get ground truth transform between this frame and the next
+        time = int(self.frames[idx].split('.')[0])
         T_21 = get_groundtruth_odometry(time, self.data_dir + seq + "/gt/radar_odometry.csv")
         return {'input': cart, 'T_21': T_21}
 
