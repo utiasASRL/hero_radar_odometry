@@ -33,9 +33,9 @@ if __name__ == '__main__':
         if (batchi + 1) % config['print_rate'] == 0:
             print("Eval Batch {}: {:.2}s".format(batchi, np.mean(time_used[-config['print_rate']:])))
         out = model(batch)
-        T_gt.append(batch['T_21'].numpy().squeeze())
-        R_pred.append(out['R'].detach().cpu().numpy())
-        t_pred.append(out['t'].detach().cpu().numpy())
+        T_gt.append(batch['T_21'][0].numpy().squeeze())
+        R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
+        t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
         time_used.append(time() - ts)
 
     print('time_used: {}'.format(sum(time_used) / len(time_used)))

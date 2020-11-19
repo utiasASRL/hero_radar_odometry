@@ -62,7 +62,7 @@ class Monitor(object):
         self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img)
 
     def validation(self):
-        time_used = []self.writer.add_image('val/' )
+        time_used = []
         valid_loss = 0
         valid_R_loss = 0
         valid_t_loss = 0
@@ -81,9 +81,9 @@ class Monitor(object):
             valid_R_loss += R_loss.detach().cpu().item()
             valid_t_loss += t_loss.detach().cpu().item()
             time_used.append(time() - ts)
-            T_gt.append(batch['T_21'])
-            R_pred.append(out['R'].detach().cpu().numpy())
-            t_pred.append(out['t'].detach().cpu().numpy())
+            T_gt.append(batch['T_21'][0].numpy().squeeze())
+            R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
+            t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
 
         results = computeMedianError(T_gt, R_pred, t_pred)
         t_err, r_err = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
