@@ -5,7 +5,8 @@ import numpy as np
 from time import time
 
 from datasets.oxford import get_dataloaders
-from networks.svd_pose_model import SVDPoseModel, supervised_loss
+from networks.svd_pose_model import SVDPoseModel
+from utils.utils import supervised_loss, computeMedianError
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -23,21 +24,26 @@ if __name__ == '__main__':
     model.eval()
 
     time_used = []
-    valid_loss = 0
-    valid_R_loss = 0
-    valid_t_loss = 0
+    T_gt = []
+    R_pred = []
+    t_pred = []
     for batchi, batch in enumerate(test_loader):
         ts = time()
         if (batchi + 1) % config['print_rate'] == 0:
             print("Eval Batch {}: {:.2}s".format(batchi, np.mean(time_used[-config['print_rate']:])))
         out = model(batch)
-        loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, config)
-        valid_loss += loss.detach().cpu().item()
-        valid_R_loss += R_loss.detach().cpu().item()
-        valid_t_loss += t_loss.detach().cpu().item()
-        time_used.append(time() - ts)
+        T_gt.append(batch['T_21'])
+        R_pred.append(out['R'].detach().cpu().numpy())
+        t_pred.append(out['t'].detach().cpu().numpy())
 
-    print('valid_loss: {}'.format(valid_loss))
-    print('valid_R_loss: {}'.format(valid_R_loss))
-    print('valid_t_loss: {}'.format(valid_t_loss))
+    results = computeMedianError(T_gt, R_pred, t_pred)
+    print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
     print('time_used: {}'.format(sum(time_used) / len(time_used)))
+
+    t_err, r_err = computeKittiMetrics(T_gt, R_pred, t_pred, test_loader.dataset.seq_len)
+    print('KITTI t_err: {} %'.format(t_err * 100))
+    print('KITTI r_err: {} deg/m'.format(r_err * 180 / np.pi))
+
+    imgs = plot_sequences(T_gt, R_pred, t_pred, test_loader.dataset.seq_len, returnTensor=False)
+    for i in range(len(imgs)):
+        imgs[i].save(test_loader.dataset.sequences[i] + '.png')

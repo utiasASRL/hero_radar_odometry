@@ -5,6 +5,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBatchSampler
 from datasets.radar import load_radar, radar_polar_to_cartesian
+from utils.utils import get_inverse_tf, get_transform
 
 def get_sequences(path, prefix='2019'):
     sequences = [f for f in os.listdir(path) if prefix in f]
@@ -37,23 +38,6 @@ def get_frames_with_gt(frames, gt_path):
             else:
                 frames_out.pop()
     return frames_out
-
-def get_inverse_tf(T):
-    T2 = np.identity(4, dtype=np.float32)
-    R = T[0:3, 0:3]
-    t = T[0:3, 3].reshape(3, 1)
-    T2[0:3, 0:3] = R.transpose()
-    t = np.matmul(-1 * R.transpose(), t)
-    T2[0:3, 3] = np.squeeze(t)
-    return T2
-
-def get_transform(x, y, theta):
-    R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
-    T = np.identity(4, dtype=np.float32)
-    T[0:2, 0:2] = R
-    T[0, 3] = x
-    T[1, 3] = y
-    return T
 
 def get_groundtruth_odometry(radar_time, gt_path):
     with open(gt_path, 'r') as f:

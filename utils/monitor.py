@@ -4,13 +4,17 @@ import numpy as np
 from tensorboardX import SummaryWriter
 from time import time
 
-from networks.svd_pose_model import SVDPoseModel, supervised_loss
+from networks.svd_pose_model import SVDPoseModel
+from utils.utils import supervised_loss, computeMedianError
+from utils.vis import draw_batch
 
 class Monitor(object):
     def __init__(self, model, valid_loader, config):
         self.model = model
         self.log_dir = config['log_dir']
         self.valid_loader = valid_loader
+        self.seq_len = valid_loader.dataset.seq_len
+        self.sequences = valid_loader.dataset.sequences
         self.config = config
         self.gpuid = config['gpuid']
         self.counter = 0
@@ -54,15 +58,17 @@ class Monitor(object):
                 self.model.train()
 
     def vis(self, batchi, batch, out):
-        self.writer.add_image('val/input/{}'.format(batchi), batch['input'].squeeze())
-        self.writer.add_image('val/scores/{}'.format(batchi), out['scores'].squeeze())
-        # TODO: write visualization code for keypoint matching and transformation
+        batch_img = draw_batch(batch, out, self.config)
+        self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img)
 
     def validation(self):
-        time_used = []
+        time_used = []self.writer.add_image('val/' )
         valid_loss = 0
         valid_R_loss = 0
         valid_t_loss = 0
+        T_gt = []
+        R_pred = []
+        t_pred = []
         for batchi, batch in enumerate(self.valid_loader):
             ts = time()
             if (batchi + 1) % self.config['print_rate'] == 0:
@@ -75,8 +81,22 @@ class Monitor(object):
             valid_R_loss += R_loss.detach().cpu().item()
             valid_t_loss += t_loss.detach().cpu().item()
             time_used.append(time() - ts)
+            T_gt.append(batch['T_21'])
+            R_pred.append(out['R'].detach().cpu().numpy())
+            t_pred.append(out['t'].detach().cpu().numpy())
+
+        results = computeMedianError(T_gt, R_pred, t_pred)
+        t_err, r_err = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         self.writer.add_scalar('val/R_loss', valid_R_loss, self.counter)
         self.writer.add_scalar('val/t_loss', valid_t_loss, self.counter)
         self.writer.add_scalar('val/avg_time_per_batch', sum(time_used)/len(time_used), self.counter)
+        self.writer.add_scalar('val/t_err_med', results[0])
+        self.writer.add_scalar('val/t_err_std', results[1])
+        self.writer.add_scalar('val/R_err_med', results[2])
+        self.writer.add_scalar('val/R_err_std', results[3])
+
+        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
+        for i in range(len(imgs)):
+            self.writer.add_image('val/' + self.sequences[i], imgs[i])

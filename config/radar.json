@@ -22,10 +22,6 @@
         "matcher_block": {
             "softmax_temp": 0.01
         },
-        "outlier_rejection": {
-            "on": true,
-            "threshold": 4.0
-        }
     },
     "lr": 0.0001,
     "weight_decay": 0.0001,
@@ -38,5 +34,6 @@
     "log_rate": 10,
     "save_rate": 5000,
     "val_rate": 5000,
-    "vis_num": 5
+    "vis_num": 5,
+    "vis_keypoint_nms": 0.01
 }

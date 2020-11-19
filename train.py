@@ -3,7 +3,8 @@ import json
 import torch
 
 from datasets.oxford import get_dataloaders
-from networks.svd_pose_model import SVDPoseModel, supervised_loss
+from networks.svd_pose_model import SVDPoseModel
+from utils.utils import supervised_loss
 from utils.monitor import Monitor
 
 if __name__ == '__main__':

@@ -11,9 +11,6 @@ class SVDPoseModel(torch.nn.Module):
         super(SVDPoseModel, self).__init__()
 
         self.config = config
-        self.window_size = config['window_size']
-        self.outlier_rejection = config['networks']['outlier_rejection']['on']
-        self.outlier_threshold = config['networks']['outlier_rejection']['threshold']
         self.gpuid = config['gpuid']
 
         self.unet = UNet(config)
@@ -33,23 +30,4 @@ class SVDPoseModel(torch.nn.Module):
         R_tgt_src_pred, t_tgt_src_pred = self.svd(keypoint_coords, pseudo_coords, match_weights)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
-            'tgt': pseudo_coords}
-
-def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
-    T_21 = batch['T_21'].to(config['gpuid'])
-    # Get ground truth transforms
-    T_tgt_src = T_21[::config['window_size']]
-    R_tgt_src = T_tgt_src[:,:3,:3]
-    t_tgt_src = T_tgt_src[:,:3, 3]
-    svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src.unsqueeze(-1), t_tgt_src_pred, config['gpuid'])
-    return svd_loss, R_loss, t_loss
-
-def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
-    batch_size = R.size(0)
-    identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
-    loss_fn = torch.nn.SmoothL1Loss()
-    # R_loss = alpha * loss_fn(R_pred.transpose(2, 1).contiguous() @ R, identity)
-    R_loss = alpha * loss_fn(R_pred @ R, identity)
-    t_loss = 1.0 * loss_fn(t_pred, t)
-    svd_loss = R_loss + t_loss
-    return svd_loss, R_loss, t_loss
+            'tgt': pseudo_coords, 'match_weights': match_weights}
