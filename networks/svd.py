@@ -12,8 +12,8 @@ class SVD(torch.nn.Module):
         else:
             self.cart_min_range = self.cart_pixel_width // 2 * self.cart_resolution
         self.gpuid = config['gpuid']
-        B = config['batch_size']
-        N = (self.cart_pixel_width // config['patch_size'])**2
+        B = config['batch_size'] // config['window_size']
+        N = (self.cart_pixel_width // config['networks']['keypoint_block']['patch_size'])**2
         self.R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
         self.t = torch.tensor([[self.cart_min_range],[-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
 

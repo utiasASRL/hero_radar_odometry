@@ -39,8 +39,8 @@ def get_transform(x, y, theta):
 
 def get_transform2(R, t):
     T = np.identity(4)
-    T[0:3, 0:3]
-    T[0:3, 3] = t
+    T[0:3, 0:3] = R
+    T[0:3, 3] = t.squeeze()
     return T
 
 def enforce_orthog(T):
@@ -59,8 +59,7 @@ def enforce_orthog(T):
 
 # Use axis-angle representation to get a single number for rotation error
 def rotationError(T):
-    return abs(np.arccos((np.trace(T) - 2) / 2))
-    # return abs(np.arcsin(pose_error[0, 1])) # SO(2)
+    return abs(np.arcsin(T[0, 1])) # SO(2)
 
 def translationError(T):
     return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
@@ -85,8 +84,8 @@ def trajectoryDistances(poses):
     for i in range(1, len(poses)):
         P1 = poses[i - 1]
         P2 = poses[i]
-        dx = P1[0, 2] - P2[0, 2]
-        dy = P1[1, 2] - P2[1, 2]
+        dx = P1[0, 3] - P2[0, 3]
+        dy = P1[1, 3] - P2[1, 3]
         dist.append(dist[i-1] + np.sqrt(dx**2 + dy**2))
     return dist
 
@@ -135,8 +134,8 @@ def computeKittiMetrics(T_gt, R_pred, t_pred, seq_len):
     seq_indices = []
     idx = 0
     for s in seq_len:
-        seq_indices.append(list(range(idx, idx + s)))
-        idx += s
+        seq_indices.append(list(range(idx, idx + s - 1)))
+        idx += (s - 1)
     err = []
     for indices in seq_indices:
         T_gt_ = np.identity(4)
@@ -145,7 +144,7 @@ def computeKittiMetrics(T_gt, R_pred, t_pred, seq_len):
         poses_pred = []
         for i in indices:
             T_gt_ = np.matmul(T_gt[i], T_gt_)
-            T_pred_ = np.matmul(get_transform2(R_pred[i], t[i]), T_pred_)
+            T_pred_ = np.matmul(get_transform2(R_pred[i], t_pred[i]), T_pred_)
             enforce_orthog(T_gt_)
             enforce_orthog(T_pred_)
             poses_gt.append(T_gt_)

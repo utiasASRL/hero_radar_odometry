@@ -6,7 +6,8 @@ from time import time
 
 from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
-from utils.utils import supervised_loss, computeMedianError
+from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics
+from utils.vis import plot_sequences
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -32,13 +33,14 @@ if __name__ == '__main__':
         if (batchi + 1) % config['print_rate'] == 0:
             print("Eval Batch {}: {:.2}s".format(batchi, np.mean(time_used[-config['print_rate']:])))
         out = model(batch)
-        T_gt.append(batch['T_21'])
+        T_gt.append(batch['T_21'].numpy().squeeze())
         R_pred.append(out['R'].detach().cpu().numpy())
         t_pred.append(out['t'].detach().cpu().numpy())
+        time_used.append(time() - ts)
 
+    print('time_used: {}'.format(sum(time_used) / len(time_used)))
     results = computeMedianError(T_gt, R_pred, t_pred)
     print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
-    print('time_used: {}'.format(sum(time_used) / len(time_used)))
 
     t_err, r_err = computeKittiMetrics(T_gt, R_pred, t_pred, test_loader.dataset.seq_len)
     print('KITTI t_err: {} %'.format(t_err * 100))

@@ -5,8 +5,8 @@ from tensorboardX import SummaryWriter
 from time import time
 
 from networks.svd_pose_model import SVDPoseModel
-from utils.utils import supervised_loss, computeMedianError
-from utils.vis import draw_batch
+from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics
+from utils.vis import draw_batch, plot_sequences
 
 class Monitor(object):
     def __init__(self, model, valid_loader, config):

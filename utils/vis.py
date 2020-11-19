@@ -5,6 +5,7 @@ from torchvision.transforms import ToTensor
 import PIL.Image
 import numpy as np
 import matplotlib.pyplot as plt
+from utils.utils import get_transform2, enforce_orthog, get_inverse_tf
 
 def convert_plt_to_img():
     buf = io.BytesIO()
@@ -50,8 +51,8 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     seq_indices = []
     idx = 0
     for s in seq_len:
-        seq_indices.append(list(range(idx, idx + s)))
-        idx += s
+        seq_indices.append(list(range(idx, idx + s - 1)))
+        idx += (s - 1)
 
     imgs = []
     for indices in seq_indices:
@@ -63,13 +64,15 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
         y_pred = []
         for i in indices:
             T_gt_ = np.matmul(T_gt[i], T_gt_)
-            T_pred_ = np.matmul(get_transform2(R_pred[i], t[i]), T_pred_)
+            T_pred_ = np.matmul(get_transform2(R_pred[i], t_pred[i]), T_pred_)
             enforce_orthog(T_gt_)
             enforce_orthog(T_pred_)
-            x_gt.append(T_gt_[0, 3])
-            y_gt.append(T_gt_[1, 3])
-            x_pred.append(T_pred_[0, 3])
-            y_pred.append(T_pred_[1, 3])
+            T_gt_temp = get_inverse_tf(T_gt_)
+            T_pred_temp = get_inverse_tf(T_pred_)
+            x_gt.append(T_gt_temp[0, 3])
+            y_gt.append(T_gt_temp[1, 3])
+            x_pred.append(T_pred_temp[0, 3])
+            y_pred.append(T_pred_temp[1, 3])
 
         fig, ax = plt.subplots()
         plt.grid(which='both', linestyle='--', alpha=0.5)
@@ -78,6 +81,6 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
         plt.plot(x_pred, y_pred, 'r', label='PRED')
         if returnTensor:
             imgs.append(convert_plt_to_tensor())
-        else
+        else:
             imgs.append(convert_plt_to_img())
     return imgs
