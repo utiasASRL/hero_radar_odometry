@@ -12,14 +12,13 @@
 #
 ###############################################################################
 
-from typing import AnyStr, Tuple
 import numpy as np
 import cv2
 
-CTS350=0    # Oxford
-CIR204=1    # Boreas
+CTS350 = 0    # Oxford
+CIR204 = 1    # Boreas
 
-def load_radar(example_path: AnyStr, navtech_version=CTS350) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+def load_radar(example_path, navtech_version=CTS350):
     """Decode a single Oxford Radar RobotCar Dataset radar example
     Args:
         example_path (AnyStr): Oxford Radar RobotCar Dataset Example png
@@ -62,9 +61,8 @@ def get_azimuth_index(azimuths, azimuth):
         closest -= delta
     return closest
 
-def radar_polar_to_cartesian(azimuths: np.ndarray, fft_data: np.ndarray, radar_resolution: float,
-                             cart_resolution: float, cart_pixel_width: int, interpolate_crossover=True,
-                             navtech_version=CTS350) -> np.ndarray:
+def radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resolution, cart_pixel_width,
+                             interpolate_crossover=True, navtech_version=CTS350):
     """Convert a polar radar scan to cartesian.
     Args:
         azimuths (np.ndarray): Rotation for each polar radar azimuth (radians)

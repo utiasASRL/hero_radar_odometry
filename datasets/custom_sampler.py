@@ -1,5 +1,5 @@
-from torch.utils.data import Sampler, SubsetRandomSampler, SequentialSampler
 from itertools import accumulate
+from torch.utils.data import Sampler, SubsetRandomSampler
 
 class RandomWindowBatchSampler(Sampler):
     def __init__(self, batch_size, window_size, seq_len, drop_last=True):
@@ -26,8 +26,7 @@ class RandomWindowBatchSampler(Sampler):
         total_size = self.batch_size*self.window_size
         if self.drop_last:
             return len(self.sampler) // total_size
-        else:
-            return (len(self.sampler) + total_size - 1) // total_size
+        return (len(self.sampler) + total_size - 1) // total_size
 
 class SequentialWindowBatchSampler(Sampler):
     def __init__(self, batch_size, window_size, seq_len, drop_last=True):
@@ -53,5 +52,4 @@ class SequentialWindowBatchSampler(Sampler):
         total_size = self.batch_size*self.window_size
         if self.drop_last:
             return len(self.valid_frames) // total_size
-        else:
-            return (len(self.valid_frames) + total_size - 1) // total_size
+        return (len(self.valid_frames) + total_size - 1) // total_size

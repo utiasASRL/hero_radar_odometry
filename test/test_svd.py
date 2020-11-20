@@ -1,9 +1,8 @@
-import numpy as np
-import torch
-import networks
-from networks.svd import SVD
 import unittest
 import random
+import numpy as np
+import torch
+from networks.svd import SVD
 
 class TestSVD(unittest.TestCase):
     def test_basic(self):
@@ -12,20 +11,20 @@ class TestSVD(unittest.TestCase):
         D = 2
         src = torch.randn(B, N, D).float()
         theta = np.pi / 4
-        R_gt = torch.tensor([[np.cos(theta), np.sin(theta)],[-np.sin(theta), np.cos(theta)]]).unsqueeze(0).float()
+        R_gt = torch.tensor([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]).unsqueeze(0).float()
         t_gt = torch.tensor([[10, 5]]).unsqueeze(0).float()
-        out = torch.bmm(R_gt, src.transpose(2,1)).transpose(2, 1) + t_gt
+        out = torch.bmm(R_gt, src.transpose(2, 1)).transpose(2, 1) + t_gt
         weights = torch.ones(B, 1, N).float()
 
         config = {'window_size': 2, 'cart_pixel_width': 640, 'cart_resolution': 0.3456, 'gpuid': 'cpu',
-                'batch_size': 1, 'networks': {'keypoint_block': {'patch_size': 32}}}
+                  'batch_size': 1, 'networks': {'keypoint_block': {'patch_size': 32}}}
         model = SVD(config)
         model.eval()
 
         R, t = model.forward(src, out, weights, convert_from_pixels=False)
         R = R.transpose(2, 1)
 
-        R_err = torch.sum(R[:,:2,:2] - R_gt)
+        R_err = torch.sum(R[:, :2, :2] - R_gt)
         t_err = torch.sum(t - t_gt)
         self.assertTrue(R_err < 1e-4)
         self.assertTrue(t_err < 1e-4)
@@ -54,7 +53,7 @@ class TestSVD(unittest.TestCase):
             tgt[0, k, 1] = src[0, k, 0] * cart_resolution - cart_min_range
             tgt[0, k, 0] = cart_min_range - src[0, k, 1] * cart_resolution
         config = {'window_size': 2, 'cart_pixel_width': 640, 'cart_resolution': 0.3456, 'gpuid': 'cpu',
-                'batch_size': 1, 'networks': {'keypoint_block': {'patch_size': 32}}}
+                  'batch_size': 1, 'networks': {'keypoint_block': {'patch_size': 32}}}
         model = SVD(config)
         model.eval()
         tgt2 = model.convert_to_radar_frame(src)

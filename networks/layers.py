@@ -1,10 +1,11 @@
+"""
+    Parts of the U-Net model
+    Code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_parts.py
+"""
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 
-""" Parts of the U-Net model
-    Code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_parts.py"""
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
@@ -64,8 +65,9 @@ class Up(nn.Module):
         return self.conv(x)
 
 class OutConv(nn.Module):
+    """Output 1x1 convolution"""
     def __init__(self, in_channels, out_channels):
-        super(OutConv, self).__init__()
+        super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
     def forward(self, x):

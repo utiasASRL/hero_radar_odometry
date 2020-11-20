@@ -1,5 +1,4 @@
 import io
-import torch
 import torchvision.utils as vutils
 from torchvision.transforms import ToTensor
 import PIL.Image
@@ -18,9 +17,10 @@ def convert_plt_to_tensor():
     return ToTensor()(convert_plt_to_img())
 
 def draw_batch(batch, out, config):
+    """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
     # Draw radar image
-    radar = batch['input'][0].squeeze().numpy()
-    fig, ax = plt.subplots()
+    radar = batch['data'][0].squeeze().numpy()
+    plt.subplots()
     plt.imshow(radar, cmap='gray')
     radar_img = convert_plt_to_tensor()
 
@@ -42,13 +42,14 @@ def draw_batch(batch, out, config):
 
     # Draw scores
     scores = out['scores'][0].squeeze().detach().cpu().numpy()
-    fig, ax = plt.subplots()
+    plt.subplots()
     plt.imshow(scores, cmap='inferno')
     score_img = convert_plt_to_tensor()
 
     return vutils.make_grid([radar_img, score_img, match_img])
 
 def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
+    """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
     idx = 0
     for s in seq_len:
@@ -75,7 +76,7 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
             x_pred.append(T_pred_temp[0, 3])
             y_pred.append(T_pred_temp[1, 3])
 
-        fig, ax = plt.subplots()
+        plt.subplots()
         plt.grid(which='both', linestyle='--', alpha=0.5)
         plt.axes().set_aspect('equal')
         plt.plot(x_gt, y_gt, 'k', label='GT')

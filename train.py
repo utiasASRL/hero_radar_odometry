@@ -39,6 +39,6 @@ if __name__ == '__main__':
             loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
         optimizer.step()
-        monitor.step(batchi, loss, R_loss, t_loss, batch, out)
+        monitor.step(batchi, loss, R_loss, t_loss)
         if batchi >= config['max_iterations']:
             break

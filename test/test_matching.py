@@ -1,42 +1,41 @@
-import torch
-import numpy as np
-import networks
-from networks.softmax_matcher import SoftmaxMatcher
 import unittest
 import random
+import torch
+import numpy as np
+from networks.softmax_matcher import SoftmaxMatcher
 
 class TestMatching(unittest.TestCase):
     def test_basic(self):
-        B = 1
+        B = 2
         N = 1024
         C = 248
         H = 512
         W = 512
 
-        src_scores = torch.ones(2, 1, N)
-        src_desc = torch.randn(2, C, N)
-        tgt_scores_dense = torch.ones(2, 1, H, W)
-        tgt_desc_dense = torch.randn(2, C, H, W)
+        src_scores = torch.ones(B, 1, N)
+        src_desc = torch.randn(B, C, N)
+        tgt_scores_dense = torch.ones(B, 1, H, W)
+        tgt_desc_dense = torch.randn(B, C, H, W)
 
         # "Hide" the src descriptors within the dense target descriptor map
-        l = [i for i in range(0, H * W)]
+        L = list(range(0, H * W))
         random.seed(0)
-        random.shuffle(l)
-        l = l[:N]
-        row_col = [(index % H, index // H) for index in l]
+        random.shuffle(L)
+        L = L[:N]
+        row_col = [(index % H, index // H) for index in L]
         for i in range(N):
-            x = src_desc[0,:,i]
+            x = src_desc[0, :, i]
             x = x.reshape(1, C)
-            tgt_desc_dense[1,:, row_col[i][0], row_col[i][1]] = x
+            tgt_desc_dense[1, :, row_col[i][0], row_col[i][1]] = x
         # Now we have known correspondences: i <--> row_col
 
-        config = {"networks": {"matcher_block": {"softmax_temp": 0.01}}}
-        config["window_size"] = 2
-        config["gpuid"] = "cpu"
+        config = {'networks': {'matcher_block': {'softmax_temp': 0.01}}}
+        config['window_size'] = 2
+        config['gpuid'] = "cpu"
         model = SoftmaxMatcher(config)
         model.eval()
 
-        pseudo_coords, match_weights = model.forward(src_scores, src_desc, tgt_scores_dense, tgt_desc_dense)
+        pseudo_coords, _ = model.forward(src_scores, src_desc, tgt_scores_dense, tgt_desc_dense)
 
         # Now we can check whether the pseudo coordinates are the same as our known correspondences:
         outliers = 0

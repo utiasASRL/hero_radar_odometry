@@ -1,7 +1,6 @@
 # Author: Keenan Burnett
 import os
 import torch
-import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBatchSampler
 from datasets.radar import load_radar, radar_polar_to_cartesian
@@ -35,8 +34,7 @@ def get_frames_with_gt(frames, gt_path):
             frame = int(frames[i].split('.')[0])
             if check_if_frame_has_gt(frame, lines):
                 break
-            else:
-                frames_out.pop()
+            frames_out.pop()
     return frames_out
 
 def get_groundtruth_odometry(radar_time, gt_path):
@@ -46,8 +44,8 @@ def get_groundtruth_odometry(radar_time, gt_path):
         for line in lines:
             line = line.split(',')
             if int(line[9]) == radar_time:
-                T = get_transform(float(line[2]), float(line[3]), float(line[7])) # (from next time to current)
-                return get_inverse_tf(T) # T_2_1 (from current time step to the next time step)
+                T = get_transform(float(line[2]), float(line[3]), float(line[7]))  # (from next time to current)
+                return get_inverse_tf(T)  # T_2_1 (from current time step to the next time step)
     assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
 class OxfordDataset(Dataset):
@@ -62,8 +60,8 @@ class OxfordDataset(Dataset):
         self.frames = []
         self.seq_len = []
         for seq in self.sequences:
-            seq_frames = get_frames(self.data_dir + seq + "/radar/")
-            seq_frames = get_frames_with_gt(seq_frames, self.data_dir + seq + "/gt/radar_odometry.csv")
+            seq_frames = get_frames(self.data_dir + seq + '/radar/')
+            seq_frames = get_frames_with_gt(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
             self.seq_idx_range[seq] = [len(self.frames), len(self.frames) + len(seq_frames)]
             self.seq_len.append(len(seq_frames))
             self.frames.extend(seq_frames)
@@ -74,7 +72,7 @@ class OxfordDataset(Dataset):
             self.split = self.config['validation_split']
         elif split == 'test':
             self.split = self.config['test_split']
-        return [seq for i, seq in enumerate(sequences) if self.split[0] <= i and i < self.split[1]]
+        return [seq for i, seq in enumerate(sequences) if (self.split[0] <= i and i < self.split[1])]
 
     def __len__(self):
         return len(self.frames)
@@ -83,20 +81,20 @@ class OxfordDataset(Dataset):
         for seq in self.sequences:
             if self.seq_idx_range[seq][0] <= idx and idx < self.seq_idx_range[seq][1]:
                 return seq
-        assert(0), 'sequence for idx {} not found in {}'.format(idx, seq_idx_range)
+        assert(0), 'sequence for idx {} not found in {}'.format(idx, self.seq_idx_range)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         seq = self.get_seq_from_idx(idx)
-        frame = self.data_dir + seq + "/radar/" + self.frames[idx]
+        frame = self.data_dir + seq + '/radar/' + self.frames[idx]
         _, azimuths, _, polar, _ = load_radar(frame)
         cart = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
-            self.config['cart_resolution'], self.config['cart_pixel_width'])    # 1 x H x W
+                                        self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         # Get ground truth transform between this frame and the next
         time = int(self.frames[idx].split('.')[0])
-        T_21 = get_groundtruth_odometry(time, self.data_dir + seq + "/gt/radar_odometry.csv")
-        return {'input': cart, 'T_21': T_21}
+        T_21 = get_groundtruth_odometry(time, self.data_dir + seq + '/gt/radar_odometry.csv')
+        return {'data': cart, 'T_21': T_21}
 
 def get_dataloaders(config):
     vconfig = dict(config)

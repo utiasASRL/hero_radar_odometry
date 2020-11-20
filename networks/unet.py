@@ -1,17 +1,17 @@
-""" The UNet network, code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from networks.layers import DoubleConv, OutConv, Down, Up
 
 class UNet(torch.nn.Module):
+    """ The UNet network, code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py """
     def __init__(self, config):
-        super(UNet, self).__init__()
+        super().__init__()
 
         # n_channels
         n_channels = config['input_channels']
-        bilinear = config["networks"]["unet"]["bilinear"]
-        first_feature_dimension = config["networks"]["unet"]["first_feature_dimension"]
+        bilinear = config['networks']['unet']['bilinear']
+        first_feature_dimension = config['networks']['unet']['first_feature_dimension']
 
         # down
         self.inc = DoubleConv(n_channels, first_feature_dimension)
@@ -44,7 +44,7 @@ class UNet(torch.nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        batch_size, _, height, width = x.size()
+        _, _, height, width = x.size()
 
         x1 = self.inc(x)
         x2 = self.down1(x1)

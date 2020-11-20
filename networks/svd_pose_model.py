@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 
 from networks.unet import UNet
 from networks.keypoint import Keypoint
@@ -7,8 +6,13 @@ from networks.softmax_matcher import SoftmaxMatcher
 from networks.svd import SVD
 
 class SVDPoseModel(torch.nn.Module):
+    """
+        This model computes a 3x3 Rotation matrix and a 3x1 rotation matrix describing the transformation
+        between two radar scans. This transformation can be used for odometry or metric localization.
+        It is intended to be an implementation of Under the Radar (Barnes et al., 2020)
+    """
     def __init__(self, config):
-        super(SVDPoseModel, self).__init__()
+        super().__init__()
 
         self.config = config
         self.gpuid = config['gpuid']
@@ -19,9 +23,9 @@ class SVDPoseModel(torch.nn.Module):
         self.svd = SVD(config)
 
     def forward(self, batch):
-        input = batch['input'].to(self.gpuid)
+        data = batch['data'].to(self.gpuid)
 
-        detector_scores, weight_scores, desc = self.unet(input)
+        detector_scores, weight_scores, desc = self.unet(data)
 
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
 
@@ -30,4 +34,4 @@ class SVDPoseModel(torch.nn.Module):
         R_tgt_src_pred, t_tgt_src_pred = self.svd(keypoint_coords, pseudo_coords, match_weights)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
-            'tgt': pseudo_coords, 'match_weights': match_weights}
+                'tgt': pseudo_coords, 'match_weights': match_weights}

@@ -2,8 +2,13 @@ import torch
 import torch.nn.functional as F
 
 class SVD(torch.nn.Module):
+    """
+        Computes a 3x3 rotation matrix SO(3) and a 3x1 translation vector from pairs of 3D point clouds aligned
+        according to known correspondences. The forward() method uses singular value decomposition to do this.
+        This implementation is differentiable and follows the derivation from State Estimation for Robotics (Barfoot).
+    """
     def __init__(self, config):
-        super(SVD, self).__init__()
+        super().__init__()
         self.window_size = config['window_size']
         self.cart_pixel_width = config['cart_pixel_width']
         self.cart_resolution = config['cart_resolution']
@@ -15,7 +20,7 @@ class SVD(torch.nn.Module):
 
     def forward(self, keypoint_coords, tgt_coords, weights, convert_from_pixels=True):
         src_coords = keypoint_coords[::self.window_size]
-        batch_size, n_points, _ = src_coords.size()  # B x N x 2
+        batch_size = src_coords.size(0)  # B x N x 2
         if convert_from_pixels:
             src_coords = self.convert_to_radar_frame(src_coords)
             tgt_coords = self.convert_to_radar_frame(tgt_coords)
@@ -25,7 +30,7 @@ class SVD(torch.nn.Module):
         if tgt_coords.size(2) < 3:
             pad = 3 - tgt_coords.size(2)
             tgt_coords = F.pad(tgt_coords, [0, pad, 0, 0])
-        src_coords = src_coords.transpose(2, 1) # B x 3 x N
+        src_coords = src_coords.transpose(2, 1)  # B x 3 x N
         tgt_coords = tgt_coords.transpose(2, 1)
 
         # Compute weighted centroids (elementwise multiplication/division)
@@ -52,7 +57,8 @@ class SVD(torch.nn.Module):
         return R_tgt_src.transpose(2, 1), t_src_tgt_intgt
 
     def convert_to_radar_frame(self, pixel_coords):
+        """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
         B, N, _ = pixel_coords.size()
         R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
-        t = torch.tensor([[self.cart_min_range],[-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
+        t = torch.tensor([[self.cart_min_range], [-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
         return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)

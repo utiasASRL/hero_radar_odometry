@@ -1,6 +1,6 @@
 torch==1.5.0
-numpy==1.18.1
+numpy==1.18
 tensorboardX==2.1
-matplotlib
-PIL
-opencv-python
+matplotlib==3.2
+Pillow==8.0
+opencv-python==3.4

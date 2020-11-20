@@ -5,8 +5,8 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     T_21 = batch['T_21'].to(config['gpuid'])
     # Get ground truth transforms
     T_tgt_src = T_21[::config['window_size']]
-    R_tgt_src = T_tgt_src[:,:3,:3]
-    t_tgt_src = T_tgt_src[:,:3, 3].unsqueeze(-1)
+    R_tgt_src = T_tgt_src[:, :3, :3]
+    t_tgt_src = T_tgt_src[:, :3, 3].unsqueeze(-1)
     svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred, config['gpuid'])
     return svd_loss, R_loss, t_loss
 
@@ -44,6 +44,7 @@ def get_transform2(R, t):
     return T
 
 def enforce_orthog(T):
+    """Enforces the orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix."""
     if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
         return T
     c1 = T[0:3, 1]
@@ -59,16 +60,16 @@ def enforce_orthog(T):
 
 # Use axis-angle representation to get a single number for rotation error
 def rotationError(T):
-    return abs(np.arcsin(T[0, 1])) # SO(2)
+    return abs(np.arcsin(T[0, 1]))  # SO(2)
 
 def translationError(T):
     return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
 
 def computeMedianError(T_gt, R_pred, t_pred):
+    """Computes the median translation and rotation error along with their standard deviations."""
     t_error = []
     r_error = []
-    for i in range(len(T_gt)):
-        T = T_gt[i]
+    for i, T in enumerate(T_gt):
         T_pred = np.identity(4)
         T_pred = get_transform2(R_pred[i], t_pred[i])
         T_error = np.matmul(T, get_inverse_tf(T_pred))
@@ -78,8 +79,8 @@ def computeMedianError(T_gt, R_pred, t_pred):
     r_error = np.array(r_error)
     return [np.median(t_error), np.std(t_error), np.median(r_error), np.std(r_error)]
 
-# Calculates path length along the trajectory
 def trajectoryDistances(poses):
+    """Calculates path length along the trajectory."""
     dist = [0]
     for i in range(1, len(poses)):
         P1 = poses[i - 1]
@@ -98,13 +99,12 @@ def lastFrameFromSegmentLength(dist, first_frame, length):
 def calcSequenceErrors(poses_gt, poses_pred):
     lengths = [100, 200, 300, 400, 500, 600, 700, 800]
     err = []
-    step_size = 4 # Every second
+    step_size = 4  # Every second
     # Pre-compute distances from ground truth as reference
     dist = trajectoryDistances(poses_gt)
 
     for first_frame in range(0, len(poses_gt), step_size):
-        for i in range(0, len(lengths)):
-            length = lengths[i]
+        for length in lengths:
             last_frame = lastFrameFromSegmentLength(dist, first_frame, length)
             if last_frame == -1:
                 continue
@@ -131,6 +131,7 @@ def getStats(err):
     return t_err, r_err
 
 def computeKittiMetrics(T_gt, R_pred, t_pred, seq_len):
+    """Computes the translational and rotational drift in the KITTI style."""
     seq_indices = []
     idx = 0
     for s in seq_len:
