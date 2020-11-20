@@ -7,7 +7,7 @@ from networks.svd import SVD
 
 class SVDPoseModel(torch.nn.Module):
     """
-        This model computes a 3x3 Rotation matrix and a 3x1 rotation matrix describing the transformation
+        This model computes a 3x3 Rotation matrix and a 3x1 translation vector describing the transformation
         between two radar scans. This transformation can be used for odometry or metric localization.
         It is intended to be an implementation of Under the Radar (Barnes et al., 2020)
     """

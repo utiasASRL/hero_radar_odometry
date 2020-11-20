@@ -96,12 +96,12 @@ class Monitor(object):
         self.writer.add_scalar('val/R_loss', valid_R_loss, self.counter)
         self.writer.add_scalar('val/t_loss', valid_t_loss, self.counter)
         self.writer.add_scalar('val/avg_time_per_batch', sum(time_used)/len(time_used), self.counter)
-        self.writer.add_scalar('val/t_err_med', results[0])
-        self.writer.add_scalar('val/t_err_std', results[1])
-        self.writer.add_scalar('val/R_err_med', results[2])
-        self.writer.add_scalar('val/R_err_std', results[3])
-        self.writer.add_scalar('val/KITTI/t_err', t_err)
-        self.writer.add_scalar('val/KITTI/r_err', r_err)
+        self.writer.add_scalar('val/t_err_med', results[0], self.counter)
+        self.writer.add_scalar('val/t_err_std', results[1], self.counter)
+        self.writer.add_scalar('val/R_err_med', results[2], self.counter)
+        self.writer.add_scalar('val/R_err_std', results[3], self.counter)
+        self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
+        self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
 
         imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
         for i, img in enumerate(imgs):
