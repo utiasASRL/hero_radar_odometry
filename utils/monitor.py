@@ -90,7 +90,7 @@ class Monitor(object):
             t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
 
         results = computeMedianError(T_gt, R_pred, t_pred)
-        t_err, r_err = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
+        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         self.writer.add_scalar('val/R_loss', valid_R_loss, self.counter)
