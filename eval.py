@@ -6,8 +6,15 @@ import numpy as np
 
 from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
-from utils.utils import computeMedianError, computeKittiMetrics
+from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors
 from utils.vis import plot_sequences
+
+def get_folder_from_file_path(path):
+    elems = path.split('/')
+    newpath = ""
+    for i in range(0, len(elems) - 1):
+        newpath += elems[i] + "/"
+    return newpath
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -42,10 +49,12 @@ if __name__ == '__main__':
     results = computeMedianError(T_gt, R_pred, t_pred)
     print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
 
-    t_err, r_err = computeKittiMetrics(T_gt, R_pred, t_pred, test_loader.dataset.seq_len)
-    print('KITTI t_err: {} %'.format(t_err * 100))
-    print('KITTI r_err: {} deg/m'.format(r_err * 180 / np.pi))
-
+    t_err, r_err, err = computeKittiMetrics(T_gt, R_pred, t_pred, test_loader.dataset.seq_len)
+    print('KITTI t_err: {} %'.format(t_err))
+    print('KITTI r_err: {} deg/m'.format(r_err))
+    root = get_folder_from_file_path(args.pretrain)
+    saveKittiErrors(err, root + "kitti_err.obj")
+    
     imgs = plot_sequences(T_gt, R_pred, t_pred, test_loader.dataset.seq_len, returnTensor=False)
     for i, img in enumerate(imgs):
-        imgs[i].save(test_loader.dataset.sequences[i] + '.png')
+        imgs[i].save(root + test_loader.dataset.sequences[i] + '.png')

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import pickle
 
 def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     T_21 = batch['T_21'].to(config['gpuid'])
@@ -131,7 +132,7 @@ def getStats(err):
     return t_err, r_err
 
 def computeKittiMetrics(T_gt, R_pred, t_pred, seq_len):
-    """Computes the translational and rotational drift in the KITTI style."""
+    """Computes the translational (%) and rotational drift (deg/m) in the KITTI style."""
     seq_indices = []
     idx = 0
     for s in seq_len:
@@ -152,4 +153,10 @@ def computeKittiMetrics(T_gt, R_pred, t_pred, seq_len):
             poses_pred.append(T_pred_)
         err.extend(calcSequenceErrors(poses_gt, poses_pred))
     t_err, r_err = getStats(err)
-    return t_err, r_err
+    return t_err * 100, r_err * 180 / np.pi, err
+
+def saveKittiErrors(err, fname):
+    pickle.dump(err, open(fname, 'wb'))
+
+def loadKittiErrors(fname):
+    return pickle.load(open(fname, 'rb'))
