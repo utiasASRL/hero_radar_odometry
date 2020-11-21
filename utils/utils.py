@@ -22,6 +22,7 @@ def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     return svd_loss, R_loss, t_loss
 
 def get_inverse_tf(T):
+    """Returns the inverse of a given 4x4 homogeneous transform."""
     T2 = np.identity(4, dtype=np.float32)
     R = T[0:3, 0:3]
     t = T[0:3, 3].reshape(3, 1)
@@ -31,6 +32,7 @@ def get_inverse_tf(T):
     return T2
 
 def get_transform(x, y, theta):
+    """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
     R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     T = np.identity(4, dtype=np.float32)
     T[0:2, 0:2] = R
@@ -71,8 +73,8 @@ def computeMedianError(T_gt, R_pred, t_pred):
     t_error = []
     r_error = []
     for i, T in enumerate(T_gt):
-        T_pred = np.identity(4)
         T_pred = get_transform2(R_pred[i], t_pred[i])
+        T_pred = enforce_orthog(T_pred)
         T_error = np.matmul(T, get_inverse_tf(T_pred))
         t_error.append(translationError(T_error))
         r_error.append(rotationError(T_error))
