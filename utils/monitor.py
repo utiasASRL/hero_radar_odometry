@@ -1,7 +1,7 @@
 import os
 from time import time
-import torch
 import numpy as np
+import torch
 from tensorboardX import SummaryWriter
 
 from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics

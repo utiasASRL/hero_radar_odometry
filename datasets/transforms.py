@@ -1,6 +1,6 @@
-import torch
 import numpy as np
 import cv2
+import torch
 
 from utils.utils import get_transform, get_inverse_tf
 

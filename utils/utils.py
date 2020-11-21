@@ -1,6 +1,6 @@
-import torch
-import numpy as np
 import pickle
+import numpy as np
+import torch
 
 def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     T_21 = batch['T_21'].to(config['gpuid'])
@@ -15,7 +15,7 @@ def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     batch_size = R.size(0)
     identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
     loss_fn = torch.nn.SmoothL1Loss()
-    R_loss = alpha * loss_fn(R_pred.transpose(2, 1) @ R, identity)
+    R_loss = alpha * loss_fn(torch.matmul(R_pred.transpose(2, 1), R), identity)
     # R_loss = alpha * loss_fn(R_pred @ R, identity)
     t_loss = 1.0 * loss_fn(t_pred, t)
     svd_loss = R_loss + t_loss

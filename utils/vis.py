@@ -1,9 +1,9 @@
 import io
-import torchvision.utils as vutils
-from torchvision.transforms import ToTensor
 import PIL.Image
 import numpy as np
 import matplotlib.pyplot as plt
+import torchvision.utils as vutils
+from torchvision.transforms import ToTensor
 from utils.utils import get_transform2, enforce_orthog, get_inverse_tf
 
 def convert_plt_to_img():
