@@ -1,6 +1,6 @@
-import torch
-import numpy as np
 import pickle
+import numpy as np
+import torch
 
 def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     T_21 = batch['T_21'].to(config['gpuid'])
@@ -15,13 +15,14 @@ def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     batch_size = R.size(0)
     identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
     loss_fn = torch.nn.SmoothL1Loss()
-    R_loss = alpha * loss_fn(R_pred.transpose(2, 1) @ R, identity)
+    R_loss = alpha * loss_fn(torch.matmul(R_pred.transpose(2, 1), R), identity)
     # R_loss = alpha * loss_fn(R_pred @ R, identity)
     t_loss = 1.0 * loss_fn(t_pred, t)
     svd_loss = R_loss + t_loss
     return svd_loss, R_loss, t_loss
 
 def get_inverse_tf(T):
+    """Returns the inverse of a given 4x4 homogeneous transform."""
     T2 = np.identity(4, dtype=np.float32)
     R = T[0:3, 0:3]
     t = T[0:3, 3].reshape(3, 1)
@@ -31,6 +32,7 @@ def get_inverse_tf(T):
     return T2
 
 def get_transform(x, y, theta):
+    """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
     R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     T = np.identity(4, dtype=np.float32)
     T[0:2, 0:2] = R
@@ -71,8 +73,8 @@ def computeMedianError(T_gt, R_pred, t_pred):
     t_error = []
     r_error = []
     for i, T in enumerate(T_gt):
-        T_pred = np.identity(4)
         T_pred = get_transform2(R_pred[i], t_pred[i])
+        T_pred = enforce_orthog(T_pred)
         T_error = np.matmul(T, get_inverse_tf(T_pred))
         t_error.append(translationError(T_error))
         r_error.append(rotationError(T_error))

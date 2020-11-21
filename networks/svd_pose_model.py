@@ -1,5 +1,4 @@
 import torch
-
 from networks.unet import UNet
 from networks.keypoint import Keypoint
 from networks.softmax_matcher import SoftmaxMatcher

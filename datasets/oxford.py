@@ -1,4 +1,7 @@
-# Author: Keenan Burnett
+"""
+    PyTorch dataset class for the Oxford Radar Robotcar Dataset.
+    Authors: Keenan Burnett
+"""
 import os
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -7,16 +10,19 @@ from datasets.radar import load_radar, radar_polar_to_cartesian
 from utils.utils import get_inverse_tf, get_transform
 
 def get_sequences(path, prefix='2019'):
+    """Retrieves a list of all the sequences in the oxford dataset."""
     sequences = [f for f in os.listdir(path) if prefix in f]
     sequences.sort()
     return sequences
 
 def get_frames(path, extension='.png'):
+    """Retrieves all the file names within a path that match the given extension."""
     frames = [f for f in os.listdir(path) if extension in f]
     frames.sort()
     return frames
 
 def check_if_frame_has_gt(frame, gt_lines):
+    """Checks whether or not the specified file has ground truth within the corresponding radar_odometry.csv."""
     for i in range(len(gt_lines) - 1, -1, -1):
         line = gt_lines[i].split(',')
         if frame == int(line[9]):
@@ -24,6 +30,7 @@ def check_if_frame_has_gt(frame, gt_lines):
     return False
 
 def get_frames_with_gt(frames, gt_path):
+    """Returns a subset of the specified file list which have ground truth."""
     # For the Oxford Dataset we do a search from the end backwards because some
     # of the sequences don't have GT as the end, but they all have GT at the beginning.
     frames_out = frames
@@ -38,19 +45,19 @@ def get_frames_with_gt(frames, gt_path):
     return frames_out
 
 def get_groundtruth_odometry(radar_time, gt_path):
+    """For a given time stamp (UNIX INT64), returns 4x4 homogeneous transformation matrix fromt current time to next."""
     with open(gt_path, 'r') as f:
         f.readline()
         lines = f.readlines()
         for line in lines:
             line = line.split(',')
             if int(line[9]) == radar_time:
-                T = get_transform(float(line[2]), float(line[3]), float(line[7]))  # (from next time to current)
-                return get_inverse_tf(T)  # T_2_1 (from current time step to the next time step)
+                T = get_transform(float(line[2]), float(line[3]), float(line[7]))  # from next time to current
+                return get_inverse_tf(T)  # T_2_1 from current time step to the next time step
     assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
 class OxfordDataset(Dataset):
-    """Oxford Radar Robotcar Dataset """
-
+    """Oxford Radar Robotcar Dataset."""
     def __init__(self, config, split='train'):
         self.config = config
         self.data_dir = config['data_dir']
@@ -67,6 +74,7 @@ class OxfordDataset(Dataset):
             self.frames.extend(seq_frames)
 
     def get_sequences_split(self, sequences, split):
+        """Retrieves a list of sequence names depending on train/validation/test split."""
         self.split = self.config['train_split']
         if split == 'validation':
             self.split = self.config['validation_split']
@@ -78,6 +86,7 @@ class OxfordDataset(Dataset):
         return len(self.frames)
 
     def get_seq_from_idx(self, idx):
+        """Returns the name of the sequence that this idx belongs to."""
         for seq in self.sequences:
             if self.seq_idx_range[seq][0] <= idx and idx < self.seq_idx_range[seq][1]:
                 return seq
@@ -97,6 +106,7 @@ class OxfordDataset(Dataset):
         return {'data': cart, 'T_21': T_21}
 
 def get_dataloaders(config):
+    """Retrieves train, validation, and test data loaders."""
     vconfig = dict(config)
     vconfig['batch_size'] = 1
     train_dataset = OxfordDataset(config, 'train')

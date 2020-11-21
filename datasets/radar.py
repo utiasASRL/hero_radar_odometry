@@ -46,10 +46,11 @@ def load_radar(example_path, navtech_version=CTS350):
 
 # This fixes the wobble in CIR204 data from Boreas
 def get_azimuth_index(azimuths, azimuth):
+    """For a given azimuth (float), this function returns the corresponding interpolated azimuth index."""
     mind = 1000
     closest = 0
-    for i in range(0, len(azimuths)):
-        d = abs(azimuths[i] - azimuth)
+    for i, azimuth_orig in enumerate(azimuths):
+        d = abs(azimuth_orig - azimuth)
         if d < mind:
             mind = d
             closest = i
@@ -139,7 +140,7 @@ def radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resoluti
     else:
         cart_min_range = cart_pixel_width // 2 * cart_resolution
     coords = np.linspace(-cart_min_range, cart_min_range, cart_pixel_width, dtype=np.float32)
-    Y, X = np.meshgrid(coords, -coords)
+    Y, X = np.meshgrid(coords, -1 * coords)
     sample_range = np.sqrt(Y * Y + X * X)
     sample_angle = np.arctan2(Y, X)
     sample_angle += (sample_angle < 0).astype(np.float32) * 2. * np.pi

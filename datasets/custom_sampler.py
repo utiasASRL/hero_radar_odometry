@@ -19,7 +19,7 @@ class RandomWindowBatchSampler(Sampler):
             if len(batch) == self.batch_size*self.window_size:
                 yield batch
                 batch = []
-        if len(batch) > 0 and not self.drop_last:
+        if batch and not self.drop_last:
             yield batch
 
     def __len__(self):
@@ -45,7 +45,7 @@ class SequentialWindowBatchSampler(Sampler):
             if len(batch) == self.batch_size*self.window_size:
                 yield batch
                 batch = []
-        if len(batch) > 0 and not self.drop_last:
+        if batch and not self.drop_last:
             yield batch
 
     def __len__(self):

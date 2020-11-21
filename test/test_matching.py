@@ -1,7 +1,7 @@
 import unittest
 import random
-import torch
 import numpy as np
+import torch
 from networks.softmax_matcher import SoftmaxMatcher
 
 class TestMatching(unittest.TestCase):
