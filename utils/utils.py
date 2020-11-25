@@ -162,3 +162,15 @@ def saveKittiErrors(err, fname):
 
 def loadKittiErrors(fname):
     return pickle.load(open(fname, 'rb'))
+
+def convert_to_yeti_format(T_gt, R_pred, t_pred, timestamps, fname='accuracy.csv'):
+    """This function converts outputs to a format that is backwards compatible with the yeti repository."""
+    with open(fname, 'w') as f:
+        f.write('x,y,yaw,gtx,gty,gtyaw,time1,time2\n')
+        for i, T in enumerate(T_gt):
+            yaw = np.arcsin(R_pred[i][0,1])
+            gtyaw = np.arcsin(T_pred[i][0, 1])
+            t = np.matmul(-1 * R_pred[i].transpose(), t_pred[i])
+            T = get_inverse_tf(T)
+            f.write('{},{},{},{},{},{},{},{}\n'.format(t[0], t[1], yaw, T[0, 3], T[1, 3], gtyaw, times[i][0],
+                    times[i][1]))

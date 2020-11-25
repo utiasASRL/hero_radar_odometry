@@ -77,63 +77,6 @@ def radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resoluti
 
     Returns:
         np.ndarray: Cartesian radar power readings
-    Notes:
-        After using the warping grid the output radar cartesian is defined as as follows where
-        X and Y are the `real` world locations of the pixels in metres:
-         If 'cart_pixel_width' is odd:
-                        +------ Y = -1 * cart_resolution (m)
-                        |+----- Y =  0 (m) at centre pixel
-                        ||+---- Y =  1 * cart_resolution (m)
-                        |||+--- Y =  2 * cart_resolution (m)
-                        |||| +- Y =  cart_pixel_width // 2 * cart_resolution (m) (at last pixel)
-                        |||| +-----------+
-                        vvvv             v
-         +---------------+---------------+
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         +---------------+---------------+ <-- X = 0 (m) at centre pixel
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         |               |               |
-         +---------------+---------------+
-         <------------------------------->
-             cart_pixel_width (pixels)
-         If 'cart_pixel_width' is even:
-                        +------ Y = -0.5 * cart_resolution (m)
-                        |+----- Y =  0.5 * cart_resolution (m)
-                        ||+---- Y =  1.5 * cart_resolution (m)
-                        |||+--- Y =  2.5 * cart_resolution (m)
-                        |||| +- Y =  (cart_pixel_width / 2 - 0.5) * cart_resolution (m) (at last pixel)
-                        |||| +----------+
-                        vvvv            v
-         +------------------------------+
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         |                              |
-         +------------------------------+
-         <------------------------------>
-             cart_pixel_width (pixels)
     """
     if (cart_pixel_width % 2) == 0:
         cart_min_range = (cart_pixel_width / 2 - 0.5) * cart_resolution
