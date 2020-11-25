@@ -35,6 +35,7 @@ if __name__ == '__main__':
     T_gt = []
     R_pred = []
     t_pred = []
+    timestamps = []
     for batchi, batch in enumerate(test_loader):
         ts = time()
         if (batchi + 1) % config['print_rate'] == 0:
@@ -43,6 +44,7 @@ if __name__ == '__main__':
         T_gt.append(batch['T_21'][0].numpy().squeeze())
         R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
         t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
+        timestamps.append(batch['times'][0].numpy().squeeze())
         time_used.append(time() - ts)
 
     print('time_used: {}'.format(sum(time_used) / len(time_used)))
@@ -58,3 +60,5 @@ if __name__ == '__main__':
     imgs = plot_sequences(T_gt, R_pred, t_pred, test_loader.dataset.seq_len, returnTensor=False)
     for i, img in enumerate(imgs):
         imgs[i].save(root + test_loader.dataset.sequences[i] + '.png')
+
+    convert_to_yeti_format(T_gt, R_pred, t_pred, timestamps)

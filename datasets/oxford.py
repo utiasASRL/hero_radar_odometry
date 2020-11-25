@@ -101,9 +101,11 @@ class OxfordDataset(Dataset):
         cart = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         # Get ground truth transform between this frame and the next
-        time = int(self.frames[idx].split('.')[0])
-        T_21 = get_groundtruth_odometry(time, self.data_dir + seq + '/gt/radar_odometry.csv')
-        return {'data': cart, 'T_21': T_21}
+        time1 = int(self.frames[idx].split('.')[0])
+        time2 = int(self.frames[idx + 1].split('.')[0])
+        times = np.array([time1, time2])
+        T_21 = get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
+        return {'data': cart, 'T_21': T_21, 'times': times}
 
 def get_dataloaders(config):
     """Retrieves train, validation, and test data loaders."""
