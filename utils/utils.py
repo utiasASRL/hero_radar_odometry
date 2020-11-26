@@ -74,7 +74,6 @@ def computeMedianError(T_gt, R_pred, t_pred):
     r_error = []
     for i, T in enumerate(T_gt):
         T_pred = get_transform2(R_pred[i], t_pred[i])
-        T_pred = enforce_orthog(T_pred)
         T_error = np.matmul(T, get_inverse_tf(T_pred))
         t_error.append(translationError(T_error))
         r_error.append(rotationError(T_error))
@@ -86,8 +85,8 @@ def trajectoryDistances(poses):
     """Calculates path length along the trajectory."""
     dist = [0]
     for i in range(1, len(poses)):
-        P1 = poses[i - 1]
-        P2 = poses[i]
+        P1 = get_inverse_tf(poses[i - 1])
+        P2 = get_inverse_tf(poses[i])
         dx = P1[0, 3] - P2[0, 3]
         dy = P1[1, 3] - P2[1, 3]
         dist.append(dist[i-1] + np.sqrt(dx**2 + dy**2))
@@ -163,14 +162,22 @@ def saveKittiErrors(err, fname):
 def loadKittiErrors(fname):
     return pickle.load(open(fname, 'rb'))
 
-def convert_to_yeti_format(T_gt, R_pred, t_pred, timestamps, fname='accuracy.csv'):
+def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_len, seq_names, root='./'):
     """This function converts outputs to a format that is backwards compatible with the yeti repository."""
-    with open(fname, 'w') as f:
-        f.write('x,y,yaw,gtx,gty,gtyaw,time1,time2\n')
-        for i, T in enumerate(T_gt):
-            yaw = np.arcsin(R_pred[i][0,1])
-            gtyaw = np.arcsin(T_pred[i][0, 1])
-            t = np.matmul(-1 * R_pred[i].transpose(), t_pred[i])
-            T = get_inverse_tf(T)
-            f.write('{},{},{},{},{},{},{},{}\n'.format(t[0], t[1], yaw, T[0, 3], T[1, 3], gtyaw, times[i][0],
-                    times[i][1]))
+
+    seq_indices = []
+    idx = 0
+    for s in seq_len:
+        seq_indices.append(list(range(idx, idx + s - 1)))
+        idx += (s - 1)
+
+    for s, indices in enumerate(seq_indices):
+        fname = root + 'accuracy' + seq_names[s] + '.csv'
+        with open(fname, 'w') as f:
+            f.write('x,y,yaw,gtx,gty,gtyaw,time1,time2\n')
+            for i in indices:
+                yaw = -1 * np.arcsin(R_pred[i][0,1])
+                gtyaw = -1 * np.arcsin(T_gt[i][0, 1])
+                t = np.matmul(-1 * R_pred[i].transpose(), np.reshape(t_pred[i], (3, 1)))
+                T = get_inverse_tf(T_gt[i])
+                f.write('{},{},{},{},{},{},{},{}\n'.format(t[0, 0], t[1, 0], yaw, T[0, 3], T[1, 3], gtyaw, timestamps[i][0],                                 timestamps[i][1]))

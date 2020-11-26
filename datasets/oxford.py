@@ -4,6 +4,7 @@
 """
 import os
 import torch
+import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBatchSampler
 from datasets.radar import load_radar, radar_polar_to_cartesian
@@ -102,8 +103,11 @@ class OxfordDataset(Dataset):
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
-        time2 = int(self.frames[idx + 1].split('.')[0])
-        times = np.array([time1, time2])
+        if idx + 1 < len(self.frames):
+            time2 = int(self.frames[idx + 1].split('.')[0])
+        else:
+            time2 = 0
+        times = np.array([time1, time2]).reshape(1, 2)
         T_21 = get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
         return {'data': cart, 'T_21': T_21, 'times': times}
 
