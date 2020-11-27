@@ -76,7 +76,7 @@ def computeMedianError(T_gt, R_pred, t_pred):
         T_pred = get_transform2(R_pred[i], t_pred[i])
         T_error = np.matmul(T, get_inverse_tf(T_pred))
         t_error.append(translationError(T_error))
-        r_error.append(rotationError(T_error))
+        r_error.append(180 * rotationError(T_error) / np.pi)
     t_error = np.array(t_error)
     r_error = np.array(r_error)
     return [np.median(t_error), np.std(t_error), np.median(r_error), np.std(r_error)]
