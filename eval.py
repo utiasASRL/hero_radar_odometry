@@ -46,9 +46,6 @@ if __name__ == '__main__':
         T_gt.append(batch['T_21'][0].numpy().squeeze())
         R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
         t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
-        print(T_gt[-1])
-        print(R_pred[-1])
-        print(t_pred[-1])
         timestamps.append(batch['times'][0].numpy().squeeze())
         time_used.append(time() - ts)
 

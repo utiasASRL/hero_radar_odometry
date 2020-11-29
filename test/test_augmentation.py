@@ -62,7 +62,6 @@ class TestAugmentation(unittest.TestCase):
                     outlier = 0
                     break
             outliers += outlier
-        print('outliers: {} / {}'.format(outliers, len(out_metric)))
         self.assertTrue(outliers == 0)
 
     def test_nn(self):

@@ -1,11 +1,11 @@
 {
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2020-11-27-4/",
-    "gpuid": "cuda:3",
+    "log_dir": "/workspace/Documents/logs/2020-11-27/",
+    "gpuid": "cuda:1",
     "min_range": 58,
     "radar_resolution": 0.0432,
     "cart_resolution": 0.3456,
-    "cart_pixel_width": 640,
+    "cart_pixel_width": 576,
     "input_channels": 1,
     "train_split": [0, 24],
     "validation_split": [24, 25],
@@ -16,7 +16,7 @@
             "first_feature_dimension": 8
         },
         "keypoint_block": {
-            "patch_size": 32,
+            "patch_size": 24,
             "softmax_temp": 0.1
         },
         "matcher_block": {
@@ -32,12 +32,12 @@
     "max_iterations": 100000,
     "print_rate": 10,
     "log_rate": 10,
-    "save_rate": 5000,
-    "val_rate": 5000,
+    "save_rate": 2500,
+    "val_rate": 2500,
     "vis_num": 5,
     "vis_keypoint_nms": 0.01,
     "augmentation": {
-        "augment": false,
+        "augment": true,
         "rot_max": 0.19634954084936207
     }
 }
