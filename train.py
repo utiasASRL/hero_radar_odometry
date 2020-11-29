@@ -29,16 +29,19 @@ if __name__ == '__main__':
 
     model.train()
 
-    for batchi, batch in enumerate(train_loader):
-        if config['augmentation']['augment']:
-            batch = augmentBatch(batch, config)
-        optimizer.zero_grad()
-        out = model(batch)
-        loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, config)
-        if loss.requires_grad:
-            loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
-        optimizer.step()
-        monitor.step(batchi, loss, R_loss, t_loss)
-        if batchi >= config['max_iterations']:
-            break
+    step = 0
+    for epoch in range(config['max_epochs']):
+        for batchi, batch in enumerate(train_loader):
+            if config['augmentation']['augment']:
+                batch = augmentBatch(batch, config)
+            optimizer.zero_grad()
+            out = model(batch)
+            loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, config)
+            if loss.requires_grad:
+                loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
+            optimizer.step()
+            step = batchi + epoch * len(train_loader.dataset)
+            monitor.step(step, loss, R_loss, t_loss)
+            if step >= config['max_iterations']:
+                break
