@@ -3,9 +3,7 @@ import json
 import numpy as np
 import torch
 from datasets.transforms import augmentBatch
-from datasets.oxford import get_dataloaders
-from networks.svd_pose_model import SVDPoseModel
-from utils.utils import get_inverse_tf, get_transform2, rotationError, translationError, supervised_loss
+from utils.utils import get_inverse_tf, get_transform2, rotationError, translationError
 
 def convert_to_metric(pixel_coords, cart_resolution, cart_pixel_width):
     if (cart_pixel_width % 2) == 0:
@@ -68,18 +66,15 @@ class TestAugmentation(unittest.TestCase):
         with open('config/test.json') as f:
             config = json.load(f)
         _, _, test_loader = get_dataloaders(config)
-        pretrain = '../logs/2020-11-26/35000.pt'
+        pretrain = ''
         model = SVDPoseModel(config)
-        model.load_state_dict(torch.load(pretrain, map_location=torch.device(config['gpuid'])), strict=False)
+        model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
         model.to(config['gpuid'])
         model.eval()
 
-        np.random.seed(1234)
         for batchi, batch in enumerate(test_loader):
             batch = augmentBatch(batch, config)
             out = model(batch)
-            loss, R_loss, t_loss = supervised_loss(out['R'], out['t'], batch, config)
-            print('t_loss', t_loss.detach().item(), 'R_loss', R_loss.detach().item())
             T_gt = batch['T_21'][0].numpy().squeeze()
             R_pred = out['R'][0].detach().cpu().numpy().squeeze()
             t_pred = out['t'][0].detach().cpu().numpy().squeeze()
@@ -88,10 +83,9 @@ class TestAugmentation(unittest.TestCase):
 
         print(T_gt)
         print(T_pred)
-        T_error = np.matmul(T_gt, get_inverse_tf(T_pred))
+        T_error = np.matmul(T, get_inverse_tf(T_pred))
         t_error = translationError(T_error)
-        r_error = rotationError(T_error)
-        print(t_error, 180 * r_error / np.pi)
+        r_error = rotationError(r_error)
 
 
 if __name__ == '__main__':
