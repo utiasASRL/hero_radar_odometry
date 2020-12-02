@@ -25,5 +25,5 @@ find_package(Steam REQUIRED)
 ENABLE_TESTING()
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${Steam_INCLUDE_DIRS})
 
-PYTHON_ADD_MODULE(steampy steampy.cpp P2P3ErrorEval.cpp P2PLandmarkErrorEval.cpp)
+PYTHON_ADD_MODULE(steampy steampy.cpp P2P3ErrorEval.cpp)
 target_link_libraries(steampy PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})

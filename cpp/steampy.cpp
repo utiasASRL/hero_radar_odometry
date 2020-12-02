@@ -2,7 +2,6 @@
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
 #include "P2P3ErrorEval.hpp"
-#include "P2PLandmarkErrorEval.hpp"
 
 namespace p = boost::python;
 namespace np = boost::python::numpy;
@@ -24,10 +23,10 @@ struct TrajStateVar {
 
 // run steam optimization
 void run_steam(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
-    np::ndarray& poses, np::ndarray& vels, bool compute_sp, int delTmult, double dt, np::ndarray& covout) {
+    np::ndarray& poses, np::ndarray& vels, bool compute_sp, double dt, np::ndarray& covout) {
 
   // time between states
-  double delT = dt*delTmult;
+  double delT = dt;
 
   // Smoothing factor diagonal
   // TODO: Make this parameter an input
