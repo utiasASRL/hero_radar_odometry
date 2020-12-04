@@ -23,7 +23,7 @@ struct TrajStateVar {
 
 // run steam optimization
 void run_steam(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
-    np::ndarray& poses, np::ndarray& vels, bool compute_sp, double dt, np::ndarray& covout) {
+    np::ndarray& poses, np::ndarray& vels, bool compute_sp, double dt) {
 
   // time between states
   double delT = dt;
@@ -47,7 +47,7 @@ void run_steam(const p::object& p2_list, const p::object& p1_list, const p::obje
   std::vector<np::ndarray> p1_vec = to_std_vector<np::ndarray>(p1_list);
   std::vector<np::ndarray> weight_vec = to_std_vector<np::ndarray>(weight_list);
 
-  // uesful variables
+  // useful variables
   int window_size = poses.shape(0);
 
   //
@@ -112,7 +112,7 @@ void run_steam(const p::object& p2_list, const p::object& p1_list, const p::obje
       Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
       for (int r = 0; r < 3; ++r)
         for (int c = 0; c < 3; ++c)
-          R(r,c) = p::extract<double>(weight_vec[i-1][j][r][c]);
+          R(r,c) = p::extract<float>(weight_vec[i-1][j][r][c]);
 //      R += 1e-6*Eigen::Matrix3d::Identity();
 
       steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(R, steam::INFORMATION));
@@ -179,40 +179,8 @@ void run_steam(const p::object& p2_list, const p::object& p1_list, const p::obje
       vels[i][r] = float(vel_eigen(r));
   }
 
-  if (!compute_sp) {
-    // compute covariance between last two poses
-    Eigen::MatrixXd cov;
-    if (states.size() == 2){
-      // no computation, just grab covariance of pose
-      cov = solver.queryCovariance(states.back().pose->getKey());
-    }
-    else {
-      // need to compute between 2 uncertain poses
-      std::vector<steam::StateKey> keys;
-      std::vector<lgmath::se3::Transformation> T_k0_mean;
-      for (unsigned int i = states.size()-2; i < states.size(); i++) {
-        const TrajStateVar& state = states.at(i);
-        keys.push_back(state.pose->getKey());
-        T_k0_mean.push_back(state.pose->getValue());
-      }
-      assert(keys.size() == 2);
-      lgmath::se3::Transformation T_21_mean = T_k0_mean[1]*T_k0_mean[0].inverse();
-      steam::BlockMatrix cov_blocks = solver.queryCovarianceBlock(keys);
-      Eigen::Matrix<double,6,6> cov11 = cov_blocks.at(0, 0);
-      Eigen::Matrix<double,6,6> cov12 = cov_blocks.at(0, 1);
-      Eigen::Matrix<double,6,6> cov21 = cov_blocks.at(1, 0);
-      Eigen::Matrix<double,6,6> cov22 = cov_blocks.at(1, 1);
-      Eigen::Matrix<double,6,6> Tad_21 = lgmath::se3::tranAd(T_21_mean.matrix());
-      cov = cov22 - Tad_21*cov12 - cov21*Tad_21.transpose() + Tad_21*cov11*Tad_21.transpose();
-    }
-
-    // to numpy
-    for (int r = 0; r < 6; ++r)
-      for (int c = 0; c < 6; ++c)
-        covout[r][c] = float(cov(r, c));
-
+  if (!compute_sp)
     return;
-  }
 
   // get sigmapoints
 
