@@ -1,25 +1,9 @@
-#include <steam/steam.hpp>
-#include <boost/python.hpp>
-#include <boost/python/numpy.hpp>
 #include "P2P3ErrorEval.hpp"
+#include "SteamPyHelper.hpp"
 
 namespace p = boost::python;
 namespace np = boost::python::numpy;
 
-// convert python list to std::vector
-template< typename T >
-inline
-std::vector< T > to_std_vector( const p::object& iterable ) {
-  return std::vector< T >( p::stl_input_iterator< T >( iterable ),
-                           p::stl_input_iterator< T >( ) );
-}
-
-// trajectory state struct
-struct TrajStateVar {
-  steam::Time time;
-  steam::se3::TransformStateVar::Ptr pose;
-  steam::VectorSpaceStateVar::Ptr velocity;
-};
 
 // run steam optimization
 void run_steam(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
@@ -43,9 +27,9 @@ void run_steam(const p::object& p2_list, const p::object& p1_list, const p::obje
   Qc_inv.diagonal() = 1.0/Qc_diag;
 
   // convert input lists to vectors
-  std::vector<np::ndarray> p2_vec = to_std_vector<np::ndarray>(p2_list);
-  std::vector<np::ndarray> p1_vec = to_std_vector<np::ndarray>(p1_list);
-  std::vector<np::ndarray> weight_vec = to_std_vector<np::ndarray>(weight_list);
+  std::vector<np::ndarray> p2_vec = toStdVector<np::ndarray>(p2_list);
+  std::vector<np::ndarray> p1_vec = toStdVector<np::ndarray>(p1_list);
+  std::vector<np::ndarray> weight_vec = toStdVector<np::ndarray>(weight_list);
 
   // useful variables
   int window_size = poses.shape(0);

@@ -8,6 +8,9 @@ set(DEPEND_LIBS "boost_system")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -Wno-unused-function")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
 
+# set(Boost_NO_SYSTEM_PATHS ON)
+# set(BOOST_ROOT "/home/david/anaconda3/envs/pointcloud")
+
 # packages
 find_package(PythonInterp)
 # FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX} numpy${PYTHON_VERSION_SUFFIX} system)
@@ -25,5 +28,10 @@ find_package(Steam REQUIRED)
 ENABLE_TESTING()
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${Steam_INCLUDE_DIRS})
 
+# single function call version
 PYTHON_ADD_MODULE(steampy steampy.cpp P2P3ErrorEval.cpp)
 target_link_libraries(steampy PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
+
+# class version
+PYTHON_ADD_MODULE(SteamSolver SteamSolver.cpp P2P3ErrorEval.cpp)
+target_link_libraries(SteamSolver PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
