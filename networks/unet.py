@@ -12,6 +12,7 @@ class UNet(torch.nn.Module):
         n_channels = config['input_channels']
         bilinear = config['networks']['unet']['bilinear']
         first_feature_dimension = config['networks']['unet']['first_feature_dimension']
+        self.score_sigmoid = config['networks']['unet']['score_sigmoid']
 
         # down
         self.inc = DoubleConv(n_channels, first_feature_dimension)
@@ -63,7 +64,8 @@ class UNet(torch.nn.Module):
         x2_up_score = self.up3_score(x3_up_score, x2)
         x1_up_score = self.up4_score(x2_up_score, x1)
         score = self.outc_score(x1_up_score)
-        score = self.sigmoid(score)
+        if self.score_sigmoid:
+            score = self.sigmoid(score)
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to
