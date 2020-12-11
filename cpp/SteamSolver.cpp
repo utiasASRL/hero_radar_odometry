@@ -118,3 +118,15 @@ void SteamSolver::optimize() {
   solver_->optimize();
 }
 
+void SteamSolver::getPoses(np::ndarray& poses) {
+  for (int i = 0; i < states_.size(); ++i) {
+    // get position
+    Eigen::Matrix<double,4,4> Tvi = states_[i].pose->getValue().matrix();
+
+    // set output
+    for (int r = 0; r < 3; ++r)
+      for (int c = 0; c < 4; ++c)
+        poses[i][r][c] = float(Tvi(r,c));
+  }
+
+}

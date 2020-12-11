@@ -32,11 +32,32 @@ class SteamPoseModel(torch.nn.Module):
         # R_tgt_src_pred, t_tgt_src_pred = self.svd(keypoint_coords, pseudo_coords, match_weights)
         self.solver.optimize(keypoint_coords, pseudo_coords, match_weights)
 
-        # return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
-        #         'tgt': pseudo_coords, 'match_weights': match_weights}
+        return {'src': keypoint_coords, 'tgt': pseudo_coords, 'match_weights': match_weights}
 
-        return
+    def loss(self, keypoint_coords, pseudo_coords, match_weights):
+        loss = 0
 
+        # loop through each batch
+        # TODO: currently only implemented for mean approx and window_size = 2
+        for b in range(self.solver.batch_size):
+            id = b*self.solver.window_size
+            points1 = keypoint_coords[id].T   # 2 x N
+            points2 = pseudo_coords[id].T     # 2 x N
+            weights = match_weights[id]  # 1 x N
+
+            # get R_21 and t_12_in_2
+            R_21 = torch.from_numpy(self.solver.poses[b, 1][:2, :2]).to(self.gpuid)
+            t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:4]).to(self.gpuid)
+
+
+            # squared error
+            error = points2 - (R_21@points1 + t_12_in_2)
+            loss += torch.mean(torch.sum(error*error*torch.exp(weights), dim=0))
+
+            # log det
+            loss -= 2*torch.mean(weights)
+
+        return loss
 
 class SteamSolver():
     """
@@ -52,7 +73,7 @@ class SteamSolver():
         self.poses = np.tile(
             np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
-        self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
+        # self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
 
         # steam solver (c++)
         self.solver_cpp = SteamCpp.SteamSolver(config['steam']['time_step'], self.window_size)
@@ -74,7 +95,6 @@ class SteamSolver():
             id = b*self.window_size
             points1 = keypoint_coords[id].detach().cpu().numpy()
             points2 = pseudo_coords[id].detach().cpu().numpy()
-            # np.concatenate((points1, zeros_vec), 1)
 
             # weights must be list of N x 3 x 3
             weights = torch.exp(match_weights[id, 0]).unsqueeze(-1).unsqueeze(-1).detach().cpu().numpy()*identity_weights
@@ -82,6 +102,9 @@ class SteamSolver():
             # solver
             self.solver_cpp.resetTraj()
             self.solver_cpp.setMeas([np.concatenate((points2, zeros_vec), 1)],
-                                    [np.concatenate((points1, zeros_vec), 1)], weights)
+                                    [np.concatenate((points1, zeros_vec), 1)], [weights])
             self.solver_cpp.optimize()
+
+            # get pose output
+            self.solver_cpp.getPoses(self.poses[b])
 

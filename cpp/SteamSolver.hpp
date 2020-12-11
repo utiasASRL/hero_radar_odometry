@@ -36,6 +36,7 @@ public:
   void optimize();
 
   // output
+  void getPoses(np::ndarray& poses);
 
 private:
   // Solver
@@ -69,6 +70,7 @@ BOOST_PYTHON_MODULE(SteamSolver)
     .def("setQcInv", &SteamSolver::setQcInv)
     .def("setMeas", &SteamSolver::setMeas)
     .def("optimize", &SteamSolver::optimize)
+    .def("getPoses", &SteamSolver::getPoses)
   ;
 }
 

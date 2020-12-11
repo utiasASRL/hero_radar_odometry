@@ -1,7 +1,7 @@
 {
-    "data_dir": "/home/david/Data/oxford/",
-    "log_dir": "/workspace/Documents/logs/test/",
-    "gpuid": "cpu",
+    "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
+    "log_dir": "logs/test/",
+    "gpuid": "cuda:0",
     "min_range": 58,
     "radar_resolution": 0.0432,
     "cart_resolution": 0.3456,
@@ -38,6 +38,7 @@
     "window_size": 2,
     "num_workers": 0,
     "max_iterations": 100000,
+    "max_epochs": 3,
     "print_rate": 10,
     "log_rate": 10,
     "save_rate": 2500,
@@ -45,7 +46,7 @@
     "vis_num": 5,
     "vis_keypoint_nms": 0.01,
     "augmentation": {
-        "augment": true,
+        "augment": false,
         "rot_max": 0.19634954084936207
     }
 }
