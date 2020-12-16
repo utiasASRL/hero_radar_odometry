@@ -15,6 +15,13 @@ class SteamPoseModel(torch.nn.Module):
         self.config = config
         self.gpuid = config['gpuid']
 
+        self.cart_pixel_width = config['cart_pixel_width']
+        self.cart_resolution = config['cart_resolution']
+        if (self.cart_pixel_width % 2) == 0:
+            self.cart_min_range = (self.cart_pixel_width / 2 - 0.5) * self.cart_resolution
+        else:
+            self.cart_min_range = self.cart_pixel_width // 2 * self.cart_resolution
+
         self.unet = UNet(config)
         self.keypoint = Keypoint(config)
         self.softmax_matcher = SoftmaxMatcher(config)
@@ -29,6 +36,11 @@ class SteamPoseModel(torch.nn.Module):
 
         pseudo_coords, match_weights = self.softmax_matcher(keypoint_scores, keypoint_desc, weight_scores, desc)
 
+        # convert to radar frame points
+        pseudo_coords = self.convert_to_radar_frame(pseudo_coords)
+        keypoint_coords = self.convert_to_radar_frame(keypoint_coords)
+
+        # steam optimization
         # R_tgt_src_pred, t_tgt_src_pred = self.svd(keypoint_coords, pseudo_coords, match_weights)
         self.solver.optimize(keypoint_coords, pseudo_coords, match_weights)
 
@@ -47,8 +59,7 @@ class SteamPoseModel(torch.nn.Module):
 
             # get R_21 and t_12_in_2
             R_21 = torch.from_numpy(self.solver.poses[b, 1][:2, :2]).to(self.gpuid)
-            t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:4]).to(self.gpuid)
-
+            t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:]).to(self.gpuid)
 
             # squared error
             error = points2 - (R_21@points1 + t_12_in_2)
@@ -58,6 +69,13 @@ class SteamPoseModel(torch.nn.Module):
             loss -= 2*torch.mean(weights)
 
         return loss
+
+    def convert_to_radar_frame(self, pixel_coords):
+        """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
+        B, N, _ = pixel_coords.size()
+        R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
+        t = torch.tensor([[self.cart_min_range], [-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
+        return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
 
 class SteamSolver():
     """
