@@ -47,7 +47,8 @@ class SteamPoseModel(torch.nn.Module):
         return {'src': keypoint_coords, 'tgt': pseudo_coords, 'match_weights': match_weights}
 
     def loss(self, keypoint_coords, pseudo_coords, match_weights):
-        loss = 0
+        point_loss = 0
+        logdet_loss = 0
 
         # loop through each batch
         # TODO: currently only implemented for mean approx and window_size = 2
@@ -63,12 +64,14 @@ class SteamPoseModel(torch.nn.Module):
 
             # squared error
             error = points2 - (R_21@points1 + t_12_in_2)
-            loss += torch.mean(torch.sum(error*error*torch.exp(weights), dim=0))
+            point_loss += torch.mean(torch.sum(error*error*torch.exp(weights), dim=0))
 
             # log det
-            loss -= 2*torch.mean(weights)
+            logdet_loss -= 2*torch.mean(weights)
 
-        return loss
+        total_loss = point_loss + logdet_loss
+        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss}
+        return total_loss, dict_loss
 
     def convert_to_radar_frame(self, pixel_coords):
         """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
