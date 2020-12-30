@@ -41,10 +41,10 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_coords = self.convert_to_radar_frame(keypoint_coords)
 
         # steam optimization
-        # R_tgt_src_pred, t_tgt_src_pred = self.svd(keypoint_coords, pseudo_coords, match_weights)
-        self.solver.optimize(keypoint_coords, pseudo_coords, match_weights)
+        R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords, pseudo_coords, match_weights)
 
-        return {'src': keypoint_coords, 'tgt': pseudo_coords, 'match_weights': match_weights}
+        return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
+                'tgt': pseudo_coords, 'match_weights': match_weights}
 
     def loss(self, keypoint_coords, pseudo_coords, match_weights):
         point_loss = 0
@@ -53,14 +53,14 @@ class SteamPoseModel(torch.nn.Module):
         # loop through each batch
         # TODO: currently only implemented for mean approx and window_size = 2
         for b in range(self.solver.batch_size):
-            id = b*self.solver.window_size
-            points1 = keypoint_coords[id].T   # 2 x N
-            points2 = pseudo_coords[id].T     # 2 x N
-            weights = match_weights[id]  # 1 x N
+            i = b*self.solver.window_size
+            points1 = keypoint_coords[i].T   # 2 x N
+            points2 = pseudo_coords[b].T     # 2 x N
+            weights = match_weights[b]  # 1 x N
 
             # get R_21 and t_12_in_2
             R_21 = torch.from_numpy(self.solver.poses[b, 1][:2, :2]).to(self.gpuid)
-            t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:]).to(self.gpuid)
+            t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:4]).to(self.gpuid)
 
             # squared error
             error = points2 - (R_21@points1 + t_12_in_2)
@@ -89,6 +89,7 @@ class SteamSolver():
         self.sliding_flag = config['steam']['sliding_flag']
         self.batch_size = config['batch_size']
         self.window_size = config['window_size']
+        self.gpuid = config['gpuid']
 
         # state variables
         self.poses = np.tile(
@@ -107,18 +108,21 @@ class SteamSolver():
         zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
         identity_weights = np.tile(np.expand_dims(np.eye(3, dtype=np.float32), 0), (num_points, 1, 1))
 
+        R_tgt_src = np.zeros((self.batch_size, 3, 3))
+        t_src_tgt_in_tgt = np.zeros((self.batch_size, 3, 1))
+
         # loop through each batch
         for b in range(self.batch_size):
             # TODO: This implementation only works for window_size = 2
             assert self.window_size == 2, "Currently only implemented for window of 2."
 
             # points must be list of N x 3
-            id = b*self.window_size
-            points1 = keypoint_coords[id].detach().cpu().numpy()
-            points2 = pseudo_coords[id].detach().cpu().numpy()
+            i = b*self.window_size
+            points1 = keypoint_coords[i].detach().cpu().numpy()
+            points2 = pseudo_coords[b].detach().cpu().numpy()
 
             # weights must be list of N x 3 x 3
-            weights = torch.exp(match_weights[id, 0]).unsqueeze(-1).unsqueeze(-1).detach().cpu().numpy()*identity_weights
+            weights = torch.exp(match_weights[b, 0]).unsqueeze(-1).unsqueeze(-1).detach().cpu().numpy()*identity_weights
 
             # solver
             self.solver_cpp.resetTraj()
@@ -129,3 +133,8 @@ class SteamSolver():
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
 
+            # set output
+            R_tgt_src[b, :, :] = self.poses[b, 1, :3, :3]
+            t_src_tgt_in_tgt[b, :, :] = self.poses[b, 1, :3, 3:4]
+
+        return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)

@@ -45,11 +45,11 @@ class MonitorBase:
                 self.writer.add_scalar('train/' + loss_item[0], loss_item[1].detach().cpu().item(), self.counter)
             self.writer.add_scalar('train/step_time', self.dt, self.counter)
 
-        # if self.counter % self.config['val_rate'] == 0:
-        #     with torch.no_grad():
-        #         self.model.eval()
-        #         self.validation()
-        #         self.model.train()
+        if self.counter % self.config['val_rate'] == 0:
+            with torch.no_grad():
+                self.model.eval()
+                self.validation()
+                self.model.train()
 
         if self.counter % self.config['save_rate'] == 0:
             with torch.no_grad():
