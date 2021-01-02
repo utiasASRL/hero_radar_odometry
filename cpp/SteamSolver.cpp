@@ -1,5 +1,6 @@
 #include "SteamSolver.hpp"
 #include "P2P3ErrorEval.hpp"
+#include "SE2VelPriorEval.hpp"
 
 // Reset trajectory to identity poses and zero velocities
 void SteamSolver::resetTraj() {
@@ -55,8 +56,8 @@ void SteamSolver::optimize() {
   steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
   traj.appendPriorCostTerms(costTerms);
 
-  // steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
-  steam::GemanMcClureLossFunc::Ptr sharedLossFunc(new steam::GemanMcClureLossFunc(1.0));
+  steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
+  steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
 
   // loop through every frame
   for (unsigned int i = 1; i < window_size_; i++) {
@@ -85,9 +86,19 @@ void SteamSolver::optimize() {
 
       steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_k0_eval_ptr));
       steam::WeightedLeastSqCostTerm<3,6>::Ptr cost(
-          new steam::WeightedLeastSqCostTerm<3,6>(error, sharedNoiseModel, sharedLossFunc));
+          new steam::WeightedLeastSqCostTerm<3,6>(error, sharedNoiseModel, sharedLossFuncGM));
       costTerms->add(cost);
     } // end j
+  } // end i
+
+  // SE(2) velocity priors
+  Eigen::Matrix<double,3,3> vel_prior_noise = 1e-3*Eigen::Matrix<double,3,3>::Identity();   // TODO: make this a parameter
+  steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
+  for (unsigned int i = 0; i < states_.size(); i++) {
+    steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
+    steam::WeightedLeastSqCostTerm<3,6>::Ptr cost(
+          new steam::WeightedLeastSqCostTerm<3,6>(error, vel_prior_noise_model, sharedLossFuncL2));
+    costTerms->add(cost);
   } // end i
 
   // Initialize problem
