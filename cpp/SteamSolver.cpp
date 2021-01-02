@@ -128,5 +128,15 @@ void SteamSolver::getPoses(np::ndarray& poses) {
       for (int c = 0; c < 4; ++c)
         poses[i][r][c] = float(Tvi(r,c));
   }
+}
 
+void SteamSolver::getVelocities(np::ndarray& vels) {
+  for (int i = 0; i < states_.size(); ++i) {
+    // get position
+    Eigen::Matrix<double,6,1> vel = states_[i].velocity->getValue();
+
+    // set output
+    for (int r = 0; r < 6; ++r)
+      vels[i][r] = float(vel(r));
+  }
 }

@@ -37,6 +37,7 @@ public:
 
   // output
   void getPoses(np::ndarray& poses);
+  void getVelocities(np::ndarray& vels);
 
 private:
   // Solver
@@ -71,6 +72,7 @@ BOOST_PYTHON_MODULE(SteamSolver)
     .def("setMeas", &SteamSolver::setMeas)
     .def("optimize", &SteamSolver::optimize)
     .def("getPoses", &SteamSolver::getPoses)
+    .def("getVelocities", &SteamSolver::getVelocities)
   ;
 }
 

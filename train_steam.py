@@ -47,6 +47,10 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             out = model(batch)
             loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'])
+            if loss == 0:
+                print("No movement predicted. Skipping mini-batch.")
+                continue
+
             if loss.requires_grad:
                 loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])

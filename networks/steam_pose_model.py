@@ -52,7 +52,13 @@ class SteamPoseModel(torch.nn.Module):
 
         # loop through each batch
         # TODO: currently only implemented for mean approx and window_size = 2
+        bcount = 0
         for b in range(self.solver.batch_size):
+            # check velocity
+            if np.linalg.norm(self.solver.vels[b, 1]) < 0.03:   # TODO: make this a config parameter
+                continue
+
+            bcount += 1
             i = b*self.solver.window_size
             points1 = keypoint_coords[i].T   # 2 x N
             points2 = pseudo_coords[b].T     # 2 x N
@@ -69,6 +75,10 @@ class SteamPoseModel(torch.nn.Module):
             # log det
             logdet_loss -= 2*torch.mean(weights)
 
+        # average over batches
+        if bcount > 0:
+            point_loss /= bcount
+            logdet_loss /= bcount
         total_loss = point_loss + logdet_loss
         dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss}
         return total_loss, dict_loss
@@ -95,7 +105,7 @@ class SteamSolver():
         self.poses = np.tile(
             np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
-        # self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
+        self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
 
         # steam solver (c++)
         self.solver_cpp = SteamCpp.SteamSolver(config['steam']['time_step'], self.window_size)
@@ -132,6 +142,7 @@ class SteamSolver():
 
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
+            self.solver_cpp.getVelocities(self.vels[b])
 
             # set output
             R_tgt_src[b, :, :] = self.poses[b, 1, :3, :3]
