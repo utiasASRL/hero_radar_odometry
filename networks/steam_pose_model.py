@@ -68,9 +68,13 @@ class SteamPoseModel(torch.nn.Module):
             R_21 = torch.from_numpy(self.solver.poses[b, 1][:2, :2]).to(self.gpuid)
             t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:4]).to(self.gpuid)
 
-            # squared error
+            # error threshold
             error = points2 - (R_21@points1 + t_12_in_2)
-            point_loss += torch.mean(torch.sum(error*error*torch.exp(weights), dim=0))
+            error2 = torch.sum(error*error, dim=0)
+            ids = torch.nonzero(error2.squeeze() < 2.0 ** 2, as_tuple=False).squeeze()
+
+            # squared error
+            point_loss += torch.mean(torch.sum(error[:, ids]*error[:, ids]*torch.exp(weights[:, ids]), dim=0))
 
             # log det
             logdet_loss -= 2*torch.mean(weights)
