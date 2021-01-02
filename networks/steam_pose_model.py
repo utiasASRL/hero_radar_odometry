@@ -115,6 +115,13 @@ class SteamSolver():
         self.solver_cpp = SteamCpp.SteamSolver(config['steam']['time_step'], self.window_size)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights):
+        # update batch size
+        self.batch_size = keypoint_coords.size(0)/self.window_size
+        self.poses = np.tile(
+            np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
+            (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
+        self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
+
         # keypoint_coords (BxW) x 400 x 2
         # weights (BxW/2) x 1 x 400
         # pseudo_coords (BxW/2) x 400 x 2
