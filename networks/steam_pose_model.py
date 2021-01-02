@@ -70,14 +70,14 @@ class SteamPoseModel(torch.nn.Module):
 
             # error threshold
             error = points2 - (R_21@points1 + t_12_in_2)
-            error2 = torch.sum(error*error, dim=0)
-            ids = torch.nonzero(error2.squeeze() < 2.0 ** 2, as_tuple=False).squeeze()
+            error2 = torch.sum(error*error*torch.exp(weights), dim=0)
+            ids = torch.nonzero(error2.squeeze() < 4.0 ** 2, as_tuple=False).squeeze()
 
             # squared error
             point_loss += torch.mean(torch.sum(error[:, ids]*error[:, ids]*torch.exp(weights[:, ids]), dim=0))
 
             # log det
-            logdet_loss -= 2*torch.mean(weights)
+            logdet_loss -= 3*torch.mean(weights)
 
         # average over batches
         if bcount > 0:

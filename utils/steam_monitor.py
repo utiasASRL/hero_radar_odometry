@@ -27,8 +27,8 @@ class SteamMonitor(MonitorBase):
             loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'])
             if loss != 0:
                 valid_loss += loss.detach().cpu().item()
-            valid_point_loss += dict_loss['point_loss'].detach().cpu().item()
-            valid_logdet_loss += dict_loss['logdet_loss'].detach().cpu().item()
+                valid_point_loss += dict_loss['point_loss'].detach().cpu().item()
+                valid_logdet_loss += dict_loss['logdet_loss'].detach().cpu().item()
             time_used.append(time() - ts)
             T_gt.append(batch['T_21'][0].numpy().squeeze())
             R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
