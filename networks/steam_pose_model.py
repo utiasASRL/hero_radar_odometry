@@ -116,7 +116,7 @@ class SteamSolver():
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights):
         # update batch size
-        self.batch_size = keypoint_coords.size(0)/self.window_size
+        self.batch_size = int(keypoint_coords.size(0)/self.window_size)
         self.poses = np.tile(
             np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
