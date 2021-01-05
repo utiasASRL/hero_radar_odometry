@@ -48,6 +48,43 @@ def draw_batch(batch, out, config):
 
     return vutils.make_grid([radar_img, score_img, match_img])
 
+def draw_batch_steam(batch, out, config):
+    """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
+    # Draw radar image
+    radar = batch['data'][0].squeeze().numpy()
+    plt.subplots()
+    plt.imshow(radar, cmap='gray')
+    radar_img = convert_plt_to_tensor()
+
+    # Draw keypoint matches
+    src = out['src'][0].squeeze().detach().cpu().numpy()
+    tgt = out['tgt'][0].squeeze().detach().cpu().numpy()
+    match_weights = np.exp(out['match_weights'][0].squeeze().detach().cpu().numpy())
+
+    nms = config['vis_keypoint_nms']
+    max_w = np.max(match_weights)
+    plt.imshow(radar, cmap='gray')
+    for i in range(src.shape[0]):
+        if match_weights[i] < nms * max_w:
+            continue
+        plt.plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1]], c='w', linewidth=2, zorder=2)
+        plt.scatter(src[i, 0], src[i, 1], c='g', s=5, zorder=3)
+        plt.scatter(tgt[i, 0], tgt[i, 1], c='r', s=5, zorder=4)
+    match_img = convert_plt_to_tensor()
+
+    # Draw weights
+    plt.subplots()
+    plt.imshow(match_weights, cmap='inferno')
+    weight_img = convert_plt_to_tensor()
+
+    # Draw scores
+    scores = out['scores'][0].squeeze().detach().cpu().numpy()
+    plt.subplots()
+    plt.imshow(scores, cmap='inferno')
+    score_img = convert_plt_to_tensor()
+
+    return vutils.make_grid([radar_img, score_img, match_img, weight_img])
+
 def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []

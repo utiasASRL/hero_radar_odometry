@@ -4,8 +4,6 @@ import torch
 from time import time
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.vis import draw_batch
-
 class MonitorBase:
     """This base class is used for monitoring the training process and executing validation / visualization."""
     def __init__(self, model, valid_loader, config):
@@ -61,8 +59,7 @@ class MonitorBase:
 
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
-        batch_img = draw_batch(batch, out, self.config)
-        self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img)
+        raise NotImplementedError('Subclasses must override vis()!')
 
     def validation(self):
         """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""

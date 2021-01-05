@@ -3,6 +3,7 @@ from time import time
 import numpy as np
 from utils.utils import computeMedianError, computeKittiMetrics
 from utils.vis import plot_sequences
+from utils.vis import draw_batch_steam
 
 class SteamMonitor(MonitorBase):
     def __init__(self, model, valid_loader, config):
@@ -51,3 +52,8 @@ class SteamMonitor(MonitorBase):
         imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img)
+
+    def vis(self, batchi, batch, out):
+        """Visualizes the output from a single batch."""
+        batch_img = draw_batch_steam(batch, out, self.config)
+        self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img)
