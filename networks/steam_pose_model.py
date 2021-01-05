@@ -1,7 +1,8 @@
 import torch
 import numpy as np
+import torch.nn.functional as F
 from networks.unet import UNet
-from networks.keypoint import Keypoint
+from networks.keypoint import Keypoint, normalize_coords
 from networks.softmax_matcher import SoftmaxMatcher
 import cpp.build.SteamSolver as SteamCpp
 
@@ -40,8 +41,11 @@ class SteamPoseModel(torch.nn.Module):
         pseudo_coords = self.convert_to_radar_frame(pseudo_coords)
         keypoint_coords = self.convert_to_radar_frame(keypoint_coords)
 
+        # zero intensity filter
+        keypoint_ints = self.zero_intensity_filter(data, keypoint_coords)
+
         # steam optimization
-        R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords, pseudo_coords, match_weights)
+        R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords, pseudo_coords, match_weights, keypoint_ints)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
                 'tgt': pseudo_coords, 'match_weights': match_weights}
@@ -94,6 +98,14 @@ class SteamPoseModel(torch.nn.Module):
         t = torch.tensor([[self.cart_min_range], [-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
         return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
 
+    def zero_intensity_filter(self, data, keypoint_coords):
+        N, _, height, width = data.size()
+        norm_keypoints2D = normalize_coords(keypoint_coords, width, height).unsqueeze(1)
+        keypoint_int = F.grid_sample(data, norm_keypoints2D, mode='bilinear')
+        keypoint_int = keypoint_int.reshape(N, data.size(1), keypoint_coords.size(1))  # N x 1 x n_patch
+        return keypoint_int
+
+
 class SteamSolver():
     """
         TODO
@@ -114,7 +126,7 @@ class SteamSolver():
         # steam solver (c++)
         self.solver_cpp = SteamCpp.SteamSolver(config['steam']['time_step'], self.window_size)
 
-    def optimize(self, keypoint_coords, pseudo_coords, match_weights):
+    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         # update batch size
         self.batch_size = int(keypoint_coords.size(0)/self.window_size)
         self.poses = np.tile(
@@ -136,19 +148,22 @@ class SteamSolver():
         for b in range(self.batch_size):
             # TODO: This implementation only works for window_size = 2
             assert self.window_size == 2, "Currently only implemented for window of 2."
+            i = b*self.window_size
+
+            # filter by zero intensity
+            ids = torch.nonzero(keypoint_ints[i, 0] != 0, as_tuple=False).squeeze(1)
 
             # points must be list of N x 3
-            i = b*self.window_size
-            points1 = keypoint_coords[i].detach().cpu().numpy()
-            points2 = pseudo_coords[b].detach().cpu().numpy()
+            points1 = keypoint_coords[i, ids].detach().cpu().numpy()
+            points2 = pseudo_coords[b, ids].detach().cpu().numpy()
 
             # weights must be list of N x 3 x 3
-            weights = torch.exp(match_weights[b, 0]).unsqueeze(-1).unsqueeze(-1).detach().cpu().numpy()*identity_weights
+            weights = torch.exp(match_weights[b, 0, ids]).view(-1, 1, 1).detach().cpu().numpy()*identity_weights[ids]
 
             # solver
             self.solver_cpp.resetTraj()
-            self.solver_cpp.setMeas([np.concatenate((points2, zeros_vec), 1)],
-                                    [np.concatenate((points1, zeros_vec), 1)], [weights])
+            self.solver_cpp.setMeas([np.concatenate((points2, zeros_vec[ids]), 1)],
+                                    [np.concatenate((points1, zeros_vec[ids]), 1)], [weights])
             self.solver_cpp.optimize()
 
             # get pose output

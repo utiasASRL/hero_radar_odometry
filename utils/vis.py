@@ -72,18 +72,13 @@ def draw_batch_steam(batch, out, config):
         plt.scatter(tgt[i, 0], tgt[i, 1], c='r', s=5, zorder=4)
     match_img = convert_plt_to_tensor()
 
-    # Draw weights
-    plt.subplots()
-    plt.imshow(match_weights, cmap='inferno')
-    weight_img = convert_plt_to_tensor()
-
     # Draw scores
     scores = out['scores'][0].squeeze().detach().cpu().numpy()
     plt.subplots()
     plt.imshow(scores, cmap='inferno')
     score_img = convert_plt_to_tensor()
 
-    return vutils.make_grid([radar_img, score_img, match_img, weight_img])
+    return vutils.make_grid([radar_img, score_img, match_img])
 
 def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
