@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from utils.utils import convert_to_radar_frame
 
 class SVD(torch.nn.Module):
     """
@@ -12,18 +13,14 @@ class SVD(torch.nn.Module):
         self.window_size = config['window_size']
         self.cart_pixel_width = config['cart_pixel_width']
         self.cart_resolution = config['cart_resolution']
-        if (self.cart_pixel_width % 2) == 0:
-            self.cart_min_range = (self.cart_pixel_width / 2 - 0.5) * self.cart_resolution
-        else:
-            self.cart_min_range = self.cart_pixel_width // 2 * self.cart_resolution
         self.gpuid = config['gpuid']
 
     def forward(self, keypoint_coords, tgt_coords, weights, convert_from_pixels=True):
         src_coords = keypoint_coords[::self.window_size]
         batch_size = src_coords.size(0)  # B x N x 2
         if convert_from_pixels:
-            src_coords = self.convert_to_radar_frame(src_coords)
-            tgt_coords = self.convert_to_radar_frame(tgt_coords)
+            src_coords = convert_to_radar_frame(src_coords, self.cart_pixel_width, self.cart_resolution)
+            tgt_coords = convert_to_radar_frame(tgt_coords, self.cart_pixel_width, self.cart_resolution)
         if src_coords.size(2) < 3:
             pad = 3 - src_coords.size(2)
             src_coords = F.pad(src_coords, [0, pad, 0, 0])
@@ -55,10 +52,3 @@ class SVD(torch.nn.Module):
         t_src_tgt_intgt = -R_tgt_src.bmm(t_tgt_src_insrc)
 
         return R_tgt_src.transpose(2, 1), t_src_tgt_intgt
-
-    def convert_to_radar_frame(self, pixel_coords):
-        """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
-        B, N, _ = pixel_coords.size()
-        R = torch.tensor([[0, -self.cart_resolution], [self.cart_resolution, 0]]).expand(B, 2, 2).to(self.gpuid)
-        t = torch.tensor([[self.cart_min_range], [-self.cart_min_range]]).expand(B, 2, N).to(self.gpuid)
-        return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)

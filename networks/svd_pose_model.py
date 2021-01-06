@@ -12,10 +12,8 @@ class SVDPoseModel(torch.nn.Module):
     """
     def __init__(self, config):
         super().__init__()
-
         self.config = config
         self.gpuid = config['gpuid']
-
         self.unet = UNet(config)
         self.keypoint = Keypoint(config)
         self.softmax_matcher = SoftmaxMatcher(config)

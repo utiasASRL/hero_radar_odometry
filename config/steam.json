@@ -1,4 +1,5 @@
 {
+    "model": "SteamPoseModel",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
     "log_dir": "logs/test/",
     "gpuid": "cuda:0",

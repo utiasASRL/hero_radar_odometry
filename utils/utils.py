@@ -9,7 +9,8 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     R_tgt_src = T_tgt_src[:, :3, :3]
     t_tgt_src = T_tgt_src[:, :3, 3].unsqueeze(-1)
     svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred, config['gpuid'])
-    return svd_loss, R_loss, t_loss
+    dict_loss = {'R_loss' : R_loss, 't_loss' : t_loss}
+    return svd_loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     batch_size = R.size(0)
@@ -181,3 +182,14 @@ def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_len, seq_names, ro
                 t = np.matmul(-1 * R_pred[i].transpose(), np.reshape(t_pred[i], (3, 1)))
                 T = get_inverse_tf(T_gt[i])
                 f.write('{},{},{},{},{},{},{},{}\n'.format(t[0, 0], t[1, 0], yaw, T[0, 3], T[1, 3], gtyaw, timestamps[i][0],                                 timestamps[i][1]))
+
+def convert_to_radar_frame(pixel_coords, cart_pixel_width, cart_resolution):
+    """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
+    if (cart_pixel_width % 2) == 0:
+        cart_min_range = (cart_pixel_width / 2 - 0.5) * cart_resolution
+    else:
+        cart_min_range = cart_pixel_width // 2 * cart_resolution
+    B, N, _ = pixel_coords.size()
+    R = torch.tensor([[0, -cart_resolution], [cart_resolution, 0]]).expand(B, 2, 2).to(gpuid)
+    t = torch.tensor([[cart_min_range], [-cart_min_range]]).expand(B, 2, N).to(gpuid)
+    return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
