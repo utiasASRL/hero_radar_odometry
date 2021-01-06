@@ -19,8 +19,8 @@ class SVD(torch.nn.Module):
         src_coords = keypoint_coords[::self.window_size]
         batch_size = src_coords.size(0)  # B x N x 2
         if convert_from_pixels:
-            src_coords = convert_to_radar_frame(src_coords, self.cart_pixel_width, self.cart_resolution)
-            tgt_coords = convert_to_radar_frame(tgt_coords, self.cart_pixel_width, self.cart_resolution)
+            src_coords = convert_to_radar_frame(src_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
+            tgt_coords = convert_to_radar_frame(tgt_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
         if src_coords.size(2) < 3:
             pad = 3 - src_coords.size(2)
             src_coords = F.pad(src_coords, [0, pad, 0, 0])

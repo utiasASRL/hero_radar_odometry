@@ -31,8 +31,8 @@ class SteamPoseModel(torch.nn.Module):
 
         pseudo_coords, match_weights = self.softmax_matcher(keypoint_scores, keypoint_desc, weight_scores, desc)
 
-        pseudo_coords = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution)
-        keypoint_coords = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution)
+        pseudo_coords = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
+        keypoint_coords = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
 
         keypoint_ints = self.zero_intensity_filter(data, keypoint_coords)
 

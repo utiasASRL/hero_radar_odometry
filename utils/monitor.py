@@ -7,7 +7,7 @@ from tensorboardX import SummaryWriter
 from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
-class MonitorBase:
+class MonitorBase(object):
     """This base class is used for monitoring the training process and executing validation / visualization."""
     def __init__(self, model, valid_loader, config):
         self.model = model
