@@ -21,6 +21,7 @@ class SteamPoseModel(torch.nn.Module):
         self.keypoint = Keypoint(config)
         self.softmax_matcher = SoftmaxMatcher(config)
         self.solver = SteamSolver(config)
+        self.patch_size = config['networks']['keypoint_block']['patch_size']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -40,9 +41,9 @@ class SteamPoseModel(torch.nn.Module):
                                                               keypoint_ints)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
-                'tgt': pseudo_coords, 'match_weights': match_weights}
+                'tgt': pseudo_coords, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints}
 
-    def loss(self, keypoint_coords, pseudo_coords, match_weights):
+    def loss(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         point_loss = 0
         logdet_loss = 0
 
@@ -55,9 +56,13 @@ class SteamPoseModel(torch.nn.Module):
                 continue
             bcount += 1
             i = b * self.solver.window_size
-            points1 = keypoint_coords[i].T   # 2 x N
-            points2 = pseudo_coords[b].T     # 2 x N
-            weights = match_weights[b]  # 1 x N
+
+            # filter by zero intensity
+            ids = torch.nonzero(keypoint_ints[i, 0] > self.solver.zero_int_thresh, as_tuple=False).squeeze(1)
+
+            points1 = keypoint_coords[i, ids].T   # 2 x N
+            points2 = pseudo_coords[b, ids].T     # 2 x N
+            weights = match_weights[b, :, ids]  # 1 x N
             # get R_21 and t_12_in_2
             R_21 = torch.from_numpy(self.solver.poses[b, 1][:2, :2]).to(self.gpuid)
             t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:4]).to(self.gpuid)
@@ -79,10 +84,15 @@ class SteamPoseModel(torch.nn.Module):
         return total_loss, dict_loss
 
     def zero_intensity_filter(self, data, keypoint_coords):
-        N, _, height, width = data.size()
-        norm_keypoints2D = normalize_coords(keypoint_coords, width, height).unsqueeze(1)
-        keypoint_int = F.grid_sample(data, norm_keypoints2D, mode='bilinear')
-        keypoint_int = keypoint_int.reshape(N, data.size(1), keypoint_coords.size(1))  # N x 1 x n_patch
+        # N, _, height, width = data.size()
+        # norm_keypoints2D = normalize_coords(keypoint_coords, width, height).unsqueeze(1)
+        # keypoint_int = F.grid_sample(data, norm_keypoints2D, mode='bilinear')
+        # keypoint_int = keypoint_int.reshape(N, data.size(1), keypoint_coords.size(1))  # N x 1 x n_patch
+
+        int_patches = F.unfold(data, kernel_size=(self.patch_size, self.patch_size),
+                            stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
+        keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)
+
         return keypoint_int
 
 
@@ -103,6 +113,7 @@ class SteamSolver():
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
+        self.zero_int_thresh = config['steam']['zero_int_thresh']
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         # update batch size
@@ -126,17 +137,22 @@ class SteamSolver():
             # TODO: This implementation only works for window_size = 2
             assert self.window_size == 2, "Currently only implemented for window of 2."
             i = b*self.window_size
+
             # filter by zero intensity
-            ids = torch.nonzero(keypoint_ints[i, 0] != 0, as_tuple=False).squeeze(1)
+            ids = torch.nonzero(keypoint_ints[i, 0] > self.zero_int_thresh, as_tuple=False).squeeze(1)
+            ids_cpu = ids.cpu()
+
             # points must be list of N x 3
             points1 = keypoint_coords[i, ids].detach().cpu().numpy()
             points2 = pseudo_coords[b, ids].detach().cpu().numpy()
+
             # weights must be list of N x 3 x 3
-            weights = torch.exp(match_weights[b, 0, ids]).view(-1, 1, 1).detach().cpu().numpy()*identity_weights[ids]
+            weights = torch.exp(match_weights[b, 0, ids]).view(-1, 1, 1).detach().cpu().numpy()*identity_weights[ids_cpu]
+
             # solver
             self.solver_cpp.resetTraj()
-            self.solver_cpp.setMeas([np.concatenate((points2, zeros_vec[ids]), 1)],
-                                    [np.concatenate((points1, zeros_vec[ids]), 1)], [weights])
+            self.solver_cpp.setMeas([np.concatenate((points2, zeros_vec[ids_cpu]), 1)],
+                                    [np.concatenate((points1, zeros_vec[ids_cpu]), 1)], [weights])
             self.solver_cpp.optimize()
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
