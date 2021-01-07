@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 
-from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics
+from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
 class MonitorBase(object):
