@@ -3,6 +3,7 @@ import random
 import numpy as np
 import torch
 from networks.svd import SVD
+from utils.utils import convert_to_radar_frame
 
 class TestSVD(unittest.TestCase):
     def test_basic(self):
@@ -56,7 +57,7 @@ class TestSVD(unittest.TestCase):
                   'batch_size': 1, 'networks': {'keypoint_block': {'patch_size': 32}}}
         model = SVD(config)
         model.eval()
-        tgt2 = model.convert_to_radar_frame(src)
+        tgt2 = convert_to_radar_frame(src, cart_pixel_width, cart_resolution, config['gpuid'])
         self.assertTrue(torch.sum(tgt - tgt2) < 1e-4)
 
 if __name__ == '__main__':

@@ -57,6 +57,14 @@ def get_groundtruth_odometry(radar_time, gt_path):
                 return get_inverse_tf(T)  # T_2_1 from current time step to the next time step
     assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
+def mean_intensity_mask(polar_data):
+    num_azimuths, range_bins = polar_data.shape
+    mask = np.zeros((num_azimuths, range_bins))
+    for i in range(num_azimuths):
+        m = np.mean(polar_data[i, :])
+        mask[i, :] = polar_data[i, :] > m
+    return mask
+
 class OxfordDataset(Dataset):
     """Oxford Radar Robotcar Dataset."""
     def __init__(self, config, split='train'):
@@ -101,6 +109,9 @@ class OxfordDataset(Dataset):
         _, azimuths, _, polar, _ = load_radar(frame)
         cart = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
+        polar_mask = mean_intensity_mask(polar)
+        cart_mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
+                                        self.config['cart_resolution'], self.config['cart_pixel_width'])
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
         if idx + 1 < len(self.frames):
@@ -109,7 +120,7 @@ class OxfordDataset(Dataset):
             time2 = 0
         times = np.array([time1, time2]).reshape(1, 2)
         T_21 = get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
-        return {'data': cart, 'T_21': T_21, 'times': times}
+        return {'data': cart, 'T_21': T_21, 'times': times, 'mask': cart_mask}
 
 def get_dataloaders(config):
     """Retrieves train, validation, and test data loaders."""

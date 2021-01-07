@@ -12,6 +12,7 @@ class SoftmaxMatcher(nn.Module):
         self.softmax_temp = config['networks']['matcher_block']['softmax_temp']
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
+        self.score_comp = config['networks']['matcher_block']['score_comp']
 
     def forward(self, keypoint_scores, keypoint_desc, scores_dense, desc_dense):
         """
@@ -54,7 +55,10 @@ class SoftmaxMatcher(nn.Module):
 
         desc_match_score = torch.sum(src_desc * pseudo_desc, dim=1, keepdim=True) / float(encoder_dim)  # Bx1xN
         src_scores = keypoint_scores[::self.window_size]
-        match_weights = 0.5 * (desc_match_score + 1) * src_scores * pseudo_scores
+        if self.score_comp:
+            match_weights = 0.5 * (desc_match_score + 1) * src_scores * pseudo_scores
+        else:
+            match_weights = pseudo_scores
 
         return pseudo_coords, match_weights
 
