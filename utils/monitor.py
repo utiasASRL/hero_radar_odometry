@@ -30,35 +30,19 @@ class MonitorBase(object):
         """Returns a list of batch indices which we will use for visualization during validation."""
         return np.linspace(0, len(self.valid_loader.dataset) - 1, self.config['vis_num']).astype(np.int32)
 
-    def step(self, batchi, total_loss, dict_loss):
-        """At each step of the monitor, we can print, log, validate, or save model information."""
-        raise NotImplementedError('Subclasses must override step()!')
-
-    def vis(self, batchi, batch, out):
-        """Visualizes the output from a single batch."""
-        raise NotImplementedError('Subclasses must override vis()!')
-
-    def validation(self):
-        """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""
-        raise NotImplementedError('Subclasses must override validation()!')
-
-class SVDMonitor(MonitorBase):
-
     def step(self, batchi, loss, dict_loss):
         """At each step of the monitor, we can print, log, validate, or save model information."""
         self.counter += 1
         self.dt = time() - self.current_time
         self.current_time = time()
-        R_loss = dict_loss['R_loss']
-        t_loss = dict_loss['t_loss']
 
         if self.counter % self.config['print_rate'] == 0:
             print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, loss.detach().cpu().item(), self.dt))
 
         if self.counter % self.config['log_rate'] == 0:
             self.writer.add_scalar('train/loss', loss.detach().cpu().item(), self.counter)
-            self.writer.add_scalar('train/R_loss', R_loss.detach().cpu().item(), self.counter)
-            self.writer.add_scalar('train/t_loss', t_loss.detach().cpu().item(), self.counter)
+            for loss_name in dict_loss:
+                self.writer.add_scalar('train/' + loss_name, dict_loss[loss_name].detach().cpu().item(), self.counter)
             self.writer.add_scalar('train/step_time', self.dt, self.counter)
 
         if self.counter % self.config['val_rate'] == 0:
@@ -77,6 +61,16 @@ class SVDMonitor(MonitorBase):
 
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
+        raise NotImplementedError('Subclasses must override vis()!')
+
+    def validation(self):
+        """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""
+        raise NotImplementedError('Subclasses must override validation()!')
+
+class SVDMonitor(MonitorBase):
+
+    def vis(self, batchi, batch, out):
+        """Visualizes the output from a single batch."""
         batch_img = draw_batch(batch, out, self.config)
         self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img)
 
@@ -84,8 +78,8 @@ class SVDMonitor(MonitorBase):
         """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""
         time_used = []
         valid_loss = 0
-        valid_R_loss = 0
-        valid_t_loss = 0
+        aux_losses = {}
+        aux_init = False
         T_gt = []
         R_pred = []
         t_pred = []
@@ -96,10 +90,18 @@ class SVDMonitor(MonitorBase):
             out = self.model(batch)
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
-            loss, dict_loss = supervised_loss(out['R'], out['t'], batch, self.config)
+            if config['loss'] == 'supervised_loss':
+                loss, dict_loss = supervised_loss(out['R'], out['t'], batch, self.config)
+            elif config['loss'] == 'pointmatch_loss':
+                loss, dict_loss = pointmatch_loss(out['R'], out['t'], out['tgt'], out['src'], self.config)
             valid_loss += loss.detach().cpu().item()
-            valid_R_loss += dict_loss['R_loss'].detach().cpu().item()
-            valid_t_loss += dict_loss['t_loss'].detach().cpu().item()
+            if not aux_init:
+                for loss_name in dict_loss:
+                    aux_losses[loss_name] = dict_loss[loss_name].detach().cpu().item()
+                aux_init = True
+            else
+                for loss_name in dict_loss:
+                    aux_losses[loss_name] += dict_loss[loss_name].detach().cpu().item()
             time_used.append(time() - ts)
             T_gt.append(batch['T_21'][0].numpy().squeeze())
             R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
@@ -109,8 +111,8 @@ class SVDMonitor(MonitorBase):
         t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
-        self.writer.add_scalar('val/R_loss', valid_R_loss, self.counter)
-        self.writer.add_scalar('val/t_loss', valid_t_loss, self.counter)
+        for loss_name in aux_losses:
+            self.writer.add_scalar('val/' + loss_name, aux_losses[loss_name], self.counter)
         self.writer.add_scalar('val/avg_time_per_batch', sum(time_used)/len(time_used), self.counter)
         self.writer.add_scalar('val/t_err_med', results[0], self.counter)
         self.writer.add_scalar('val/t_err_std', results[1], self.counter)
@@ -124,36 +126,6 @@ class SVDMonitor(MonitorBase):
             self.writer.add_image('val/' + self.sequences[i], img)
 
 class SteamMonitor(MonitorBase):
-
-    def step(self, batchi, total_loss, dict_loss):
-        """At each step of the monitor, we can print, log, validate, or save model information."""
-        self.counter += 1
-        self.dt = time() - self.current_time
-        self.current_time = time()
-        losses = dict_loss.items()
-
-        if self.counter % self.config['print_rate'] == 0:
-            print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, total_loss.detach().cpu().item(), self.dt))
-
-        if self.counter % self.config['log_rate'] == 0:
-            self.writer.add_scalar('train/loss', total_loss.detach().cpu().item(), self.counter)
-            for loss_item in losses:
-                self.writer.add_scalar('train/' + loss_item[0], loss_item[1].detach().cpu().item(), self.counter)
-            self.writer.add_scalar('train/step_time', self.dt, self.counter)
-
-        if self.counter % self.config['val_rate'] == 0:
-            with torch.no_grad():
-                self.model.eval()
-                self.validation()
-                self.model.train()
-
-        if self.counter % self.config['save_rate'] == 0:
-            with torch.no_grad():
-                self.model.eval()
-                mname = os.path.join(self.log_dir, '{}.pt'.format(self.counter))
-                print('saving model', mname)
-                torch.save(self.model.state_dict(), mname)
-                self.model.train()
 
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
@@ -175,7 +147,6 @@ class SteamMonitor(MonitorBase):
                 print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.config['print_rate']:])))
             out = self.model(batch)
             if batchi in self.vis_batches:
-                # out = self.model(batch)
                 self.vis(batchi, batch, out)
             loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
             if loss != 0:

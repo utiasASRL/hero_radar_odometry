@@ -44,7 +44,10 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             out = model(batch)
             if config['model'] == 'SVDPoseModel':
-                loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
+                if config['loss'] == 'supervised_loss':
+                    loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
+                elif config['loss'] == 'pointmatch_loss':
+                    loss, dict_loss = pointmatch_loss(out['R'], out['t'], out['tgt'], out['src'], config)
             elif config['model'] == 'SteamPoseModel':
                 loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
             if loss == 0:

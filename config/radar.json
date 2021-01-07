@@ -43,5 +43,6 @@
     "augmentation": {
         "augment": true,
         "rot_max": 0.19634954084936207
-    }
+    },
+    "loss": "pointmatch_loss"
 }
