@@ -99,7 +99,7 @@ class SVDMonitor(MonitorBase):
                 for loss_name in dict_loss:
                     aux_losses[loss_name] = dict_loss[loss_name].detach().cpu().item()
                 aux_init = True
-            else
+            else:
                 for loss_name in dict_loss:
                     aux_losses[loss_name] += dict_loss[loss_name].detach().cpu().item()
             time_used.append(time() - ts)

@@ -14,12 +14,15 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
 
 def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, config):
     # tgt, src: B x N x 2
-    B, N, _ = pixel_coords.size()
+    src = src[::config['window_size']]
+    B, N, _ = tgt.size()
     R = R_tgt_src_pred[:, :2, :2]  # B x 2 x 2
-    t = t_tgt_src_pred[:, :2, 3].unsqueeze(-1).transpose(2, 1).expand(B, 2, N)  # B x 2 x N
+    t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
     tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1)
+    error = torch.abs(tgt - tgt_pred)
+    loss = torch.sum(error) / (2 * N)
     dict_loss = {}
-    return torch.nn.L1Loss(tgt, tgt_pred), dict_loss
+    return loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     batch_size = R.size(0)
