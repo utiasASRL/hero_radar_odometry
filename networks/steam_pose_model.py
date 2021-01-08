@@ -25,6 +25,7 @@ class SteamPoseModel(torch.nn.Module):
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
+        mask = batch['mask'].to(self.gpuid)
 
         detector_scores, weight_scores, desc = self.unet(data)
 
@@ -37,7 +38,7 @@ class SteamPoseModel(torch.nn.Module):
         pseudo_coords[:, :, 1] *= -1.0
         keypoint_coords[:, :, 1] *= -1.0
 
-        keypoint_ints = self.zero_intensity_filter(data, keypoint_coords)
+        keypoint_ints = self.zero_intensity_filter(mask)
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords, pseudo_coords, match_weights,
                                                               keypoint_ints)
@@ -85,7 +86,7 @@ class SteamPoseModel(torch.nn.Module):
         dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss}
         return total_loss, dict_loss
 
-    def zero_intensity_filter(self, data, keypoint_coords):
+    def zero_intensity_filter(self, data):
         # N, _, height, width = data.size()
         # norm_keypoints2D = normalize_coords(keypoint_coords, width, height).unsqueeze(1)
         # keypoint_int = F.grid_sample(data, norm_keypoints2D, mode='bilinear')

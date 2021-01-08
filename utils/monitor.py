@@ -2,7 +2,7 @@ import os
 from time import time
 import numpy as np
 import torch
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam

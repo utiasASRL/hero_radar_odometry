@@ -78,7 +78,13 @@ def draw_batch_steam(batch, out, config):
     plt.imshow(scores, cmap='inferno')
     score_img = convert_plt_to_tensor()
 
-    return vutils.make_grid([radar_img, score_img, match_img])
+    # Draw mask
+    mask = batch['mask'][0].squeeze().numpy()
+    plt.subplots()
+    plt.imshow(mask, cmap='gray')
+    mask_img = convert_plt_to_tensor()
+
+    return vutils.make_grid([radar_img, score_img, match_img, mask_img])
 
 def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""

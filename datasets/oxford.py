@@ -57,12 +57,12 @@ def get_groundtruth_odometry(radar_time, gt_path):
                 return get_inverse_tf(T)  # T_2_1 from current time step to the next time step
     assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
-def mean_intensity_mask(polar_data):
+def mean_intensity_mask(polar_data, multiplier):
     num_azimuths, range_bins = polar_data.shape
     mask = np.zeros((num_azimuths, range_bins))
     for i in range(num_azimuths):
         m = np.mean(polar_data[i, :])
-        mask[i, :] = polar_data[i, :] > m
+        mask[i, :] = polar_data[i, :] > multiplier*m
     return mask
 
 class OxfordDataset(Dataset):
@@ -75,6 +75,7 @@ class OxfordDataset(Dataset):
         self.seq_idx_range = {}
         self.frames = []
         self.seq_len = []
+        self.mean_int_mask_mult = config['mean_int_mask_mult']
         for seq in self.sequences:
             seq_frames = get_frames(self.data_dir + seq + '/radar/')
             seq_frames = get_frames_with_gt(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
@@ -109,7 +110,7 @@ class OxfordDataset(Dataset):
         _, azimuths, _, polar, _ = load_radar(frame)
         cart = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
-        polar_mask = mean_intensity_mask(polar)
+        polar_mask = mean_intensity_mask(polar, self.mean_int_mask_mult)
         cart_mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])
         # Get ground truth transform between this frame and the next
