@@ -90,9 +90,9 @@ class SVDMonitor(MonitorBase):
             out = self.model(batch)
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
-            if config['loss'] == 'supervised_loss':
+            if self.config['loss'] == 'supervised_loss':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, self.config)
-            elif config['loss'] == 'pointmatch_loss':
+            elif self.config['loss'] == 'pointmatch_loss':
                 loss, dict_loss = pointmatch_loss(out['R'], out['t'], out['tgt'], out['src'], self.config)
             valid_loss += loss.detach().cpu().item()
             if not aux_init:
