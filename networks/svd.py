@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from utils.utils import convert_to_radar_frame
+from utils.utils import convert_to_radar_frame, get_indices
 
 class SVD(torch.nn.Module):
     """
@@ -15,9 +15,14 @@ class SVD(torch.nn.Module):
         self.cart_resolution = config['cart_resolution']
         self.gpuid = config['gpuid']
 
-    def forward(self, keypoint_coords, tgt_coords, weights, convert_from_pixels=True):
-        src_coords = keypoint_coords[::self.window_size]
-        batch_size = src_coords.size(0)  # B x N x 2
+    def forward(self, src_coords, tgt_coords, weights, convert_from_pixels=True):
+        if src_coords.size(0) > tgt_coords.size(0):
+            BW = src_coords.size(0)
+            batch_size = int(BW / self.window_size)
+            kp_inds, _ = get_indices(batch_size, self.window_size)
+            src_coords = src_coords[kp_inds]
+        assert(src_coords.size() == tgt_coords.size())
+        B = src_coords.size(0)  # B x N x 2
         if convert_from_pixels:
             src_coords = convert_to_radar_frame(src_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
             tgt_coords = convert_to_radar_frame(tgt_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
@@ -30,7 +35,7 @@ class SVD(torch.nn.Module):
         src_coords = src_coords.transpose(2, 1)  # B x 3 x N
         tgt_coords = tgt_coords.transpose(2, 1)
 
-        # Compute weighted centroids (elementwise multiplication/division)
+        # Compute weighted centroids
         w = torch.sum(weights, dim=2, keepdim=True)
         src_centroid = torch.sum(src_coords * weights, dim=2, keepdim=True) / w  # B x 3 x 1
         tgt_centroid = torch.sum(tgt_coords * weights, dim=2, keepdim=True) / w
@@ -43,7 +48,7 @@ class SVD(torch.nn.Module):
         U, _, V = torch.svd(W)
 
         det_UV = torch.det(U) * torch.det(V)
-        ones = torch.ones(batch_size, 2).type_as(V)
+        ones = torch.ones(B, 2).type_as(V)
         S = torch.diag_embed(torch.cat((ones, det_UV.unsqueeze(1)), dim=1))  # B x 3 x 3
 
         # Compute rotation and translation (T_tgt_src)

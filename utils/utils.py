@@ -5,7 +5,8 @@ import torch
 def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     T_21 = batch['T_21'].to(config['gpuid'])
     # Get ground truth transforms
-    T_tgt_src = T_21[::config['window_size']]
+    kp_inds, _ = get_indices(config['batch_size'], config['window_size'])
+    T_tgt_src = T_21[kp_inds]
     R_tgt_src = T_tgt_src[:, :3, :3]
     t_tgt_src = T_tgt_src[:, :3, 3].unsqueeze(-1)
     svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred, config['gpuid'])
@@ -14,7 +15,7 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
 
 def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, config):
     # tgt, src: B x N x 2
-    src = src[::config['window_size']]
+    assert(tgt.size() == src.size())
     B, N, _ = tgt.size()
     R = R_tgt_src_pred[:, :2, :2]  # B x 2 x 2
     t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
@@ -206,3 +207,13 @@ def convert_to_radar_frame(pixel_coords, cart_pixel_width, cart_resolution, gpui
     R = torch.tensor([[0, -cart_resolution], [cart_resolution, 0]]).expand(B, 2, 2).to(gpuid)
     t = torch.tensor([[cart_min_range], [-cart_min_range]]).expand(B, 2, N).to(gpuid)
     return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
+
+def get_indices(batch_size, window_size):
+    src_inds = []
+    tgt_inds = []
+    for i in range(batch_size):
+        for j in range(window_size - 1):
+            idx = i * window_size + j
+            src_inds.append(idx)
+            tgt_inds.append(idx + 1)
+    return src_inds, tgt_inds

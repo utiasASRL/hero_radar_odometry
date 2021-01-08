@@ -26,9 +26,10 @@ class SVDPoseModel(torch.nn.Module):
 
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
 
-        pseudo_coords, match_weights = self.softmax_matcher(keypoint_scores, keypoint_desc, weight_scores, desc)
+        pseudo_coords, match_weights, kp_inds = self.softmax_matcher(keypoint_scores, keypoint_desc, weight_scores, desc)
+        src_coords = keypoint_coords[kp_inds]
 
-        R_tgt_src_pred, t_tgt_src_pred = self.svd(keypoint_coords, pseudo_coords, match_weights)
+        R_tgt_src_pred, t_tgt_src_pred = self.svd(src_coords, pseudo_coords, match_weights)
 
-        return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
+        return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': src_coords,
                 'tgt': pseudo_coords, 'match_weights': match_weights}
