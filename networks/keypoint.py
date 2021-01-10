@@ -12,10 +12,13 @@ class Keypoint(torch.nn.Module):
         self.patch_size = config['networks']['keypoint_block']['patch_size']
         self.temperature = config['networks']['keypoint_block']['softmax_temp']
         self.gpuid = config['gpuid']
+        self.mask_threshold = config['mask_threshold']
 
-    def forward(self, detector_scores, weight_scores, descriptors):
+    def forward(self, detector_scores, weight_scores, descriptors, mask):
 
         N, _, height, width = descriptors.size()
+        _, _, h, w = mask.size()
+        assert(height == h and width == w)
 
         v_coords, u_coords = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
         v_coords = v_coords.unsqueeze(0).float()  # 1 x H x W
@@ -30,6 +33,16 @@ class Keypoint(torch.nn.Module):
 
         detector_patches = F.unfold(detector_scores, kernel_size=(self.patch_size, self.patch_size),
                                     stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
+        mask_patches = F.unfold(mask, kernel_size=(self.patch_size, self.patch_size),
+                                    stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
+
+        patch_elems = detector_patches.size(1)
+        mask_patches = torch.sum(mask_patches, dim=1, keepdims=True).expand(detector_patches.size()) / patch_elems
+        mask_patches = mask_patches > self.mask_threshold
+        keep_indices = torch.nonzero(mask_patches)
+        detector_patches = detector_patches[keep_indices]
+        u_patches = u_patches[keep_indices]
+        v_patches = v_patches[keep_indices]
 
         softmax_attention = F.softmax(detector_patches / self.temperature, dim=1)  # N x patch_elements x num_patches
 

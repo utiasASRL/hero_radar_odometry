@@ -19,7 +19,8 @@
         },
         "keypoint_block": {
             "patch_size": 32,
-            "softmax_temp": 1.0
+            "softmax_temp": 1.0,
+            "mask_threshold": 0.15
         },
         "matcher_block": {
             "softmax_temp": 0.01,
