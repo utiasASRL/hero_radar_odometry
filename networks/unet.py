@@ -32,6 +32,7 @@ class UNet(torch.nn.Module):
         self.up3_score = Up(first_feature_dimension * (4 + 2), first_feature_dimension * 2, bilinear)
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, 1)
+        self.outc_score2 = OutConv(2, 1)
         self.sigmoid = torch.nn.Sigmoid()
 
         self.initialize_weights()
@@ -44,7 +45,7 @@ class UNet(torch.nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         _, _, height, width = x.size()
 
         x1 = self.inc(x)
@@ -64,6 +65,9 @@ class UNet(torch.nn.Module):
         x2_up_score = self.up3_score(x3_up_score, x2)
         x1_up_score = self.up4_score(x2_up_score, x1)
         score = self.outc_score(x1_up_score)
+        if mask is not None:
+            torch.cat((score, mask), dim=1)
+            score = self.outc_score2(score)
         if self.score_sigmoid:
             score = self.sigmoid(score)
 
