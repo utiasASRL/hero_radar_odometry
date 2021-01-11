@@ -1,8 +1,8 @@
 {
     "model": "SVDPoseModel",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2021-01-07/",
-    "gpuid": "cuda:1",
+    "log_dir": "/workspace/Documents/logs/2021-01-10/",
+    "gpuid": "cuda:0",
     "min_range": 58,
     "radar_resolution": 0.0432,
     "cart_resolution": 0.3456,
@@ -20,7 +20,7 @@
         "keypoint_block": {
             "patch_size": 32,
             "softmax_temp": 1.0,
-            "mask_threshold": 0.15
+            "mask_threshold": 0.05
         },
         "matcher_block": {
             "softmax_temp": 0.01,

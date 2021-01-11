@@ -12,7 +12,7 @@ class Keypoint(torch.nn.Module):
         self.patch_size = config['networks']['keypoint_block']['patch_size']
         self.temperature = config['networks']['keypoint_block']['softmax_temp']
         self.gpuid = config['gpuid']
-        self.mask_threshold = config['mask_threshold']
+        self.mask_threshold = config['networks']['keypoint_block']['mask_threshold']
 
     def forward(self, detector_scores, weight_scores, descriptors, mask):
 
@@ -37,12 +37,7 @@ class Keypoint(torch.nn.Module):
                                     stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
 
         patch_elems = detector_patches.size(1)
-        mask_patches = torch.sum(mask_patches, dim=1, keepdims=True).expand(detector_patches.size()) / patch_elems
-        mask_patches = mask_patches > self.mask_threshold
-        keep_indices = torch.nonzero(mask_patches)
-        detector_patches = detector_patches[keep_indices]
-        u_patches = u_patches[keep_indices]
-        v_patches = v_patches[keep_indices]
+        mask_patches = torch.sum(mask_patches, dim=1) > patch_elems * self.mask_threshold
 
         softmax_attention = F.softmax(detector_patches / self.temperature, dim=1)  # N x patch_elements x num_patches
 
@@ -58,7 +53,7 @@ class Keypoint(torch.nn.Module):
         keypoint_scores = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')
         keypoint_scores = keypoint_scores.reshape(N, weight_scores.size(1), keypoint_coords.size(1))  # N x 1 x n_patch
 
-        return keypoint_coords, keypoint_scores, keypoint_desc
+        return keypoint_coords, keypoint_scores, keypoint_desc, mask_patches
 
 def normalize_coords(coords_2D, width, height):
     """Normalizes coords_2D (B x N x 2) to be within [-1, 1] """

@@ -62,7 +62,7 @@ def mean_intensity_mask(polar_data):
     mask = np.zeros((num_azimuths, range_bins))
     for i in range(num_azimuths):
         m = np.mean(polar_data[i, :])
-        mask[i, :] = polar_data[i, :] > 2.0 * m
+        mask[i, :] = polar_data[i, :] > 1.5 * m
     return mask
 
 class OxfordDataset(Dataset):
