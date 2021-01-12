@@ -33,18 +33,19 @@ class SteamPoseModel(torch.nn.Module):
 
         pseudo_coords, match_weights = self.softmax_matcher(keypoint_scores, keypoint_desc, weight_scores, desc)
 
-        pseudo_coords = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
-        keypoint_coords = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
-        pseudo_coords[:, :, 1] *= -1.0
-        keypoint_coords[:, :, 1] *= -1.0
+        pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
+        keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
+        pseudo_coords_xy[:, :, 1] *= -1.0
+        keypoint_coords_xy[:, :, 1] *= -1.0
 
         keypoint_ints = self.zero_intensity_filter(mask)
 
-        R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords, pseudo_coords, match_weights,
+        R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints)
 
-        return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords,
-                'tgt': pseudo_coords, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints}
+        return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords_xy,
+                'tgt': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
+                'detector_scores': detector_scores, 'src_rc': keypoint_coords, 'tgt_rc': pseudo_coords}
 
     def loss(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         point_loss = 0
