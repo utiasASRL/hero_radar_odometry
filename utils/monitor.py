@@ -203,4 +203,4 @@ class SteamMonitor(MonitorBase):
 
         imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
         for i, img in enumerate(imgs):
-            self.writer.add_image('val/' + self.sequences[i], img)
+            self.writer.add_image('val/' + self.sequences[i], img, self.counter)

@@ -22,6 +22,7 @@ class SteamPoseModel(torch.nn.Module):
         self.softmax_matcher = SoftmaxMatcher(config)
         self.solver = SteamSolver(config)
         self.patch_size = config['networks']['keypoint_block']['patch_size']
+        self.border = config['steam']['border']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -38,7 +39,9 @@ class SteamPoseModel(torch.nn.Module):
         pseudo_coords_xy[:, :, 1] *= -1.0
         keypoint_coords_xy[:, :, 1] *= -1.0
 
-        keypoint_ints = self.zero_intensity_filter(mask)
+        keypoint_ints_zif = self.zero_intensity_filter(mask)
+        keypoint_ints_bf = self.border_filter(keypoint_coords)
+        keypoint_ints = keypoint_ints_zif*keypoint_ints_bf
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints)
@@ -77,7 +80,7 @@ class SteamPoseModel(torch.nn.Module):
             # squared error
             point_loss += torch.mean(torch.sum(error[:, ids] * error[:, ids] * torch.exp(weights[:, ids]), dim=0))
             # log det
-            logdet_loss -= 3 * torch.mean(weights)
+            logdet_loss -= 3 * torch.mean(weights[:, ids])
 
         # average over batches
         if bcount > 0:
@@ -98,6 +101,14 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)
 
         return keypoint_int
+
+    def border_filter(self, keypoint_coords):
+        # self.cart_pixel_width
+        width = self.cart_pixel_width
+        border = self.border
+        keypoint_int = (keypoint_coords[:, :, 0] > border)*(keypoint_coords[:, :, 0] < width - border)\
+                       *(keypoint_coords[:, :, 1] > border)*(keypoint_coords[:, :, 1] < width - border)
+        return keypoint_int.unsqueeze(1)
 
 
 class SteamSolver():
