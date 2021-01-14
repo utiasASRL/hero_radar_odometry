@@ -7,10 +7,12 @@ from networks.softmax_matcher import SoftmaxMatcher
 import cpp.build.SteamSolver as steamcpp
 from utils.utils import convert_to_radar_frame
 
+
 class SteamPoseModel(torch.nn.Module):
     """
         TODO
     """
+
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -23,6 +25,7 @@ class SteamPoseModel(torch.nn.Module):
         self.solver = SteamSolver(config)
         self.patch_size = config['networks']['keypoint_block']['patch_size']
         self.border = config['steam']['border']
+        self.min_abs_vel = config['steam']['min_abs_vel']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -34,14 +37,17 @@ class SteamPoseModel(torch.nn.Module):
 
         pseudo_coords, match_weights = self.softmax_matcher(keypoint_scores, keypoint_desc, weight_scores, desc)
 
-        pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
-        keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
+        pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution,
+                                                  self.gpuid)
+        keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
+                                                    self.gpuid)
         pseudo_coords_xy[:, :, 1] *= -1.0
         keypoint_coords_xy[:, :, 1] *= -1.0
 
-        keypoint_ints_zif = self.zero_intensity_filter(mask)
+        # binary masks
+        keypoint_ints_zif = self.zero_intensity_filter(mask) >= self.solver.zero_int_thresh
         keypoint_ints_bf = self.border_filter(keypoint_coords)
-        keypoint_ints = keypoint_ints_zif*keypoint_ints_bf
+        keypoint_ints = keypoint_ints_zif * keypoint_ints_bf
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints)
@@ -59,16 +65,16 @@ class SteamPoseModel(torch.nn.Module):
         bcount = 0
         for b in range(self.solver.batch_size):
             # check velocity
-            if np.linalg.norm(self.solver.vels[b, 1]) < 0.03:   # TODO: make this a config parameter
+            if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
                 continue
             bcount += 1
             i = b * self.solver.window_size
 
-            # filter by zero intensity
-            ids = torch.nonzero(keypoint_ints[i, 0] > self.solver.zero_int_thresh, as_tuple=False).squeeze(1)
+            # filter by zero intensity and/or border
+            ids = torch.nonzero(keypoint_ints[i, 0] > 0, as_tuple=False).squeeze(1)
 
-            points1 = keypoint_coords[i, ids].T   # 2 x N
-            points2 = pseudo_coords[b, ids].T     # 2 x N
+            points1 = keypoint_coords[i, ids].T  # 2 x N
+            points2 = pseudo_coords[b, ids].T  # 2 x N
             weights = match_weights[b, :, ids]  # 1 x N
             # get R_21 and t_12_in_2
             R_21 = torch.from_numpy(self.solver.poses[b, 1][:2, :2]).to(self.gpuid)
@@ -97,7 +103,7 @@ class SteamPoseModel(torch.nn.Module):
         # keypoint_int = keypoint_int.reshape(N, data.size(1), keypoint_coords.size(1))  # N x 1 x n_patch
 
         int_patches = F.unfold(data, kernel_size=(self.patch_size, self.patch_size),
-                            stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
+                               stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
         keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)
 
         return keypoint_int
@@ -106,8 +112,8 @@ class SteamPoseModel(torch.nn.Module):
         # self.cart_pixel_width
         width = self.cart_pixel_width
         border = self.border
-        keypoint_int = (keypoint_coords[:, :, 0] > border)*(keypoint_coords[:, :, 0] < width - border)\
-                       *(keypoint_coords[:, :, 1] > border)*(keypoint_coords[:, :, 1] < width - border)
+        keypoint_int = (keypoint_coords[:, :, 0] >= border) * (keypoint_coords[:, :, 0] <= width - border) \
+                       * (keypoint_coords[:, :, 1] >= border) * (keypoint_coords[:, :, 1] <= width - border)
         return keypoint_int.unsqueeze(1)
 
 
@@ -115,6 +121,7 @@ class SteamSolver():
     """
         TODO
     """
+
     def __init__(self, config):
         # parameters
         self.sliding_flag = config['steam']['sliding_flag']
@@ -132,7 +139,7 @@ class SteamSolver():
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         # update batch size
-        self.batch_size = int(keypoint_coords.size(0)/self.window_size)
+        self.batch_size = int(keypoint_coords.size(0) / self.window_size)
         self.poses = np.tile(
             np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
@@ -151,10 +158,10 @@ class SteamSolver():
         for b in range(self.batch_size):
             # TODO: This implementation only works for window_size = 2
             assert self.window_size == 2, "Currently only implemented for window of 2."
-            i = b*self.window_size
+            i = b * self.window_size
 
-            # filter by zero intensity
-            ids = torch.nonzero(keypoint_ints[i, 0] > self.zero_int_thresh, as_tuple=False).squeeze(1)
+            # filter by zero intensity and/or border
+            ids = torch.nonzero(keypoint_ints[i, 0] > 0, as_tuple=False).squeeze(1)
             ids_cpu = ids.cpu()
 
             # points must be list of N x 3
@@ -162,7 +169,7 @@ class SteamSolver():
             points2 = pseudo_coords[b, ids].detach().cpu().numpy()
 
             # weights must be list of N x 3 x 3
-            weights = torch.exp(match_weights[b, 0, ids]).view(-1, 1, 1).detach().cpu().numpy()*identity_weights[ids_cpu]
+            weights = torch.exp(match_weights[b, 0, ids]).view(-1, 1, 1).detach().cpu().numpy() * identity_weights[ids_cpu]
 
             # solver
             self.solver_cpp.resetTraj()

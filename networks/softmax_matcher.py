@@ -58,7 +58,7 @@ class SoftmaxMatcher(nn.Module):
         if self.score_comp:
             match_weights = 0.5 * (desc_match_score + 1) * src_scores * pseudo_scores
         else:
-            match_weights = pseudo_scores
+            match_weights = src_scores
 
         return pseudo_coords, match_weights
 
