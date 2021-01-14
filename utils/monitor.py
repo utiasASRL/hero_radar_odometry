@@ -157,8 +157,10 @@ class SteamMonitor(MonitorBase):
 
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
-        batch_img = draw_batch_steam(batch, out, self.config)
-        self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img, global_step=self.counter)
+        score_img, match_img, error_img = draw_batch_steam(batch, out, self.config)
+        self.writer.add_image('val/score_img/{}'.format(batchi), score_img, global_step=self.counter)
+        self.writer.add_image('val/match_img/{}'.format(batchi), match_img, global_step=self.counter)
+        self.writer.add_image('val/error_img/{}'.format(batchi), error_img, global_step=self.counter)
 
     def validation(self):
         """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""

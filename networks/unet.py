@@ -34,7 +34,8 @@ class UNet(torch.nn.Module):
         self.outc_score = OutConv(first_feature_dimension, 1)
         self.sigmoid = torch.nn.Sigmoid()
 
-        self.initialize_weights()
+        if config['networks']['unet']['kaiming']:
+            self.initialize_weights()
 
     def initialize_weights(self):
         for m in self.modules():

@@ -54,8 +54,8 @@ def draw_batch_steam(batch, out, config):
     # Draw radar image
     radar = batch['data'][0].squeeze().numpy()
     radar_tgt = batch['data'][1].squeeze().numpy()
-    plt.subplots()
-    plt.imshow(radar, cmap='gray')
+    plt.imshow(np.concatenate((radar, radar_tgt), axis=1), cmap='gray')
+    plt.title('radar src-tgt pair')
     radar_img = convert_plt_to_tensor()
 
     # Draw keypoint matches
@@ -64,7 +64,7 @@ def draw_batch_steam(batch, out, config):
     match_weights = np.exp(out['match_weights'][0].squeeze().detach().cpu().numpy())
     keypoint_ints = out['keypoint_ints']
 
-    ids = torch.nonzero(keypoint_ints[0, 0] > config['steam']['zero_int_thresh'], as_tuple=False).squeeze(1)
+    ids = torch.nonzero(keypoint_ints[0, 0] > 0, as_tuple=False).squeeze(1)
     ids_cpu = ids.cpu()
 
     nms = config['vis_keypoint_nms']    # inverse variance
@@ -79,31 +79,59 @@ def draw_batch_steam(batch, out, config):
             plt.plot([src[i, 0], tgt[i, 0] + delta], [src[i, 1], tgt[i, 1]], c='y', linewidth=0.5, zorder=2)
             plt.scatter(src[i, 0], src[i, 1], c=custom_colour, s=5, zorder=3)
             plt.scatter(tgt[i, 0] + delta, tgt[i, 1], c=custom_colour, s=5, zorder=4)
-        # else:
-        #     custom_colour = 'r'
-
-
+    plt.title('matches')
     match_img = convert_plt_to_tensor()
+
+    plt.imshow(np.concatenate((radar, radar_tgt), axis=0), cmap='gray')
+    delta = radar.shape[1]
+    for i in range(src.shape[0]):
+        if match_weights[i] < nms:
+            continue
+        if i in ids_cpu:
+            custom_colour = 'g'
+            plt.plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1] + delta], c='y', linewidth=0.5, zorder=2)
+            plt.scatter(src[i, 0], src[i, 1], c=custom_colour, s=5, zorder=3)
+            plt.scatter(tgt[i, 0], tgt[i, 1] + delta, c=custom_colour, s=5, zorder=4)
+    plt.title('matches')
+    match_img2 = convert_plt_to_tensor()
 
     # Draw scores
     scores = out['scores'][0].squeeze().detach().cpu().numpy()
-    plt.subplots()
     plt.imshow(scores, cmap='inferno')
+    plt.colorbar()
+    plt.title('log inverse variance (weight score)')
     score_img = convert_plt_to_tensor()
-
-    # Draw mask
-    mask = batch['mask'][0].squeeze().numpy()
-    plt.subplots()
-    plt.imshow(mask, cmap='gray')
-    mask_img = convert_plt_to_tensor()
 
     # Draw detector scores
     detector_scores = out['detector_scores'][0].squeeze().detach().cpu().numpy()
-    plt.subplots()
     plt.imshow(detector_scores, cmap='inferno')
+    plt.colorbar()
+    plt.title('detector score')
     dscore_img = convert_plt_to_tensor()
 
-    return vutils.make_grid([radar_img, score_img, match_img, mask_img, dscore_img])
+    # Draw point-to-point error
+    src_p = out['src'][0].squeeze().T
+    tgt_p = out['tgt'][0].squeeze().T
+    R_tgt_src = out['R'][0, :2, :2]
+    t_st_in_t = out['t'][0, :2, :]
+    error = tgt_p - (R_tgt_src @ src_p + t_st_in_t)
+    mah = torch.sqrt(torch.sum(error * error * torch.exp(out['match_weights'][0]), dim=0).squeeze())
+    error2_sqrt = torch.sqrt(torch.sum(error * error, dim=0).squeeze())
+
+    plt.imshow(radar, cmap='gray')
+    plt.scatter(src[:, 0], src[:, 1], c=error2_sqrt.detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
+    plt.colorbar()
+    plt.title('P2P error')
+    p2p_img = convert_plt_to_tensor()
+
+    plt.imshow(radar, cmap='gray')
+    plt.scatter(src[:, 0], src[:, 1], c=mah.detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
+    plt.colorbar()
+    plt.title('MAH')
+    mah_img = convert_plt_to_tensor()
+
+    return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
+           vutils.make_grid([p2p_img, mah_img])
 
 def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""

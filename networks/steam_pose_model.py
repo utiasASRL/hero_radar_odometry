@@ -26,6 +26,7 @@ class SteamPoseModel(torch.nn.Module):
         self.patch_size = config['networks']['keypoint_block']['patch_size']
         self.border = config['steam']['border']
         self.min_abs_vel = config['steam']['min_abs_vel']
+        self.mah_thresh = config['steam']['mah_thresh']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -79,10 +80,15 @@ class SteamPoseModel(torch.nn.Module):
             # get R_21 and t_12_in_2
             R_21 = torch.from_numpy(self.solver.poses[b, 1][:2, :2]).to(self.gpuid)
             t_12_in_2 = torch.from_numpy(self.solver.poses[b, 1][:2, 3:4]).to(self.gpuid)
-            # error threshold
             error = points2 - (R_21 @ points1 + t_12_in_2)
             error2 = torch.sum(error * error * torch.exp(weights), dim=0)
-            ids = torch.nonzero(error2.squeeze() < 4.0 ** 2, as_tuple=False).squeeze()
+
+            # error threshold
+            if self.mah_thresh > 0:
+                ids = torch.nonzero(error2.squeeze() < self.mah_thresh ** 2, as_tuple=False).squeeze()
+            else:
+                ids = torch.arange(error2.squeeze().size(0))
+
             # squared error
             point_loss += torch.mean(torch.sum(error[:, ids] * error[:, ids] * torch.exp(weights[:, ids]), dim=0))
             # log det
@@ -151,8 +157,8 @@ class SteamSolver():
         zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
         identity_weights = np.tile(np.expand_dims(np.eye(3, dtype=np.float32), 0), (num_points, 1, 1))
 
-        R_tgt_src = np.zeros((self.batch_size, 3, 3))
-        t_src_tgt_in_tgt = np.zeros((self.batch_size, 3, 1))
+        R_tgt_src = np.zeros((self.batch_size, 3, 3), dtype=np.float32)
+        t_src_tgt_in_tgt = np.zeros((self.batch_size, 3, 1), dtype=np.float32)
 
         # loop through each batch
         for b in range(self.batch_size):
