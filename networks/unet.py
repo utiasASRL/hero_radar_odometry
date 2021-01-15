@@ -32,9 +32,8 @@ class UNet(torch.nn.Module):
         self.up3_score = Up(first_feature_dimension * (4 + 2), first_feature_dimension * 2, bilinear)
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, 1)
-        self.outc_score2 = OutConv(2, 1)
-        self.outc_score3 = OutConv(1, 1)
         self.sigmoid = torch.nn.Sigmoid()
+        self.tanh = torch.nn.Tanh()
 
         self.initialize_weights()
 
@@ -83,5 +82,6 @@ class UNet(torch.nn.Module):
 
         feature_list = [f1, f2, f3, f4, f5]
         descriptors = torch.cat(feature_list, dim=1)
+        descriptors = self.tanh(descriptors)
 
         return logits_pts, score, descriptors
