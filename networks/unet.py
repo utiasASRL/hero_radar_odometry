@@ -33,6 +33,7 @@ class UNet(torch.nn.Module):
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, 1)
         self.outc_score2 = OutConv(2, 1)
+        self.outc_score3 = OutConv(1, 1)
         self.sigmoid = torch.nn.Sigmoid()
 
         self.initialize_weights()
@@ -65,11 +66,10 @@ class UNet(torch.nn.Module):
         x2_up_score = self.up3_score(x3_up_score, x2)
         x1_up_score = self.up4_score(x2_up_score, x1)
         score = self.outc_score(x1_up_score)
-        if mask is not None:
-            torch.cat((score, mask), dim=1)
-            score = self.outc_score2(score)
         if self.score_sigmoid:
             score = self.sigmoid(score)
+        if mask is not None:
+            score = score * mask
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to

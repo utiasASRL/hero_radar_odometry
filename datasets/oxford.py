@@ -62,7 +62,7 @@ def mean_intensity_mask(polar_data):
     mask = np.zeros((num_azimuths, range_bins))
     for i in range(num_azimuths):
         m = np.mean(polar_data[i, :])
-        mask[i, :] = polar_data[i, :] > 1.5 * m
+        mask[i, :] = polar_data[i, :] > 2.0 * m
     return mask
 
 class OxfordDataset(Dataset):
@@ -111,7 +111,7 @@ class OxfordDataset(Dataset):
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         polar_mask = mean_intensity_mask(polar)
         cart_mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
-                                        self.config['cart_resolution'], self.config['cart_pixel_width'])
+                                        self.config['cart_resolution'], self.config['cart_pixel_width']).astype(np.float32)
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
         if idx + 1 < len(self.frames):
