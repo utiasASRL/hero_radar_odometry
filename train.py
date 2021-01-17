@@ -33,6 +33,7 @@ if __name__ == '__main__':
         monitor = SVDMonitor(model, valid_loader, config)
     elif config['model'] == 'SteamPoseModel':
         monitor = SteamMonitor(model, valid_loader, config)
+    os.system('cp ' + args.config + ' ' + config['log_dir'])
 
     model.train()
 
