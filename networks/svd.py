@@ -47,7 +47,10 @@ class SVD(torch.nn.Module):
 
         W = torch.bmm(tgt_centered * weights, src_centered.transpose(2, 1)) / w  # B x 3 x 3
 
-        U, _, V = torch.svd(W)
+        try:
+            U, _, V = torch.svd(W)
+        except:     # torch.svd sometimes has convergence issues, this has yet to be patched.
+            U, _, V = torch.svd(W + 1e-4 * W.mean() * torch.rand(1, 3))    # Add turbulence to patch convergence issue
 
         det_UV = torch.det(U) * torch.det(V)
         ones = torch.ones(B, 2).type_as(V)

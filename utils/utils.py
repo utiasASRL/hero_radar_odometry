@@ -13,7 +13,7 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
     return svd_loss, dict_loss
 
-def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, weights, alpha=1.0):
+def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, weights, alpha=0.1):
     # tgt, src: B x N x 2
     assert(tgt.size() == src.size())
     B, N, _ = tgt.size()
@@ -22,9 +22,10 @@ def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, weights, alpha=1.0
     tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1)
     error = torch.abs(tgt - tgt_pred)
     point_loss = torch.sum(error) / (2 * B * N)
-    weight_loss = -1 * torch.nn.log(torch.sum(weights) / (B * N))
+    weight_loss = -1 * torch.log(torch.sum(weights) / (B * N))
     dict_loss = {'point_loss': point_loss, 'weight_loss': weight_loss}
     loss = point_loss + alpha * weight_loss
+    #loss = point_loss
     return loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):

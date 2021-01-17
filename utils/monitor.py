@@ -2,7 +2,8 @@ import os
 from time import time
 import numpy as np
 import torch
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
@@ -23,7 +24,7 @@ class MonitorBase(object):
         self.vis_batches = self.get_vis_batches()
         if not os.path.exists(self.log_dir):
             os.mkdir(self.log_dir)
-        self.writer = SummaryWriter(self.log_dir)
+        self.writer = SummaryWriter(log_dir=self.log_dir, comment=self.config['log_comment'])
         print('monitor running and saving to {}'.format(self.log_dir))
 
     def get_vis_batches(self):
@@ -93,7 +94,7 @@ class SVDMonitor(MonitorBase):
             if self.config['loss'] == 'supervised_loss':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, self.config)
             elif self.config['loss'] == 'pointmatch_loss':
-                loss, dict_loss = pointmatch_loss(out['R'], out['t'], out['tgt'], out['src'], self.config)
+                loss, dict_loss = pointmatch_loss(out['R'], out['t'], out['tgt'], out['src'], out['match_weights'])
             valid_loss += loss.detach().cpu().item()
             if not aux_init:
                 for loss_name in dict_loss:

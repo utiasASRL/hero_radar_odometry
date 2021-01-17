@@ -67,8 +67,8 @@ class UNet(torch.nn.Module):
         score = self.outc_score(x1_up_score)
         if self.score_sigmoid:
             score = self.sigmoid(score)
-        if mask is not None:
-            score = score * mask
+        #if mask is not None:
+        #    score = score * mask
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to
@@ -82,6 +82,6 @@ class UNet(torch.nn.Module):
 
         feature_list = [f1, f2, f3, f4, f5]
         descriptors = torch.cat(feature_list, dim=1)
-        descriptors = self.tanh(descriptors)
+        # descriptors = self.tanh(descriptors)
 
         return logits_pts, score, descriptors
