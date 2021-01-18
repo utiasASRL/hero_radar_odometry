@@ -119,13 +119,13 @@ def draw_batch_steam(batch, out, config):
     error2_sqrt = torch.sqrt(torch.sum(error * error, dim=0).squeeze())
 
     plt.imshow(radar, cmap='gray')
-    plt.scatter(src[:, 0], src[:, 1], c=error2_sqrt.detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
+    plt.scatter(src[ids_cpu, 0], src[ids_cpu, 1], c=error2_sqrt[ids_cpu].detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
     plt.colorbar()
     plt.title('P2P error')
     p2p_img = convert_plt_to_tensor()
 
     plt.imshow(radar, cmap='gray')
-    plt.scatter(src[:, 0], src[:, 1], c=mah.detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
+    plt.scatter(src[ids_cpu, 0], src[ids_cpu, 1], c=mah[ids_cpu].detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
     plt.colorbar()
     plt.title('MAH')
     mah_img = convert_plt_to_tensor()
