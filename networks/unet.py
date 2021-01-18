@@ -67,8 +67,8 @@ class UNet(torch.nn.Module):
         score = self.outc_score(x1_up_score)
         if self.score_sigmoid:
             score = self.sigmoid(score)
-        #if mask is not None:
-        #    score = score * mask
+        if mask is not None:
+            score = score * mask
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to

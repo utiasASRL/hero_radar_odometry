@@ -25,7 +25,6 @@ def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, weights, alpha=0.1
     weight_loss = -1 * torch.log(torch.sum(weights) / (B * N))
     dict_loss = {'point_loss': point_loss, 'weight_loss': weight_loss}
     loss = point_loss + alpha * weight_loss
-    #loss = point_loss
     return loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
