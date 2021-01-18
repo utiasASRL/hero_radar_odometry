@@ -40,7 +40,7 @@ class UNet(torch.nn.Module):
     def initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='tanh')
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -67,8 +67,8 @@ class UNet(torch.nn.Module):
         score = self.outc_score(x1_up_score)
         if self.score_sigmoid:
             score = self.sigmoid(score)
-        if mask is not None:
-            score = score * mask
+        # if mask is not None:
+            # score = score * mask
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to

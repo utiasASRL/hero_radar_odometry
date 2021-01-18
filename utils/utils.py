@@ -13,7 +13,14 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
     return svd_loss, dict_loss
 
-def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, weights, alpha=0.1):
+def pointmatch_loss(out, batch, config, alpha=0.1, beta=1.0):
+    R_tgt_src_pred = out['R']
+    t_tgt_src_pred = out['t']
+    tgt = out['tgt']
+    src = out['src']
+    weights = out['match_weights']
+    dense_weights = out['dense_weights']
+    mask = batch['mask'].to(config['gpuid'])
     # tgt, src: B x N x 2
     assert(tgt.size() == src.size())
     B, N, _ = tgt.size()
@@ -21,10 +28,13 @@ def pointmatch_loss(R_tgt_src_pred, t_tgt_src_pred, tgt, src, weights, alpha=0.1
     t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
     tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1)
     error = torch.abs(tgt - tgt_pred)
-    point_loss = torch.sum(error) / (2 * B * N)
+    point_loss = config['cart_resolution'] * torch.sum(error) / (2 * B * N)
+    dict_loss = {'point_loss': point_loss}
     weight_loss = -1 * torch.log(torch.sum(weights) / (B * N))
-    dict_loss = {'point_loss': point_loss, 'weight_loss': weight_loss}
-    loss = point_loss + alpha * weight_loss
+    dict_loss['weight_loss'] = weight_loss
+    mask_loss = torch.nn.L1Loss(mask, weights)
+    dict_loss['mask_loss'] = mask_loss
+    loss = point_loss + alpha * weight_loss + beta * mask_loss
     return loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
@@ -219,3 +229,7 @@ def get_indices(batch_size, window_size):
             src_inds.append(idx)
             tgt_inds.append(idx + 1)
     return src_inds, tgt_inds
+
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']

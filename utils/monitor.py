@@ -36,6 +36,7 @@ class MonitorBase(object):
         self.counter += 1
         self.dt = time() - self.current_time
         self.current_time = time()
+        valid_loss = None
 
         if self.counter % self.config['print_rate'] == 0:
             print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, loss.detach().cpu().item(), self.dt))
@@ -49,7 +50,7 @@ class MonitorBase(object):
         if self.counter % self.config['val_rate'] == 0:
             with torch.no_grad():
                 self.model.eval()
-                self.validation()
+                valid_loss = self.validation()
                 self.model.train()
 
         if self.counter % self.config['save_rate'] == 0:
@@ -59,6 +60,7 @@ class MonitorBase(object):
                 print('saving model', mname)
                 torch.save(self.model.state_dict(), mname)
                 self.model.train()
+        return valid_loss
 
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
@@ -125,6 +127,7 @@ class SVDMonitor(MonitorBase):
         imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img)
+        return valid_loss
 
 class SteamMonitor(MonitorBase):
 
@@ -176,3 +179,4 @@ class SteamMonitor(MonitorBase):
         imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img)
+        return valid_loss
