@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import torch.nn as nn
 import torch.nn.functional as F
 from networks.unet import UNet
 from networks.keypoint import Keypoint, normalize_coords
@@ -27,12 +28,18 @@ class SteamPoseModel(torch.nn.Module):
         self.border = config['steam']['border']
         self.min_abs_vel = config['steam']['min_abs_vel']
         self.mah_thresh = config['steam']['mah_thresh']
+        self.relu_detector = nn.ReLU()
+        self.zero_int_detector = config['steam']['zero_int_detector']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
         mask = batch['mask'].to(self.gpuid)
 
         detector_scores, weight_scores, desc = self.unet(data)
+
+        if self.zero_int_detector:
+            detector_scores = self.relu_detector(detector_scores)
+            detector_scores *= mask
 
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
 
