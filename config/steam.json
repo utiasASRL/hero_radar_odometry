@@ -21,7 +21,8 @@
         },
         "keypoint_block": {
             "patch_size": 32,
-            "softmax_temp": 1.0
+            "softmax_temp": 1.0,
+            "grid_sample": true
         },
         "matcher_block": {
             "softmax_temp": 0.01,
@@ -36,7 +37,8 @@
         "zero_int_thresh": 0,
         "border": 0,
         "min_abs_vel": -1,
-        "mah_thresh": 4
+        "mah_thresh": 4,
+        "weight_thresh_mult": 1.0
     },
     "lr": 0.0001,
     "weight_decay": 0,

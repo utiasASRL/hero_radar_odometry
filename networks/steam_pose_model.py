@@ -142,6 +142,7 @@ class SteamSolver():
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
         self.zero_int_thresh = config['steam']['zero_int_thresh']
+        self.weight_thresh_mult = config['steam']['weight_thresh_mult']
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         # update batch size
@@ -173,14 +174,21 @@ class SteamSolver():
             # points must be list of N x 3
             points1 = keypoint_coords[i, ids].detach().cpu().numpy()
             points2 = pseudo_coords[b, ids].detach().cpu().numpy()
+            zeros_vec_temp = zeros_vec[ids_cpu]
 
             # weights must be list of N x 3 x 3
-            weights = torch.exp(match_weights[b, 0, ids]).view(-1, 1, 1).detach().cpu().numpy() * identity_weights[ids_cpu]
+            torch_weights = torch.exp(match_weights[b, 0, ids])
+            weights = torch_weights.view(-1, 1, 1).detach().cpu().numpy() * identity_weights[ids_cpu]
+
+            # weight threshold
+            weight_thresh = torch.mean(torch_weights)*self.weight_thresh_mult
+            ids = torch.nonzero(torch_weights > weight_thresh, as_tuple=False).squeeze(1)
+            ids_cpu = ids.cpu()
 
             # solver
             self.solver_cpp.resetTraj()
-            self.solver_cpp.setMeas([np.concatenate((points2, zeros_vec[ids_cpu]), 1)],
-                                    [np.concatenate((points1, zeros_vec[ids_cpu]), 1)], [weights])
+            self.solver_cpp.setMeas([np.concatenate((points2[ids_cpu], zeros_vec_temp[ids_cpu]), 1)],
+                                    [np.concatenate((points1[ids_cpu], zeros_vec_temp[ids_cpu]), 1)], [weights[ids_cpu]])
             self.solver_cpp.optimize()
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
