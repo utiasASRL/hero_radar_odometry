@@ -1,7 +1,7 @@
 {
     "model": "SVDPoseModel",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2021-01-17-1/run13_alpha_010_beta_050_desc_tanh_no_mask_mask_loss_bce_pre_run12_15k/",
+    "log_dir": "/workspace/Documents/logs/2021-01-17-1/run14_alpha_010_no_desc_tanh_L2_with_weights_pointmatch_loss/",
     "gpuid": "cuda:0",
     "min_range": 58,
     "radar_resolution": 0.0432,

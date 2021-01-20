@@ -26,10 +26,10 @@ def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0):
     B, N, _ = tgt.size()
     R = R_tgt_src_pred[:, :2, :2]  # B x 2 x 2
     t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
-    tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1)
+    tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1) # B x N x 2
     l1loss = torch.nn.L1Loss()
     # point_loss = l1loss(tgt, tgt_pred)
-    error = torch.sum((tgt - tgt_pred)**2, dim=1, keepdim=True)
+    error = torch.sum((tgt - tgt_pred)**2, dim=2, keepdim=True).reshape(B, 1, N)
     point_loss = torch.sum(weights * error) / (2 * B * N)
     dict_loss = {'point_loss': point_loss}
     weight_loss = -1 * torch.log(torch.sum(weights) / (B * N))
