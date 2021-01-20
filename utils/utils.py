@@ -28,15 +28,16 @@ def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0):
     t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
     tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1)
     l1loss = torch.nn.L1Loss()
-    # point_loss = config['cart_resolution'] * torch.sum(error) / (2 * B * N)
-    point_loss = l1loss(tgt, tgt_pred) #* config['cart_resolution']
+    # point_loss = l1loss(tgt, tgt_pred)
+    error = torch.sum((tgt - tgt_pred)**2, dim=1, keepdim=True)
+    point_loss = torch.sum(weights * error) / (2 * B * N)
     dict_loss = {'point_loss': point_loss}
     weight_loss = -1 * torch.log(torch.sum(weights) / (B * N))
     dict_loss['weight_loss'] = weight_loss
-    bceloss = torch.nn.BCELoss()
-    mask_loss = bceloss(dense_weights, mask)
-    dict_loss['mask_loss'] = mask_loss
-    loss = point_loss + alpha * weight_loss + beta * mask_loss
+    # bceloss = torch.nn.BCELoss()
+    # mask_loss = bceloss(dense_weights, mask)
+    # dict_loss['mask_loss'] = mask_loss
+    loss = point_loss + alpha * weight_loss #+ beta * mask_loss
     return loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
