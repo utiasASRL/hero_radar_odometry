@@ -32,7 +32,7 @@
     "steam": {
         "time_step": 0.25,
         "sliding_flag": false,
-        "expect_approx": ["mean", "2N", "linearize"],
+        "expect_approx": ["mean", "2NP1", "linearize"],
         "expect_approx_opt": 0,
         "zero_int_thresh": 0,
         "border": 0,

@@ -30,6 +30,7 @@ class SteamPoseModel(torch.nn.Module):
         self.mah_thresh = config['steam']['mah_thresh']
         self.relu_detector = nn.ReLU()
         self.zero_int_detector = config['steam']['zero_int_detector']
+        self.expect_approx_opt = config['steam']['expect_approx_opt']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -96,8 +97,23 @@ class SteamPoseModel(torch.nn.Module):
             else:
                 ids = torch.arange(error2.squeeze().size(0))
 
-            # squared error
-            point_loss += torch.mean(torch.sum(error[:, ids] * error[:, ids] * torch.exp(weights[:, ids]), dim=0))
+            # squared mah error
+            if self.expect_approx_opt == 0:
+                # only mean
+                point_loss += torch.mean(torch.sum(error[:, ids] * error[:, ids] * torch.exp(weights[:, ids]), dim=0))
+            elif self.expect_approx_opt == 1:
+                # sigmapoints
+                Rsp = torch.from_numpy(self.solver.poses_sp[b, 0, :, :2, :2]).to(self.gpuid).unsqueeze(1)  # s x 1 x 2 x 2
+                tsp = torch.from_numpy(self.solver.poses_sp[b, 0, :, :2, 3:4]).to(self.gpuid).unsqueeze(1) # s x 1 x 2 x 1
+
+                points2 = points2[:, ids].T.unsqueeze(0).unsqueeze(-1)  # 1 x n x 2 x 1
+                points1_in_2 = Rsp@(points1[:, ids].T.unsqueeze(0).unsqueeze(-1)) + tsp  # s x n x 2 x 1
+                error = points2 - points1_in_2  # s x n x 2 x 1
+                temp = torch.sum(error*error*torch.exp(weights[:, ids].unsqueeze(-1).unsqueeze(-1)), dim=0).squeeze(-1)/12.0
+                point_loss += torch.mean(torch.sum(temp, dim=1))
+            else:
+                raise NotImplementedError('Steam loss method not implemented!')
+
             # log det
             logdet_loss -= 3 * torch.mean(weights[:, ids])
 
@@ -141,15 +157,21 @@ class SteamSolver():
         self.batch_size = config['batch_size']
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
+
         # state variables
         self.poses = np.tile(
             np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
+        self.poses_sp = np.tile(
+            np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
+            (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
+
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
         self.zero_int_thresh = config['steam']['zero_int_thresh']
         self.weight_thresh_mult = config['steam']['weight_thresh_mult']
+        self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         # update batch size
@@ -158,6 +180,7 @@ class SteamSolver():
             np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
+
         # keypoint_coords (BxW) x 400 x 2
         # weights (BxW/2) x 1 x 400
         # pseudo_coords (BxW/2) x 400 x 2
@@ -197,9 +220,15 @@ class SteamSolver():
             self.solver_cpp.setMeas([np.concatenate((points2[ids_cpu], zeros_vec_temp[ids_cpu]), 1)],
                                     [np.concatenate((points1[ids_cpu], zeros_vec_temp[ids_cpu]), 1)], [weights[ids_cpu]])
             self.solver_cpp.optimize()
+
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
             self.solver_cpp.getVelocities(self.vels[b])
+
+            # sigmapoints output
+            if self.sigmapoints_flag:
+                self.solver_cpp.getSigmapoints2NP1(self.poses_sp[b])
+
             # set output
             R_tgt_src[b, :, :] = self.poses[b, 1, :3, :3]
             t_src_tgt_in_tgt[b, :, :] = self.poses[b, 1, :3, 3:4]

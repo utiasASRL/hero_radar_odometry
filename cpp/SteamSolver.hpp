@@ -29,10 +29,13 @@ public:
     // output
     void getPoses(np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
+    void getSigmapoints2NP1(np::ndarray& sigma_T);
 
 private:
     // Solver
-    typedef boost::shared_ptr<steam::SolverBase> SolverBasePtr;
+    typedef steam::VanillaGaussNewtonSolver SolverType;
+//    typedef boost::shared_ptr<steam::SolverBase> SolverBasePtr;
+    typedef boost::shared_ptr<SolverType> SolverBasePtr;
     SolverBasePtr solver_;
     // States
     std::vector<TrajStateVar> states_;
@@ -57,7 +60,8 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("setMeas", &SteamSolver::setMeas)
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
-        .def("getVelocities", &SteamSolver::getVelocities);
+        .def("getVelocities", &SteamSolver::getVelocities)
+        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
 }
 
 #endif  // STEAMSOLVER_HPP

@@ -105,7 +105,7 @@ void SteamSolver::optimize() {
     // TODO(david): Make this a parameter
     // typedef steam::DoglegGaussNewtonSolver SolverType;
     // typedef steam::LevMarqGaussNewtonSolver SolverType;
-    typedef steam::VanillaGaussNewtonSolver SolverType;
+    // typedef steam::VanillaGaussNewtonSolver SolverType;
     SolverType::Params params;
     params.verbose = false;  // TODO(david): make this a parameter
     // Make solver
@@ -136,4 +136,51 @@ void SteamSolver::getVelocities(np::ndarray& vels) {
             vels[i][r] = float(vel(r));
         }
     }
+}
+
+void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
+    // query covariance at once
+    std::vector<steam::StateKey> keys;
+    keys.reserve(window_size_ - 1);
+    for (unsigned int i = 1; i < states_.size(); i++) {
+        // skip i = 0 since it's always locked
+        const TrajStateVar& state = states_.at(i);
+        keys.push_back(state.pose->getKey());
+    }
+    steam::BlockMatrix cov_blocks = solver_->queryCovarianceBlock(keys);
+
+    // useful constants
+    int n = 6;  // pose is 6D
+    double alpha = sqrt(double(n));
+
+    // loop through every frame (skipping first since it's locked)
+    for (unsigned int i = 1; i < window_size_; i++) {
+        // mean pose
+        const TrajStateVar& state = states_.at(i);
+        Eigen::Matrix4d T_i0_eigen = state.pose->getValue().matrix();
+
+        // get cov and LLT decomposition
+        Eigen::Matrix<double,6,6> cov = cov_blocks.at(i - 1, i - 1);
+        Eigen::LLT<Eigen::MatrixXd> lltcov(cov);
+        Eigen::MatrixXd L = lltcov.matrixL();
+
+        // sigmapoints
+        for (int a = 0; a < n; ++a) {
+            // delta for pose
+            Eigen::Matrix4d T_sp = lgmath::se3::vec2tran(L.col(a).head<6>()*alpha);
+            Eigen::Matrix4d T_sp_inv = lgmath::se3::vec2tran(-L.col(a).head<6>()*alpha);
+
+            // positive/negative sigmapoints
+            T_sp = T_sp*T_i0_eigen;
+            T_sp_inv = T_sp_inv*T_i0_eigen;
+
+            // set output
+            for (int r = 0; r < 4; ++r) {
+                for (int c = 0; c < 4; ++c) {
+                    sigma_T[i-1][a][r][c] = float(T_sp(r, c));
+                    sigma_T[i-1][a+n][r][c] = float(T_sp_inv(r, c));
+                } // end c
+            } // end r
+        } // end for a
+    } // end for i
 }
