@@ -33,7 +33,7 @@ class UNet(torch.nn.Module):
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, 1)
         self.sigmoid = torch.nn.Sigmoid()
-        self.tanh = torch.nn.Tanh()
+        # self.tanh = torch.nn.Tanh()
 
         self.initialize_weights()
 

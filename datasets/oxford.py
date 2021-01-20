@@ -5,7 +5,6 @@
 import os
 import torch
 import numpy as np
-import cv2
 from torch.utils.data import Dataset, DataLoader
 from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBatchSampler
 from datasets.radar import load_radar, radar_polar_to_cartesian

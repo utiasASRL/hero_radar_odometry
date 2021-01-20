@@ -32,7 +32,12 @@ def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0):
     error = torch.sum((tgt - tgt_pred)**2, dim=2, keepdim=True).reshape(B, 1, N)
     point_loss = torch.sum(weights * error) / (2 * B * N)
     dict_loss = {'point_loss': point_loss}
-    weight_loss = -1 * torch.log(torch.sum(weights) / (B * N))
+    wsum = torch.sum(weights)
+    if wsum == 0:
+        weight_loss = 15
+        print('WARNING: matching weights have gone to zero!')
+    else:
+        weight_loss = -1 * torch.log(wsum / (B * N))
     dict_loss['weight_loss'] = weight_loss
     # bceloss = torch.nn.BCELoss()
     # mask_loss = bceloss(dense_weights, mask)
