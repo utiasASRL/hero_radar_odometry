@@ -12,7 +12,6 @@ class Keypoint(torch.nn.Module):
         self.patch_size = config['networks']['keypoint_block']['patch_size']
         self.temperature = config['networks']['keypoint_block']['softmax_temp']
         self.gpuid = config['gpuid']
-        self.mask_threshold = config['networks']['keypoint_block']['mask_threshold']
 
     def forward(self, detector_scores, weight_scores, descriptors):
 
