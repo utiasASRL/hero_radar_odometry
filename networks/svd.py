@@ -38,7 +38,7 @@ class SVD(torch.nn.Module):
         tgt_coords = tgt_coords.transpose(2, 1)
 
         # Compute weighted centroids
-        w = torch.sum(weights, dim=2, keepdim=True)
+        w = torch.sum(weights, dim=2, keepdim=True) + 1e-4
         src_centroid = torch.sum(src_coords * weights, dim=2, keepdim=True) / w  # B x 3 x 1
         tgt_centroid = torch.sum(tgt_coords * weights, dim=2, keepdim=True) / w
 
@@ -50,7 +50,12 @@ class SVD(torch.nn.Module):
         try:
             U, _, V = torch.svd(W)
         except:     # torch.svd sometimes has convergence issues, this has yet to be patched.
-            U, _, V = torch.svd(W + 1e-4 * W.mean() * torch.rand(1, 3))    # Add turbulence to patch convergence issue
+            print(W)
+            print(tgt_centered)
+            print(src_centered)
+            print(weights)
+            print('Adding turbulence to patch convergence issue')
+            U, _, V = torch.svd(W + 1e-4 * W.mean() * torch.rand(1, 3).to(self.gpuid))
 
         det_UV = torch.det(U) * torch.det(V)
         ones = torch.ones(B, 2).type_as(V)

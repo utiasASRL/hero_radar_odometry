@@ -13,7 +13,7 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
     return svd_loss, dict_loss
 
-def pointmatch_loss(out, batch, config, alpha=0.1, beta=1.0):
+def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0):
     R_tgt_src_pred = out['R']
     t_tgt_src_pred = out['t']
     tgt = out['tgt']
@@ -27,12 +27,14 @@ def pointmatch_loss(out, batch, config, alpha=0.1, beta=1.0):
     R = R_tgt_src_pred[:, :2, :2]  # B x 2 x 2
     t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
     tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1)
-    error = torch.abs(tgt - tgt_pred)
-    point_loss = config['cart_resolution'] * torch.sum(error) / (2 * B * N)
+    l1loss = torch.nn.L1Loss()
+    # point_loss = config['cart_resolution'] * torch.sum(error) / (2 * B * N)
+    point_loss = l1loss(tgt, tgt_pred) #* config['cart_resolution']
     dict_loss = {'point_loss': point_loss}
     weight_loss = -1 * torch.log(torch.sum(weights) / (B * N))
     dict_loss['weight_loss'] = weight_loss
-    mask_loss = torch.nn.L1Loss(mask, weights)
+    bceloss = torch.nn.BCELoss()
+    mask_loss = bceloss(dense_weights, mask)
     dict_loss['mask_loss'] = mask_loss
     loss = point_loss + alpha * weight_loss + beta * mask_loss
     return loss, dict_loss

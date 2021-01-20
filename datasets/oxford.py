@@ -114,10 +114,6 @@ class OxfordDataset(Dataset):
         mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
                                         self.config['cart_resolution'],
                                         self.config['cart_pixel_width']).astype(np.float32)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
-        mask = cv2.dilate(mask, kernel, iterations=3)
-        mask = cv2.erode(mask, kernel, iterations=4)
-        mask = cv2.dilate(mask, kernel, iterations=2)
 
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])

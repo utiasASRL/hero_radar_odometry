@@ -96,7 +96,7 @@ class SVDMonitor(MonitorBase):
             if self.config['loss'] == 'supervised_loss':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, self.config)
             elif self.config['loss'] == 'pointmatch_loss':
-                loss, dict_loss = pointmatch_loss(out['R'], out['t'], out['tgt'], out['src'], out['match_weights'])
+                loss, dict_loss = pointmatch_loss(out, batch, self.config)
             valid_loss += loss.detach().cpu().item()
             if not aux_init:
                 for loss_name in dict_loss:
