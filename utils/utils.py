@@ -13,7 +13,7 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
     return svd_loss, dict_loss
 
-def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0, errorT=10.0):
+def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0, errorT=100.0):
     R_tgt_src_pred = out['R']
     t_tgt_src_pred = out['t']
     tgt = out['tgt']
