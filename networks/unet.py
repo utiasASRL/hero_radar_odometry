@@ -33,8 +33,6 @@ class UNet(torch.nn.Module):
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, 1)
         self.sigmoid = torch.nn.Sigmoid()
-        # self.tanh = torch.nn.Tanh()
-        self.relu = torch.nn.ReLU()
 
         self.initialize_weights()
 
@@ -46,7 +44,7 @@ class UNet(torch.nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, mask=None):
+    def forward(self, x):
         _, _, height, width = x.size()
 
         x1 = self.inc(x)
@@ -68,9 +66,6 @@ class UNet(torch.nn.Module):
         score = self.outc_score(x1_up_score)
         if self.score_sigmoid:
             score = self.sigmoid(score)
-        if mask is not None:
-            score = score * mask
-            logits_pts = self.relu(logits_pts) * mask
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to
@@ -84,6 +79,5 @@ class UNet(torch.nn.Module):
 
         feature_list = [f1, f2, f3, f4, f5]
         descriptors = torch.cat(feature_list, dim=1)
-        # descriptors = self.tanh(descriptors)
 
         return logits_pts, score, descriptors
