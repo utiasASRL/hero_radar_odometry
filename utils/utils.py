@@ -28,16 +28,16 @@ def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0, errorT=100.0):
     t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
     tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1) # B x N x 2
     l1loss = torch.nn.L1Loss()
-    # point_loss = l1loss(tgt, tgt_pred)
-    error = config['cart_resolution']**2 * torch.sum((tgt - tgt_pred)**2, dim=2, keepdim=True).reshape(B, 1, N)
-    point_loss = 0
-    k = 0
-    for i in range(B):
-        for j in range(N):
-            if error[i, 0, j] < errorT:
-                point_loss += error[i, 0, j]
-                k += 1
-    point_loss /= (k + 1e-4)
+    point_loss = l1loss(tgt, tgt_pred)
+    #error = config['cart_resolution']**2 * torch.sum((tgt - tgt_pred)**2, dim=2, keepdim=True).reshape(B, 1, N)
+    #point_loss = 0
+    #k = 0
+    #for i in range(B):
+    #    for j in range(N):
+    #        if error[i, 0, j] < errorT:
+    #            point_loss += error[i, 0, j]
+    #            k += 1
+    #point_loss /= (k + 1e-4)
 
     # point_loss = torch.sum(weights * error) / (2 * B * N)
     # mseloss = torch.nn.MSELoss()
@@ -50,10 +50,10 @@ def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0, errorT=100.0):
     else:
         weight_loss = -1 * torch.log(wsum / (B * N))
     dict_loss['weight_loss'] = weight_loss
-    # bceloss = torch.nn.BCELoss()
-    # mask_loss = bceloss(dense_weights, mask)
-    # dict_loss['mask_loss'] = mask_loss
-    loss = point_loss #+ alpha * weight_loss #+ beta * mask_loss
+    #bceloss = torch.nn.BCELoss()
+    #mask_loss = bceloss(dense_weights, mask)
+    #dict_loss['mask_loss'] = mask_loss
+    loss = point_loss + alpha * weight_loss #+ beta * mask_loss
     return loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):

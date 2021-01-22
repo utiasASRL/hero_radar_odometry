@@ -21,6 +21,6 @@ def augmentBatch(batch, config):
         T_21[i - 1] = np.matmul(T, T_21[i - 1])
         T_21[i] = np.matmul(T_21[i], get_inverse_tf(T))
     batch['data'] = torch.from_numpy(data)
-    batch['mask'] = torch.from_numpy(mask > 0.5).type(batch['data'].dtype)
+    batch['mask'] = torch.from_numpy(mask).type(batch['data'].dtype)
     batch['T_21'] = torch.from_numpy(T_21)
     return batch

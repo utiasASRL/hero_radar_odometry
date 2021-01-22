@@ -69,7 +69,7 @@ class UNet(torch.nn.Module):
         if self.score_sigmoid:
             score = self.sigmoid(score)
         if mask is not None:
-            # score = score * mask
+            score = score * mask
             logits_pts = self.relu(logits_pts) * mask
 
         # Resize outputs of downsampling layers to the size of the original
