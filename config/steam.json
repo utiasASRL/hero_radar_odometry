@@ -1,7 +1,7 @@
 {
     "model": "SteamPoseModel",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2021-01-22/run4_bce_mask_loss/",
+    "log_dir": "/workspace/Documents/logs/2021-01-22/run7_mask_loss_nms_threshold_squared/",
     "gpuid": "cuda:1",
     "min_range": 58,
     "radar_resolution": 0.0432,
@@ -38,6 +38,7 @@
         "border": 0,
         "min_abs_vel": 1.0,
         "mah_thresh": 4,
+	"nms_thresh": 0.75,
         "weight_thresh_mult": 0,
         "zero_int_detector": true
     },

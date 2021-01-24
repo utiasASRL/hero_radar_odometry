@@ -28,6 +28,7 @@ class SteamPoseModel(torch.nn.Module):
         self.border = config['steam']['border']
         self.min_abs_vel = config['steam']['min_abs_vel']
         self.mah_thresh = config['steam']['mah_thresh']
+        self.nms_thresh = config['steam']['nms_thresh']
         self.relu_detector = nn.ReLU()
         self.zero_int_detector = config['steam']['zero_int_detector']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
@@ -96,8 +97,9 @@ class SteamPoseModel(torch.nn.Module):
             error2 = torch.sum(error * error * weights, dim=0)
 
             # error threshold
+            errorT = min(self.mah_thresh ** 2, self.nms_thresh * self.nms_thresh * torch.max(error2))
             if self.mah_thresh > 0:
-                ids = torch.nonzero(error2.squeeze() < self.mah_thresh ** 2, as_tuple=False).squeeze()
+                ids = torch.nonzero(error2.squeeze() < errorT, as_tuple=False).squeeze()
             else:
                 ids = torch.arange(error2.squeeze().size(0))
 
