@@ -30,6 +30,24 @@ def check_if_frame_has_gt(frame, gt_lines):
             return True
     return False
 
+def get_frame_speeds(frames, gt_path):
+    frame_speeds = frames
+    with open(gt_path, 'r') as f:
+        f.readline()
+        lines = f.readlines()
+        for i, frame in enumerate(frames):
+            radar_time = int(frame.split('.')[0])
+            v = None
+            for line in lines:
+                if int(line[9]) == radar_time:
+                    dx = float(line[2])
+                    dy = float(line[3])
+                    v = np.sqrt(dx**2 + dy**2) / 0.25
+                    frame_speeds[i] = v
+                    break
+            assert(v is not None)
+    return frame_speeds
+
 def get_frames_with_gt(frames, gt_path):
     """Returns a subset of the specified file list which have ground truth."""
     # For the Oxford Dataset we do a search from the end backwards because some
@@ -62,7 +80,7 @@ def mean_intensity_mask(polar_data, multiplier):
     mask = np.zeros((num_azimuths, range_bins))
     for i in range(num_azimuths):
         m = np.mean(polar_data[i, :])
-        mask[i, :] = polar_data[i, :] > multiplier*m
+        mask[i, :] = polar_data[i, :] > multiplier * m
     return mask
 
 class OxfordDataset(Dataset):
@@ -74,14 +92,17 @@ class OxfordDataset(Dataset):
         self.sequences = self.get_sequences_split(sequences, split)
         self.seq_idx_range = {}
         self.frames = []
+        self.frame_speeds = []
         self.seq_len = []
         self.mean_int_mask_mult = config['mean_int_mask_mult']
         for seq in self.sequences:
             seq_frames = get_frames(self.data_dir + seq + '/radar/')
             seq_frames = get_frames_with_gt(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
+            seq_frame_speeds = get_frame_speeds(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
             self.seq_idx_range[seq] = [len(self.frames), len(self.frames) + len(seq_frames)]
             self.seq_len.append(len(seq_frames))
             self.frames.extend(seq_frames)
+            self.frame_speeds.extend(seq_frame_speeds)
 
     def get_sequences_split(self, sequences, split):
         """Retrieves a list of sequence names depending on train/validation/test split."""
@@ -130,7 +151,8 @@ def get_dataloaders(config):
     train_dataset = OxfordDataset(config, 'train')
     valid_dataset = OxfordDataset(vconfig, 'validation')
     test_dataset = OxfordDataset(vconfig, 'test')
-    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_len)
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_len,
+                                             speed_filter=1.0, frame_speeds=train_dataset.frame_speeds)
     valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_len)
     test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_len)
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])

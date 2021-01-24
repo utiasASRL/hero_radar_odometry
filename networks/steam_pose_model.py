@@ -74,8 +74,8 @@ class SteamPoseModel(torch.nn.Module):
         bcount = 0
         for b in range(self.solver.batch_size):
             # check velocity
-            if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
-                continue
+            # if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
+                # continue
             bcount += 1
             i = b * self.solver.window_size
 
