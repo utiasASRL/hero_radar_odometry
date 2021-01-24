@@ -46,7 +46,7 @@ if __name__ == '__main__':
             if config['model'] == 'SVDPoseModel':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
             elif config['model'] == 'SteamPoseModel':
-                loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
+                loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
             if loss == 0:
                 print("No movement predicted. Skipping mini-batch.")
                 continue

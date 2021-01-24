@@ -179,7 +179,8 @@ class SteamMonitor(MonitorBase):
             if batchi in self.vis_batches:
                 # out = self.model(batch)
                 self.vis(batchi, batch, out)
-            loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
+            #loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
+            loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
             if loss != 0:
                 valid_loss += loss.detach().cpu().item()
                 valid_point_loss += dict_loss['point_loss'].detach().cpu().item()
