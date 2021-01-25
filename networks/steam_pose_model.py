@@ -63,11 +63,11 @@ class SteamPoseModel(torch.nn.Module):
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints)
 
-        return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'src': keypoint_coords_xy,
-                'tgt': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
-                'detector_scores': detector_scores, 'src_rc': keypoint_coords, 'tgt_rc': pseudo_coords, 'key_ids': key_ids}
+        return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
+                'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
+                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords, 'key_ids': key_ids}
 
-    def loss(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
+    def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints):
         point_loss = 0
         logdet_loss = 0
 
@@ -86,8 +86,8 @@ class SteamPoseModel(torch.nn.Module):
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
 
                 # points must be list of N x 3
-                points1 = pseudo_coords[w, ids].T    # 2 x N
-                points2 = keypoint_coords[w, ids].T  # 2 x N
+                points1 = src_coords[w, ids].T    # 2 x N
+                points2 = tgt_coords[w, ids].T  # 2 x N
                 weights = match_weights[w, :, ids]   # 1 x N
 
                 # get R_21 and t_12_in_2

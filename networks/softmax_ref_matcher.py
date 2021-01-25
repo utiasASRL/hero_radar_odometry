@@ -21,16 +21,10 @@ class SoftmaxRefMatcher(nn.Module):
             scores_dense: Bx1xHxW
             desc_dense: BxCxHxW
         """
-        # TODO: loop if window_size is greater than 2 (for cycle loss)
+
         bsz, encoder_dim, n_points = keypoint_desc.size()
         batch_size = int(bsz / self.window_size)
         _, _, height, width = desc_dense.size()
-
-        # src_desc = keypoint_desc[::self.window_size]  # B x C x N
-        # src_desc = F.normalize(src_desc, dim=1)
-        #
-        # tgt_desc_dense = desc_dense[1::self.window_size]  # B x C x H x W
-        # tgt_desc_unrolled = F.normalize(tgt_desc_dense.view(batch_size, encoder_dim, -1), dim=1)  # B x C x HW
 
         # setup 2D grid coord
         v_coord, u_coord = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
@@ -49,6 +43,7 @@ class SoftmaxRefMatcher(nn.Module):
         for i in range(src_desc_unrolled.size(0)):
             win_ids = torch.arange(i*self.window_size+1, i*self.window_size+self.window_size)
             tgt_desc = keypoint_desc[win_ids]  # (window - 1) x C x N
+            tgt_desc = F.normalize(tgt_desc, dim=1)
             match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc_unrolled[i:i+1])  # (window - 1) x N x HW
             soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # (window - 1) x N x HW
 
