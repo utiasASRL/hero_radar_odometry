@@ -185,9 +185,17 @@ class SteamMonitor(MonitorBase):
                 valid_point_loss += dict_loss['point_loss'].detach().cpu().item()
                 valid_logdet_loss += dict_loss['logdet_loss'].detach().cpu().item()
             time_used.append(time() - ts)
-            T_gt.append(batch['T_21'][0].numpy().squeeze())
-            R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
-            t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
+            if batchi == 0:
+                # append entire window
+                for w in range(batch['T_21'].size(0)-1):
+                    T_gt.append(batch['T_21'][w].numpy().squeeze())
+                    R_pred.append(out['R'][0, w].detach().cpu().numpy().squeeze())
+                    t_pred.append(out['t'][0, w].detach().cpu().numpy().squeeze())
+            else:
+                # append only the front of window
+                T_gt.append(batch['T_21'][-2].numpy().squeeze())
+                R_pred.append(out['R'][0, -1].detach().cpu().numpy().squeeze())
+                t_pred.append(out['t'][0, -1].detach().cpu().numpy().squeeze())
 
         results = computeMedianError(T_gt, R_pred, t_pred)
         t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
