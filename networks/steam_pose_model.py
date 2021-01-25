@@ -192,8 +192,8 @@ class SteamSolver():
         zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
         identity_weights = np.tile(np.expand_dims(np.eye(3, dtype=np.float32), 0), (num_points, 1, 1))
 
-        R_tgt_src = np.zeros((self.batch_size, self.window_size-1, 3, 3), dtype=np.float32)
-        t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size-1, 3, 1), dtype=np.float32)
+        R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
+        t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
 
         # loop through each batch
         for b in range(self.batch_size):
@@ -240,7 +240,7 @@ class SteamSolver():
                 self.solver_cpp.getSigmapoints2NP1(self.poses_sp[b])
 
             # set output
-            R_tgt_src[b] = self.poses[b, 1:, :3, :3]
-            t_src_tgt_in_tgt[b] = self.poses[b, 1:, :3, 3:4]
+            R_tgt_src[b] = self.poses[b, :, :3, :3]
+            t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
