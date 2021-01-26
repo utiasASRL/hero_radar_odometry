@@ -14,6 +14,11 @@ class UNet(torch.nn.Module):
         first_feature_dimension = config['networks']['unet']['first_feature_dimension']
         self.score_sigmoid = config['networks']['unet']['score_sigmoid']
 
+        # check for steam 2x2 weight matrix setting
+        outc_score_dim = 1
+        if 'weight_matrix' in config['steam']:
+            outc_score_dim = 3 if config['steam']['weight_matrix'] is True else 1
+
         # down
         self.inc = DoubleConv(n_channels, first_feature_dimension)
         self.down1 = Down(first_feature_dimension, first_feature_dimension * 2)
@@ -31,7 +36,7 @@ class UNet(torch.nn.Module):
         self.up2_score = Up(first_feature_dimension * (8 + 4), first_feature_dimension * 4, bilinear)
         self.up3_score = Up(first_feature_dimension * (4 + 2), first_feature_dimension * 2, bilinear)
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
-        self.outc_score = OutConv(first_feature_dimension, 1)
+        self.outc_score = OutConv(first_feature_dimension, outc_score_dim)
         self.sigmoid = torch.nn.Sigmoid()
 
         if config['networks']['unet']['kaiming']:
