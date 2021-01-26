@@ -168,7 +168,8 @@ class SteamSolver():
             (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
 
         # steam solver (c++)
-        self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
+        self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
+                                               self.window_size, config['steam']['zero_vel_prior'])
         self.zero_int_thresh = config['steam']['zero_int_thresh']
         self.weight_thresh_mult = config['steam']['weight_thresh_mult']
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)

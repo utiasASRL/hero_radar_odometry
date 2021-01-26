@@ -83,14 +83,17 @@ void SteamSolver::optimize() {
 
     // SE(2) velocity priors
     // TODO(david): make vel_prior_noise a parameter
-    Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
-    steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
-    for (uint i = 0; i < states_.size(); ++i) {
-        steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
-        steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
-            new steam::WeightedLeastSqCostTerm<3, 6>(error, vel_prior_noise_model, sharedLossFuncL2));
-        costTerms->add(cost);
-    }  // end i
+    if (zero_vel_prior_flag_) {
+        Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
+        steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
+        for (uint i = 0; i < states_.size(); ++i) {
+            steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
+            steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
+                new steam::WeightedLeastSqCostTerm<3, 6>(error, vel_prior_noise_model, sharedLossFuncL2));
+            costTerms->add(cost);
+        }  // end i
+    }
+
     // Initialize problem
     steam::OptimizationProblem problem;
     // Add state variables
