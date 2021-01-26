@@ -53,18 +53,18 @@ def draw_batch_steam(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
     # Draw radar image
     radar = batch['data'][0].squeeze().numpy()
-    radar_tgt = batch['data'][1].squeeze().numpy()
+    radar_tgt = batch['data'][-1].squeeze().numpy()
     plt.imshow(np.concatenate((radar, radar_tgt), axis=1), cmap='gray')
     plt.title('radar src-tgt pair')
     radar_img = convert_plt_to_tensor()
 
     # Draw keypoint matches
-    src = out['src_rc'][0].squeeze().detach().cpu().numpy()
-    tgt = out['tgt_rc'][0].squeeze().detach().cpu().numpy()
-    match_weights = np.exp(out['match_weights'][0].squeeze().detach().cpu().numpy())
+    src = out['src_rc'][-1].squeeze().detach().cpu().numpy()
+    tgt = out['tgt_rc'][-1].squeeze().detach().cpu().numpy()
+    match_weights = np.exp(out['match_weights'][-1].squeeze().detach().cpu().numpy())
     keypoint_ints = out['keypoint_ints']
 
-    ids = torch.nonzero(keypoint_ints[0, 0] > 0, as_tuple=False).squeeze(1)
+    ids = torch.nonzero(keypoint_ints[-1, 0] > 0, as_tuple=False).squeeze(1)
     ids_cpu = ids.cpu()
 
     nms = config['vis_keypoint_nms']    # inverse variance
@@ -96,26 +96,26 @@ def draw_batch_steam(batch, out, config):
     match_img2 = convert_plt_to_tensor()
 
     # Draw scores
-    scores = out['scores'][0].squeeze().detach().cpu().numpy()
+    scores = out['scores'][-1].squeeze().detach().cpu().numpy()
     plt.imshow(scores, cmap='inferno')
     plt.colorbar()
     plt.title('log inverse variance (weight score)')
     score_img = convert_plt_to_tensor()
 
     # Draw detector scores
-    detector_scores = out['detector_scores'][0].squeeze().detach().cpu().numpy()
+    detector_scores = out['detector_scores'][-1].squeeze().detach().cpu().numpy()
     plt.imshow(detector_scores, cmap='inferno')
     plt.colorbar()
     plt.title('detector score')
     dscore_img = convert_plt_to_tensor()
 
     # Draw point-to-point error
-    src_p = out['src'][0].squeeze().T
-    tgt_p = out['tgt'][0].squeeze().T
-    R_tgt_src = out['R'][0, :2, :2]
-    t_st_in_t = out['t'][0, :2, :]
+    src_p = out['src'][-1].squeeze().T
+    tgt_p = out['tgt'][-1].squeeze().T
+    R_tgt_src = out['R'][0, -1, :2, :2]
+    t_st_in_t = out['t'][0, -1, :2, :]
     error = tgt_p - (R_tgt_src @ src_p + t_st_in_t)
-    mah = torch.sqrt(torch.sum(error * error * torch.exp(out['match_weights'][0]), dim=0).squeeze())
+    mah = torch.sqrt(torch.sum(error * error * torch.exp(out['match_weights'][-1]), dim=0).squeeze())
     error2_sqrt = torch.sqrt(torch.sum(error * error, dim=0).squeeze())
 
     plt.imshow(radar, cmap='gray')

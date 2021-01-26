@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics
+from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics, get_inverse_tf
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
 class MonitorBase(object):
@@ -186,9 +186,19 @@ class SteamMonitor(MonitorBase):
                 valid_point_loss += dict_loss['point_loss'].detach().cpu().item()
                 valid_logdet_loss += dict_loss['logdet_loss'].detach().cpu().item()
             time_used.append(time() - ts)
-            T_gt.append(batch['T_21'][0].numpy().squeeze())
-            R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
-            t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
+            if batchi == 0:
+                # append entire window
+                for w in range(batch['T_21'].size(0)-1):
+                    T_gt.append(batch['T_21'][w].numpy().squeeze())
+                    T_pred = self.get_T_ba(out, a=w, b=w+1)
+                    R_pred.append(T_pred[:3, :3].squeeze())
+                    t_pred.append(T_pred[:3, 3].squeeze())
+            else:
+                # append only the front of window
+                T_gt.append(batch['T_21'][-2].numpy().squeeze())
+                T_pred = self.get_T_ba(out, a=-2, b=-1)
+                R_pred.append(T_pred[:3, :3].squeeze())
+                t_pred.append(T_pred[:3, 3].squeeze())
 
         results = computeMedianError(T_gt, R_pred, t_pred)
         t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
@@ -207,3 +217,12 @@ class SteamMonitor(MonitorBase):
         imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img, self.counter)
+
+    def get_T_ba(self, out, a, b):
+        T_b0 = np.eye(4)
+        T_b0[:3, :3] = out['R'][0, b].detach().cpu().numpy()
+        T_b0[:3, 3:4] = out['t'][0, b].detach().cpu().numpy()
+        T_a0 = np.eye(4)
+        T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
+        T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
+        return T_b0@get_inverse_tf(T_a0)
