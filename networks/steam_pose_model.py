@@ -78,8 +78,8 @@ class SteamPoseModel(torch.nn.Module):
         bcount = 0
         for b in range(self.solver.batch_size):
             # check velocity
-            # if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
-                # continue
+            if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
+                continue
             bcount += 1
             i = b * self.solver.window_size
 
@@ -106,8 +106,9 @@ class SteamPoseModel(torch.nn.Module):
             # squared mah error
             if self.expect_approx_opt == 0:
                 # only mean
-                #point_loss += torch.mean(torch.sum(error[:, ids] * error[:, ids] * torch.exp(weights[:, ids]), dim=0))
-                point_loss += torch.mean(torch.sum(error[:, ids] * error[:, ids] * weights[:, ids], dim=0))
+                # point_loss += torch.mean(torch.sum(error[:, ids] * error[:, ids] * weights[:, ids], dim=0))
+                error3 = torch.abs(error[:, ids])
+                point_loss += torch.mean(torch.sum(error3 * weights[:, ids], dim=0))
             elif self.expect_approx_opt == 1:
                 # sigmapoints
                 Rsp = torch.from_numpy(self.solver.poses_sp[b, 0, :, :2, :2]).to(self.gpuid).unsqueeze(1)  # s x 1 x 2 x 2
@@ -117,7 +118,10 @@ class SteamPoseModel(torch.nn.Module):
                 points1_in_2 = Rsp@(points1[:, ids].T.unsqueeze(0).unsqueeze(-1)) + tsp  # s x n x 2 x 1
                 error = points2 - points1_in_2  # s x n x 2 x 1
                 #temp = torch.sum(error*error*torch.exp(weights[:, ids].unsqueeze(-1).unsqueeze(-1)), dim=0).squeeze(-1)/12.0
-                temp = torch.sum(error*error*weights[:, ids].unsqueeze(-1).unsqueeze(-1), dim=0).squeeze(-1)/12.0
+                #temp = torch.sum(error*error*weights[:, ids].unsqueeze(-1).unsqueeze(-1), dim=0).squeeze(-1)/12.0
+                error = torch.abs(error)
+                temp = torch.sum(error*weights[:, ids].unsqueeze(-1).unsqueeze(-1), dim=0).squeeze(-1)/12.0
+
                 point_loss += torch.mean(torch.sum(temp, dim=1))
             else:
                 raise NotImplementedError('Steam loss method not implemented!')

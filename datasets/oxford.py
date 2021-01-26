@@ -31,21 +31,28 @@ def check_if_frame_has_gt(frame, gt_lines):
     return False
 
 def get_frame_speeds(frames, gt_path):
-    frame_speeds = frames
+    frame_speeds = frames.copy()
     with open(gt_path, 'r') as f:
         f.readline()
         lines = f.readlines()
+        times = []
+        speeds = []
+        for line in lines:
+            line = line.split(',')
+            times.append(int(line[9]))
+            speeds.append(np.sqrt(float(line[2])**2 + float(line[3])**2) / 0.25)
+
         for i, frame in enumerate(frames):
             radar_time = int(frame.split('.')[0])
             v = None
-            for line in lines:
-                if int(line[9]) == radar_time:
-                    dx = float(line[2])
-                    dy = float(line[3])
-                    v = np.sqrt(dx**2 + dy**2) / 0.25
-                    frame_speeds[i] = v
+            for j, time in enumerate(times):
+                if time == radar_time:
+                    v = speeds[j]
+                    frame_speeds[i] = speeds[j]
+                    del times[j]
+                    del speeds[j]
                     break
-            assert(v is not None)
+            assert(v is not None),"could not find a speed for idx: {}".format(i)
     return frame_speeds
 
 def get_frames_with_gt(frames, gt_path):
@@ -152,8 +159,7 @@ def get_dataloaders(config):
     train_dataset = OxfordDataset(config, 'train')
     valid_dataset = OxfordDataset(vconfig, 'validation')
     test_dataset = OxfordDataset(vconfig, 'test')
-    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_len,
-                                             speed_filter=1.0, frame_speeds=train_dataset.frame_speeds)
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_len)
     valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_len)
     test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_len)
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
