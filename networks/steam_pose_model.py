@@ -89,7 +89,6 @@ class SteamPoseModel(torch.nn.Module):
                 zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
                 points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
-                # weights = match_weights[w, :, ids]   # 1 x N
                 weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T)
 
                 # get R_21 and t_12_in_2
@@ -115,7 +114,7 @@ class SteamPoseModel(torch.nn.Module):
 
                     points2 = points2[ids].unsqueeze(0)  # 1 x n x 3 x 1
                     points1_in_2 = Rsp@(points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
-                    error = points2 - points1_in_2  # s x n x 2 x 1
+                    error = points2 - points1_in_2  # s x n x 3 x 1
                     temp = torch.sum(error.transpose(2, 3)@weights_mat[ids].unsqueeze(0)@error, dim=0)/Rsp.size(0)
                     point_loss += torch.mean(temp)
                 else:
@@ -155,7 +154,7 @@ class SteamSolver():
 
     def __init__(self, config):
         # parameters
-        # self.sliding_flag = config['steam']['sliding_flag']   # doesn't do anything yet
+        self.sliding_flag = False   # should always be false during training
         self.batch_size = config['batch_size']
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
@@ -190,6 +189,13 @@ class SteamSolver():
         self.poses_sp = np.tile(
             np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
             (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
+
+        if self.sliding_flag:
+            # slide window
+            self.solver_cpp.slideTraj()
+        else:
+            # reset trajectory
+            self.solver_cpp.resetTraj()
 
         # keypoint_coords B*(W-1) x 400 x 2
         # weights B*(W-1) x 1 x 400

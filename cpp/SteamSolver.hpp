@@ -23,6 +23,7 @@ public:
     }
     // initialization
     void resetTraj();
+    void slideTraj();
     void setQcInv(const np::ndarray& Qc_inv_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
     // solve
@@ -39,7 +40,7 @@ private:
     typedef boost::shared_ptr<SolverType> SolverBasePtr;
     SolverBasePtr solver_;
     // States
-    std::vector<TrajStateVar> states_;
+    std::deque<TrajStateVar> states_;
     // Measurements
     std::vector<np::ndarray> p1_;  // reference
     std::vector<np::ndarray> p2_;  // frame points
@@ -58,6 +59,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
     // p::def("run_simple", run_simple);
     p::class_<SteamSolver>("SteamSolver", p::init<const double&, const unsigned int&, const bool&>())
         .def("resetTraj", &SteamSolver::resetTraj)
+        .def("slideTraj", &SteamSolver::slideTraj)
         .def("setQcInv", &SteamSolver::setQcInv)
         .def("setMeas", &SteamSolver::setMeas)
         .def("optimize", &SteamSolver::optimize)
