@@ -24,6 +24,13 @@ void SteamSolver::slideTraj() {
     // drop first frame
     states_.pop_front();
 
+    // set first frame to identity
+    lgmath::se3::Transformation T_i0 = states_[0].pose->getValue().inverse();
+    for (uint k = 0; k < states_.size(); ++k){
+        lgmath::se3::Transformation T_ki = states_[k].pose->getValue();
+        states_[k].pose->setValue(T_ki*T_i0);
+    }
+
     // add new frame to end
     lgmath::se3::Transformation T_km1_i = states_.back().pose->getValue();
     Eigen::Matrix<double,6,1> xi = dt_ * states_.back().velocity->getValue();
