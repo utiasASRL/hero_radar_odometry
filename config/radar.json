@@ -1,7 +1,7 @@
 {
     "model": "SVDPoseModel",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2020-11-29/",
+    "log_dir": "/workspace/Documents/logs/2021-01-17-1/run24_l1_loss_kaiming_both_masks/",
     "gpuid": "cuda:1",
     "min_range": 58,
     "radar_resolution": 0.0432,
@@ -19,7 +19,7 @@
         },
         "keypoint_block": {
             "patch_size": 32,
-            "softmax_temp": 1.0
+            "softmax_temp": 1.0,
         },
         "matcher_block": {
             "softmax_temp": 0.01,
@@ -27,9 +27,9 @@
         }
     },
     "lr": 0.0001,
-    "weight_decay": 0.0001,
+    "weight_decay": 0.0,
     "clip_norm": 1.0,
-    "batch_size": 2,
+    "batch_size": 1,
     "window_size": 2,
     "num_workers": 4,
     "max_iterations": 250000,
@@ -43,5 +43,6 @@
     "augmentation": {
         "augment": true,
         "rot_max": 0.19634954084936207
-    }
+    },
+    "loss": "supervised_loss"
 }

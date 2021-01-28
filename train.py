@@ -1,11 +1,12 @@
+import os
 import argparse
 import json
 import torch
 
 from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
-from networks.steam_pose_model import SteamPoseModel
-from utils.utils import supervised_loss
+#from networks.steam_pose_model import SteamPoseModel
+from utils.utils import supervised_loss, pointmatch_loss, get_lr
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch
 
@@ -28,11 +29,13 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(args.pretrain), strict=False)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2e4 / config['val_rate'])
 
     if config['model'] == 'SVDPoseModel':
         monitor = SVDMonitor(model, valid_loader, config)
     elif config['model'] == 'SteamPoseModel':
         monitor = SteamMonitor(model, valid_loader, config)
+    os.system('cp ' + args.config + ' ' + config['log_dir'])
 
     model.train()
 
@@ -49,7 +52,10 @@ if __name__ == '__main__':
                 print('WARNING: exception encountered... skipping this batch.')
                 continue
             if config['model'] == 'SVDPoseModel':
-                loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
+                if config['loss'] == 'supervised_loss':
+                    loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
+                elif config['loss'] == 'pointmatch_loss':
+                    loss, dict_loss = pointmatch_loss(out, batch, config)
             elif config['model'] == 'SteamPoseModel':
                 loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
             if loss == 0:
@@ -60,6 +66,9 @@ if __name__ == '__main__':
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
             optimizer.step()
             step = batchi + epoch * len(train_loader.dataset)
-            monitor.step(step, loss, dict_loss)
+            valid_loss = monitor.step(step, loss, dict_loss)
+            if valid_loss is not None:
+                scheduler.step(valid_loss)
+                print('Learning Rate: {}'.format(get_lr(optimizer)))
             if step >= config['max_iterations']:
                 break

@@ -5,12 +5,43 @@ import torch
 def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     T_21 = batch['T_21'].to(config['gpuid'])
     # Get ground truth transforms
-    T_tgt_src = T_21[::config['window_size']]
+    kp_inds, _ = get_indices(config['batch_size'], config['window_size'])
+    T_tgt_src = T_21[kp_inds]
     R_tgt_src = T_tgt_src[:, :3, :3]
     t_tgt_src = T_tgt_src[:, :3, 3].unsqueeze(-1)
     svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred, config['gpuid'])
     dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
     return svd_loss, dict_loss
+
+def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0, errorT=100.0):
+    R_tgt_src_pred = out['R']
+    t_tgt_src_pred = out['t']
+    tgt = out['tgt']
+    src = out['src']
+    weights = out['match_weights']
+    dense_weights = out['dense_weights']
+    mask = batch['mask'].to(config['gpuid'])
+    # tgt, src: B x N x 2
+    assert(tgt.size() == src.size())
+    B, N, _ = tgt.size()
+    R = R_tgt_src_pred[:, :2, :2]  # B x 2 x 2
+    t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
+    tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1) # B x N x 2
+    l1loss = torch.nn.L1Loss()
+    point_loss = l1loss(tgt, tgt_pred)
+    dict_loss = {'point_loss': point_loss}
+    wsum = torch.sum(weights)
+    if wsum == 0:
+        weight_loss = 15
+        print('WARNING: matching weights have gone to zero!')
+    else:
+        weight_loss = -1 * torch.log(wsum / (B * N))
+    dict_loss['weight_loss'] = weight_loss
+    #bceloss = torch.nn.BCELoss()
+    #mask_loss = bceloss(dense_weights, mask)
+    #dict_loss['mask_loss'] = mask_loss
+    loss = point_loss + alpha * weight_loss #+ beta * mask_loss
+    return loss, dict_loss
 
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     batch_size = R.size(0)
@@ -194,3 +225,17 @@ def convert_to_radar_frame(pixel_coords, cart_pixel_width, cart_resolution, gpui
     R = torch.tensor([[0, -cart_resolution], [cart_resolution, 0]]).expand(B, 2, 2).to(gpuid)
     t = torch.tensor([[cart_min_range], [-cart_min_range]]).expand(B, 2, N).to(gpuid)
     return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
+
+def get_indices(batch_size, window_size):
+    src_inds = []
+    tgt_inds = []
+    for i in range(batch_size):
+        for j in range(window_size - 1):
+            idx = i * window_size + j
+            src_inds.append(idx)
+            tgt_inds.append(idx + 1)
+    return src_inds, tgt_inds
+
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
