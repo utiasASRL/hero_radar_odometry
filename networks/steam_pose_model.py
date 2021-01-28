@@ -285,7 +285,8 @@ class SteamSolver():
             A2x2 = L@D@L.transpose(1, 2)
 
             if self.T_aug:  # if list is not empty
-                A2x2 = self.T_aug[id][:2, :2]@A2x2@self.T_aug[id][:2, :2].T
+                Rot = self.T_aug[id][:2, :2].unsqueeze(0)
+                A2x2 = Rot@A2x2@Rot.transpose(1, 2)
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
             A[:, 0:2, 0:2] = A2x2
