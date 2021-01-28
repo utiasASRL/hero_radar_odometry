@@ -68,7 +68,7 @@ class SteamPoseModel(torch.nn.Module):
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
                 'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords, 'key_ids': key_ids}
 
-    def loss(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, scores, batch):
+    def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints, scores, batch):
         point_loss = 0
         logdet_loss = 0
         mask_loss = 0
@@ -78,8 +78,9 @@ class SteamPoseModel(torch.nn.Module):
         bcount = 0
         for b in range(self.solver.batch_size):
             # check average velocity
-            if np.mean(np.sqrt(np.sum(self.solver.vels[b]*self.solver.vels[b], axis=1))) < self.min_abs_vel:
-                continue
+            ##if np.mean(np.sqrt(np.sum(self.solver.vels[b]*self.solver.vels[b], axis=1))) < self.min_abs_vel:
+            #if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
+            #    continue
             bcount += 1
             i = b * (self.solver.window_size-1)    # first index of window
 
@@ -136,8 +137,9 @@ class SteamPoseModel(torch.nn.Module):
 
         # average over batches
         if bcount > 0:
-            point_loss /= bcount
-            logdet_loss /= bcount
+            point_loss /= (bcount * (self.solver.window_size - 1))
+            logdet_loss /= (bcount * (self.solver.window_size - 1))
+            mask_loss /= (bcount * (self.solver.window_size - 1))
         total_loss = point_loss + logdet_loss + mask_loss
         dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
         return total_loss, dict_loss
@@ -226,7 +228,7 @@ class SteamSolver():
 
                 # weights must be list of N x 3 x 3
                 #torch_weights = torch.exp(match_weights[w, 0, ids])
-                torch_weights = match_weights[w, 0, idx]
+                torch_weights = match_weights[w, 0, ids]
                 weights_temp = torch_weights.view(-1, 1, 1).detach().cpu().numpy() * identity_weights[ids_cpu]
 
                 # weight threshold

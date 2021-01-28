@@ -42,7 +42,12 @@ if __name__ == '__main__':
             if config['augmentation']['augment']:
                 batch = augmentBatch(batch, config)
             optimizer.zero_grad()
-            out = model(batch)
+            try:
+                out = model(batch)
+            except RuntimeError as e:
+                print(e)
+                print('WARNING: exception encountered... skipping this batch.')
+                continue
             if config['model'] == 'SVDPoseModel':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
             elif config['model'] == 'SteamPoseModel':
