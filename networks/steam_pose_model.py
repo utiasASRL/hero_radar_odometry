@@ -54,9 +54,8 @@ class SteamPoseModel(torch.nn.Module):
                                                     self.gpuid)
         # rotate back if augmented
         if 'T_aug' in batch:
-            for i in range(keypoint_coords_xy.size(0)):
-                batch['T_aug'][i] = batch['T_aug'][i].to(self.gpuid)
-                keypoint_coords_xy[i] = torch.matmul(keypoint_coords_xy[i], batch['T_aug'][i][:2, :2].T)
+            T_aug = torch.stack(batch['T_aug'], dim=0).to(self.gpuid)
+            keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug[:, :2, :2].transpose(1, 2))
             self.solver.T_aug = batch['T_aug']
         else:
             self.solver.T_aug = []
@@ -285,7 +284,7 @@ class SteamSolver():
             A2x2 = L@D@L.transpose(1, 2)
 
             if self.T_aug:  # if list is not empty
-                Rot = self.T_aug[id][:2, :2].unsqueeze(0)
+                Rot = self.T_aug[id].to(w.device)[:2, :2].unsqueeze(0)
                 A2x2 = Rot@A2x2@Rot.transpose(1, 2)
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
