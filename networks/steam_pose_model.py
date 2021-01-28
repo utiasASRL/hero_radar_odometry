@@ -52,6 +52,15 @@ class SteamPoseModel(torch.nn.Module):
                                                   self.gpuid)
         keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
                                                     self.gpuid)
+        # rotate back if augmented
+        if 'T_aug' in batch:
+            for b in range(self.config['batch_size']):
+                wm1 = self.config['window_size'] - 1
+                ids = torch.arange(b*wm1, b*wm1 + wm1)
+                T_aug = batch['T_aug'][b].to(self.gpuid)
+                pseudo_coords_xy[ids] = torch.matmul(pseudo_coords_xy[ids], T_aug[:2, :2].T)
+                # pseudo_coords_xy[ids] = pseudo_coords_xy[ids]@T_aug[:2, :2].T
+
         pseudo_coords_xy[:, :, 1] *= -1.0
         keypoint_coords_xy[:, :, 1] *= -1.0
 
