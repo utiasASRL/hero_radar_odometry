@@ -70,7 +70,7 @@ class TestSteam(unittest.TestCase):
 
         # run steam
         dt = 0.25
-        solver = SteamCpp.SteamSolver(dt, window_size)
+        solver = SteamCpp.SteamSolver(dt, window_size, False)
         solver.setMeas([np.concatenate((points2, zeros_vec), 1)],
                        [np.concatenate((points1, zeros_vec), 1)], [identity_weights])
         solver.optimize()

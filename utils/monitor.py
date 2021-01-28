@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics
+from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics, get_inverse_tf
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
 class MonitorBase(object):
@@ -130,10 +130,44 @@ class SVDMonitor(MonitorBase):
 
 class SteamMonitor(MonitorBase):
 
+    def step(self, batchi, total_loss, dict_loss):
+        """At each step of the monitor, we can print, log, validate, or save model information."""
+        self.counter += 1
+        self.dt = time() - self.current_time
+        self.current_time = time()
+        losses = dict_loss.items()
+
+        if self.counter % self.config['print_rate'] == 0:
+            print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, total_loss.detach().cpu().item(), self.dt))
+
+        if self.counter % self.config['log_rate'] == 0:
+            self.writer.add_scalar('train/loss', total_loss.detach().cpu().item(), self.counter)
+            for loss_item in losses:
+                self.writer.add_scalar('train/' + loss_item[0], loss_item[1].detach().cpu().item(), self.counter)
+            self.writer.add_scalar('train/step_time', self.dt, self.counter)
+
+        if self.counter % self.config['val_rate'] == 0:
+            with torch.no_grad():
+                self.model.eval()
+                self.model.solver.sliding_flag = True
+                self.validation()
+                self.model.solver.sliding_flag = False
+                self.model.train()
+
+        if self.counter % self.config['save_rate'] == 0:
+            with torch.no_grad():
+                self.model.eval()
+                mname = os.path.join(self.log_dir, '{}.pt'.format(self.counter))
+                print('saving model', mname)
+                torch.save(self.model.state_dict(), mname)
+                self.model.train()
+
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
-        batch_img = draw_batch_steam(batch, out, self.config)
-        self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img)
+        score_img, match_img, error_img = draw_batch_steam(batch, out, self.config)
+        self.writer.add_image('val/score_img/{}'.format(batchi), score_img, global_step=self.counter)
+        self.writer.add_image('val/match_img/{}'.format(batchi), match_img, global_step=self.counter)
+        self.writer.add_image('val/error_img/{}'.format(batchi), error_img, global_step=self.counter)
 
     def validation(self):
         """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""
@@ -151,15 +185,26 @@ class SteamMonitor(MonitorBase):
             out = self.model(batch)
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
-            loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
+            #loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
+            loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
             if loss != 0:
                 valid_loss += loss.detach().cpu().item()
                 valid_point_loss += dict_loss['point_loss'].detach().cpu().item()
                 valid_logdet_loss += dict_loss['logdet_loss'].detach().cpu().item()
             time_used.append(time() - ts)
-            T_gt.append(batch['T_21'][0].numpy().squeeze())
-            R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
-            t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
+            if batchi == 0:
+                # append entire window
+                for w in range(batch['T_21'].size(0)-1):
+                    T_gt.append(batch['T_21'][w].numpy().squeeze())
+                    T_pred = self.get_T_ba(out, a=w, b=w+1)
+                    R_pred.append(T_pred[:3, :3].squeeze())
+                    t_pred.append(T_pred[:3, 3].squeeze())
+            else:
+                # append only the front of window
+                T_gt.append(batch['T_21'][-2].numpy().squeeze())
+                T_pred = self.get_T_ba(out, a=-2, b=-1)
+                R_pred.append(T_pred[:3, :3].squeeze())
+                t_pred.append(T_pred[:3, 3].squeeze())
 
         results = computeMedianError(T_gt, R_pred, t_pred)
         t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
@@ -177,5 +222,14 @@ class SteamMonitor(MonitorBase):
 
         imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
         for i, img in enumerate(imgs):
-            self.writer.add_image('val/' + self.sequences[i], img)
+            self.writer.add_image('val/' + self.sequences[i], img, self.counter)
         return valid_loss
+
+    def get_T_ba(self, out, a, b):
+        T_b0 = np.eye(4)
+        T_b0[:3, :3] = out['R'][0, b].detach().cpu().numpy()
+        T_b0[:3, 3:4] = out['t'][0, b].detach().cpu().numpy()
+        T_a0 = np.eye(4)
+        T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
+        T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
+        return T_b0@get_inverse_tf(T_a0)
