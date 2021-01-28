@@ -30,6 +30,31 @@ def check_if_frame_has_gt(frame, gt_lines):
             return True
     return False
 
+def get_frame_speeds(frames, gt_path):
+    frame_speeds = frames.copy()
+    with open(gt_path, 'r') as f:
+        f.readline()
+        lines = f.readlines()
+        times = []
+        speeds = []
+        for line in lines:
+            line = line.split(',')
+            times.append(int(line[9]))
+            speeds.append(np.sqrt(float(line[2])**2 + float(line[3])**2) / 0.25)
+
+        for i, frame in enumerate(frames):
+            radar_time = int(frame.split('.')[0])
+            v = None
+            for j, time in enumerate(times):
+                if time == radar_time:
+                    v = speeds[j]
+                    frame_speeds[i] = speeds[j]
+                    del times[j]
+                    del speeds[j]
+                    break
+            assert(v is not None),"could not find a speed for idx: {}".format(i)
+    return frame_speeds
+
 def get_frames_with_gt(frames, gt_path):
     """Returns a subset of the specified file list which have ground truth."""
     # For the Oxford Dataset we do a search from the end backwards because some
@@ -62,7 +87,7 @@ def mean_intensity_mask(polar_data, multiplier):
     mask = np.zeros((num_azimuths, range_bins))
     for i in range(num_azimuths):
         m = np.mean(polar_data[i, :])
-        mask[i, :] = polar_data[i, :] > multiplier*m
+        mask[i, :] = polar_data[i, :] > multiplier * m
     return mask
 
 class OxfordDataset(Dataset):
@@ -74,14 +99,17 @@ class OxfordDataset(Dataset):
         self.sequences = self.get_sequences_split(sequences, split)
         self.seq_idx_range = {}
         self.frames = []
+        self.frame_speeds = []
         self.seq_len = []
         self.mean_int_mask_mult = config['mean_int_mask_mult']
         for seq in self.sequences:
             seq_frames = get_frames(self.data_dir + seq + '/radar/')
             seq_frames = get_frames_with_gt(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
+            seq_frame_speeds = get_frame_speeds(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
             self.seq_idx_range[seq] = [len(self.frames), len(self.frames) + len(seq_frames)]
             self.seq_len.append(len(seq_frames))
             self.frames.extend(seq_frames)
+            self.frame_speeds.extend(seq_frame_speeds)
 
     def get_sequences_split(self, sequences, split):
         """Retrieves a list of sequence names depending on train/validation/test split."""
@@ -112,7 +140,8 @@ class OxfordDataset(Dataset):
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         polar_mask = mean_intensity_mask(polar, self.mean_int_mask_mult)
         cart_mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
-                                        self.config['cart_resolution'], self.config['cart_pixel_width'])
+                                             self.config['cart_resolution'],
+                                             self.config['cart_pixel_width']).astype(np.float32)
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
         if idx + 1 < len(self.frames):

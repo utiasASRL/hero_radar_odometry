@@ -11,7 +11,7 @@ from datasets.transforms import augmentBatch
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/radar.json', type=str, help='config file path')
+    parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
     args = parser.parse_args()
     with open(args.config) as f:
@@ -42,11 +42,16 @@ if __name__ == '__main__':
             if config['augmentation']['augment']:
                 batch = augmentBatch(batch, config)
             optimizer.zero_grad()
-            out = model(batch)
+            try:
+                out = model(batch)
+            except RuntimeError as e:
+                print(e)
+                print('WARNING: exception encountered... skipping this batch.')
+                continue
             if config['model'] == 'SVDPoseModel':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
             elif config['model'] == 'SteamPoseModel':
-                loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
+                loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
             if loss == 0:
                 print("No movement predicted. Skipping mini-batch.")
                 continue

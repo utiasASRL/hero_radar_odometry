@@ -29,6 +29,7 @@ class SteamPoseModel(torch.nn.Module):
         self.border = config['steam']['border']
         self.min_abs_vel = config['steam']['min_abs_vel']
         self.mah_thresh = config['steam']['mah_thresh']
+        self.nms_thresh = config['steam']['nms_thresh']
         self.relu_detector = nn.ReLU()
         self.zero_int_detector = config['steam']['zero_int_detector']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
@@ -75,16 +76,19 @@ class SteamPoseModel(torch.nn.Module):
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
                 'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords, 'key_ids': key_ids}
 
-    def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints):
+    def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints, scores, batch):
         point_loss = 0
         logdet_loss = 0
+        mask_loss = 0
+        mask = batch['mask'].to(self.gpuid)
 
         # loop through each batch
         bcount = 0
         for b in range(self.solver.batch_size):
             # check average velocity
-            if np.mean(np.sqrt(np.sum(self.solver.vels[b]*self.solver.vels[b], axis=1))) < self.min_abs_vel:
-                continue
+            #if np.mean(np.sqrt(np.sum(self.solver.vels[b]*self.solver.vels[b], axis=1))) < self.min_abs_vel:
+            #if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
+            #    continue
             bcount += 1
             i = b * (self.solver.window_size-1)    # first index of window
 
@@ -106,8 +110,9 @@ class SteamPoseModel(torch.nn.Module):
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
                 # error threshold
+                errorT = min(self.mah_thresh**2, self.nms_thresh**2 * torch.max(error2))
                 if self.mah_thresh > 0:
-                    ids = torch.nonzero(mah2_error.squeeze() < self.mah_thresh ** 2, as_tuple=False).squeeze()
+                    ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
                 else:
                     ids = torch.arange(mah2_error.size(0))
 
@@ -131,12 +136,17 @@ class SteamPoseModel(torch.nn.Module):
                 # log det (ignore 3rd dim since it's a constant)
                 logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1))
 
+                # mask loss
+                # bceloss = torch.nn.BCELoss()
+                # mask_loss += bceloss(scores[w], mask[w])
+
         # average over batches
         if bcount > 0:
-            point_loss /= bcount
-            logdet_loss /= bcount
-        total_loss = point_loss + logdet_loss
-        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss}
+            point_loss /= (bcount * (self.solver.window_size - 1))
+            logdet_loss /= (bcount * (self.solver.window_size - 1))
+            mask_loss /= (bcount * (self.solver.window_size - 1))
+        total_loss = point_loss + logdet_loss + mask_loss
+        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
         return total_loss, dict_loss
 
     def zero_intensity_filter(self, data):
@@ -200,12 +210,9 @@ class SteamSolver():
             (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
 
         if self.sliding_flag:
-            # slide window
             self.solver_cpp.slideTraj()
         else:
-            # reset trajectory
             self.solver_cpp.resetTraj()
-
         # keypoint_coords B*(W-1) x 400 x 2
         # weights B*(W-1) x 1 x 400
         # pseudo_coords B*(W-1) x 400 x 2
