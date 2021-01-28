@@ -54,12 +54,12 @@ class SteamPoseModel(torch.nn.Module):
                                                     self.gpuid)
         # rotate back if augmented
         if 'T_aug' in batch:
-            for b in range(self.config['batch_size']):
-                wm1 = self.config['window_size'] - 1
-                ids = torch.arange(b*wm1, b*wm1 + wm1)
-                T_aug = batch['T_aug'][b].to(self.gpuid)
-                pseudo_coords_xy[ids] = torch.matmul(pseudo_coords_xy[ids], T_aug[:2, :2].T)
-                # pseudo_coords_xy[ids] = pseudo_coords_xy[ids]@T_aug[:2, :2].T
+            for i in range(keypoint_coords_xy.size(0)):
+                batch['T_aug'][i] = batch['T_aug'][i].to(self.gpuid)
+                keypoint_coords_xy[i] = torch.matmul(keypoint_coords_xy[i], batch['T_aug'][i][:2, :2].T)
+            self.solver.T_aug = batch['T_aug']
+        else:
+            self.solver.T_aug = []
 
         pseudo_coords_xy[:, :, 1] *= -1.0
         keypoint_coords_xy[:, :, 1] *= -1.0
@@ -98,7 +98,7 @@ class SteamPoseModel(torch.nn.Module):
                 zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
                 points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
-                weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T)
+                weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
 
                 # get R_21 and t_12_in_2
                 R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
@@ -167,6 +167,7 @@ class SteamSolver():
         self.batch_size = config['batch_size']
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
+        self.T_aug = []
 
         # z weight value
         # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
@@ -233,7 +234,7 @@ class SteamSolver():
                 zeros_vec_temp = zeros_vec[ids_cpu]
 
                 # weights must be list of N x 3 x 3
-                weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T)
+                weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
 
                 # append
                 points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
@@ -259,7 +260,7 @@ class SteamSolver():
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
 
-    def convert_to_weight_matrix(self, w):
+    def convert_to_weight_matrix(self, w, id):
         if w.size(1) == 1:
             # scalar weight
             A = torch.zeros(w.size(0), 9, device=w.device)
@@ -282,6 +283,9 @@ class SteamSolver():
             D = D.reshape((-1, 2, 2))
 
             A2x2 = L@D@L.transpose(1, 2)
+
+            if self.T_aug:  # if list is not empty
+                A2x2 = self.T_aug[id][:2, :2]@A2x2@self.T_aug[id][:2, :2].T
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
             A[:, 0:2, 0:2] = A2x2

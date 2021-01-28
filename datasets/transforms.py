@@ -12,7 +12,9 @@ def augmentBatch(batch, config):
     # T_21 = batch['T_21'].numpy()
     B, C, H, W = data.shape
     T_aug = []
-    for i in range(0, B, config['window_size']):
+    for i in range(B):
+        if np.mod(i, config['window_size']) == 0:
+            continue
         img = data[i].squeeze()
         mmg = mask[i].squeeze()
         rot = np.random.uniform(-rot_max, rot_max)
