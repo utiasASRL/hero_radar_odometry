@@ -38,9 +38,10 @@
         "border": 0,
         "min_abs_vel": 1.0,
         "mah_thresh": 4,
-	"nms_thresh": 0.75,
-        "weight_thresh_mult": 0,
-        "zero_int_detector": true
+        "nms_thresh": 0.75,
+        "zero_int_detector": true,
+        "zero_vel_prior": true,
+        "weight_matrix": false
     },
     "lr": 0.00001,
     "weight_decay": 0,

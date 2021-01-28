@@ -9,7 +9,7 @@ void SteamSolver::resetTraj() {
     Eigen::Matrix<double, 6, 1> zero_vel;
     zero_vel.setZero();
     states_.clear();
-    states_.reserve(window_size_);
+//    states_.reserve(window_size_);
     for (uint k = 0; k < window_size_; ++k) {
         TrajStateVar temp;
         temp.time = steam::Time(k*dt_);
@@ -17,6 +17,31 @@ void SteamSolver::resetTraj() {
         temp.velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(zero_vel));
         states_.push_back(temp);
     }
+}
+
+// Slide window and initialize newest frame with constant velocity
+void SteamSolver::slideTraj() {
+    // drop first frame
+    states_.pop_front();
+
+    // set first frame to identity
+    lgmath::se3::Transformation T_i0 = states_[0].pose->getValue().inverse();
+    for (uint k = 0; k < states_.size(); ++k){
+        lgmath::se3::Transformation T_ki = states_[k].pose->getValue();
+        states_[k].pose->setValue(T_ki*T_i0);
+    }
+
+    // add new frame to end
+    lgmath::se3::Transformation T_km1_i = states_.back().pose->getValue();
+    Eigen::Matrix<double,6,1> xi = dt_ * states_.back().velocity->getValue();
+
+    TrajStateVar temp;
+    temp.time = states_.back().time + steam::Time(dt_);
+    temp.pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(
+        lgmath::se3::Transformation(xi)*T_km1_i));
+    temp.velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(
+        states_.back().velocity->getValue()));
+    states_.push_back(temp);
 }
 
 // Set the Qc inverse matrix with the diagonal of Qc
@@ -55,7 +80,9 @@ void SteamSolver::optimize() {
 
     // loop through every frame
     for (uint i = 1; i < window_size_; ++i) {
-        auto T_k0_eval_ptr = traj.getInterpPoseEval(steam::Time(i * dt_));
+//        auto T_k0_eval_ptr = traj.getInterpPoseEval(steam::Time(i * dt_));
+        steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
+            steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
         uint num_meas = p2_[i - 1].shape(0);
         for (uint j = 0; j < num_meas; ++j) {
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
@@ -83,14 +110,17 @@ void SteamSolver::optimize() {
 
     // SE(2) velocity priors
     // TODO(david): make vel_prior_noise a parameter
-    Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
-    steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
-    for (uint i = 0; i < states_.size(); ++i) {
-        steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
-        steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
-            new steam::WeightedLeastSqCostTerm<3, 6>(error, vel_prior_noise_model, sharedLossFuncL2));
-        costTerms->add(cost);
-    }  // end i
+    if (zero_vel_prior_flag_) {
+        Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
+        steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
+        for (uint i = 0; i < states_.size(); ++i) {
+            steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
+            steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
+                new steam::WeightedLeastSqCostTerm<3, 6>(error, vel_prior_noise_model, sharedLossFuncL2));
+            costTerms->add(cost);
+        }  // end i
+    }
+
     // Initialize problem
     steam::OptimizationProblem problem;
     // Add state variables
