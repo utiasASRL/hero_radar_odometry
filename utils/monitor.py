@@ -145,8 +145,10 @@ class SteamMonitor(MonitorBase):
             with torch.no_grad():
                 self.model.eval()
                 self.model.solver.sliding_flag = True
+                self.model.solver.solver_cpp.lockFirstVel(True)
                 self.validation()
                 self.model.solver.sliding_flag = False
+                self.model.solver.solver_cpp.lockFirstVel(False)
                 self.model.train()
 
         if self.counter % self.config['save_rate'] == 0:

@@ -110,7 +110,10 @@ class SteamPoseModel(torch.nn.Module):
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
                 # error threshold
-                errorT = min(self.mah_thresh**2, self.nms_thresh**2 * torch.max(error2))
+                if self.nms_thresh > 0:
+                    errorT = min(self.mah_thresh**2, self.nms_thresh**2 * torch.max(mah2_error))
+                else:
+                    errorT = self.mah_thresh**2
                 if self.mah_thresh > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
                 else:
@@ -258,7 +261,7 @@ class SteamSolver():
 
             # sigmapoints output
             if self.sigmapoints_flag:
-                self.solver_cpp.getSigmapoints2NP1(self.poses_sp[b])
+                self.solver_cpp.getSigmapoints2N(self.poses_sp[b])
 
             # set output
             R_tgt_src[b] = self.poses[b, :, :3, :3]

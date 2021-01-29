@@ -67,9 +67,11 @@ void SteamSolver::optimize() {
         TrajStateVar& state = states_.at(i);
         steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
         traj.add(state.time, temp, state.velocity);
-        if (i == 0)  // lock first pose
-            state.pose->setLock(true);
     }  // end i
+
+    // lock first state
+    states_.front().pose->setLock(true);    // always lock pose
+    states_.front().velocity->setLock(lock_first_vel_flag_);    // check flag for velocity
 
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
@@ -168,7 +170,11 @@ void SteamSolver::getVelocities(np::ndarray& vels) {
     }
 }
 
-void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
+void SteamSolver::lockFirstVel(const bool& flag) {
+    lock_first_vel_flag_ = flag;
+}
+
+void SteamSolver::getSigmapoints2N(np::ndarray& sigma_T) {
     // query covariance at once
     std::vector<steam::StateKey> keys;
     keys.reserve(window_size_ - 1);

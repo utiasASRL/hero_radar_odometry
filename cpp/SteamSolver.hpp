@@ -26,12 +26,15 @@ public:
     void slideTraj();
     void setQcInv(const np::ndarray& Qc_inv_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
+    void lockFirstVel(const bool& flag);
+
     // solve
     void optimize();
+
     // output
     void getPoses(np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
-    void getSigmapoints2NP1(np::ndarray& sigma_T);
+    void getSigmapoints2N(np::ndarray& sigma_T);
 
 private:
     // Solver
@@ -50,6 +53,7 @@ private:
     unsigned int window_size_;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
     bool zero_vel_prior_flag_ = false;
+    bool lock_first_vel_flag_ = false;
 };
 
 // boost wrapper
@@ -65,7 +69,8 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
-        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
+        .def("getSigmapoints2N", &SteamSolver::getSigmapoints2N)
+        .def("lockFirstVel", &SteamSolver::lockFirstVel);
 }
 
 #endif  // STEAMSOLVER_HPP
