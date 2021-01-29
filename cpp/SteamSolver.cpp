@@ -33,7 +33,7 @@ void SteamSolver::slideTraj() {
 
     // add new frame to end
     lgmath::se3::Transformation T_km1_i = states_.back().pose->getValue();
-    Eigen::Matrix<double,6,1> xi = dt_ * states_.back().velocity->getValue();
+    Eigen::Matrix<double, 6, 1> xi = dt_ * states_.back().velocity->getValue();
 
     TrajStateVar temp;
     temp.time = states_.back().time + steam::Time(dt_);
@@ -190,7 +190,7 @@ void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
         Eigen::Matrix4d T_i0_eigen = state.pose->getValue().matrix();
 
         // get cov and LLT decomposition
-        Eigen::Matrix<double,6,6> cov = cov_blocks.at(i - 1, i - 1);
+        Eigen::Matrix<double, 6, 6> cov = cov_blocks.at(i - 1, i - 1);
         Eigen::LLT<Eigen::MatrixXd> lltcov(cov);
         Eigen::MatrixXd L = lltcov.matrixL();
 
@@ -209,8 +209,8 @@ void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
                 for (int c = 0; c < 4; ++c) {
                     sigma_T[i-1][a][r][c] = float(T_sp(r, c));
                     sigma_T[i-1][a+n][r][c] = float(T_sp_inv(r, c));
-                } // end c
-            } // end r
-        } // end for a
-    } // end for i
+                }  // end c
+            }  // end r
+        }  // end for a
+    }  // end for i
 }

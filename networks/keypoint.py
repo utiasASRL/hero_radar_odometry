@@ -59,7 +59,7 @@ class Keypoint(torch.nn.Module):
                                       kernel_size=(self.patch_size, self.patch_size),
                                       stride=(self.patch_size, self.patch_size))
             keypoint_scores = keypoint_scores.view(N, weight_scores.size(1), self.patch_size*self.patch_size, keypoint_scores.size(2))
-            keypoint_scores = torch.sum(keypoint_scores * softmax_attention, dim=2)    # B x C x num_patches
+            keypoint_scores = torch.sum(keypoint_scores * softmax_attention, dim=2)    # B x S x num_patches
 
         return keypoint_coords, keypoint_scores, keypoint_desc
 

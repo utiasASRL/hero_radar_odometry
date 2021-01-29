@@ -31,17 +31,15 @@
     },
     "steam": {
         "time_step": 0.25,
-        "sliding_flag": false,
         "expect_approx": ["mean", "2NP1", "linearize"],
-        "expect_approx_opt": 0,
-        "zero_int_thresh": 0.05,
-        "border": 0,
+        "expect_approx_opt": 1,
+        "patch_mean_thres": 0.05,
         "min_abs_vel": 1.0,
-        "mah_thresh": 4,
-        "nms_thresh": 0.75,
-        "zero_int_detector": true,
+        "mah_thres": 4,
+        "nms_thres": 0.75,
+        "mask_detector_scores": true,
         "zero_vel_prior": true,
-        "weight_matrix": false
+        "weight_matrix": true
     },
     "lr": 0.00001,
     "weight_decay": 0,

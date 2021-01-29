@@ -3,15 +3,16 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from networks.unet import UNet
-from networks.keypoint import Keypoint, normalize_coords
+from networks.keypoint import Keypoint
 from networks.softmax_ref_matcher import SoftmaxRefMatcher
 import cpp.build.SteamSolver as steamcpp
 from utils.utils import convert_to_radar_frame
 
-
 class SteamPoseModel(torch.nn.Module):
     """
-        TODO
+        This model performs unsupervised radar odometry using a sliding window optimization with window
+        size between 2 (regular frame-to-frame odometry) and 4. A python wrapper around the STEAM library is used
+        to optimize for the best set of transformations over the sliding window.
     """
 
     def __init__(self, config):
@@ -22,16 +23,15 @@ class SteamPoseModel(torch.nn.Module):
         self.cart_resolution = config['cart_resolution']
         self.unet = UNet(config)
         self.keypoint = Keypoint(config)
-        # self.softmax_matcher = SoftmaxMatcher(config)
         self.softmax_matcher = SoftmaxRefMatcher(config)
         self.solver = SteamSolver(config)
         self.patch_size = config['networks']['keypoint_block']['patch_size']
-        self.border = config['steam']['border']
         self.min_abs_vel = config['steam']['min_abs_vel']
-        self.mah_thresh = config['steam']['mah_thresh']
-        self.nms_thresh = config['steam']['nms_thresh']
+        self.mah_thres = config['steam']['mah_thres']
+        self.nms_thres = config['steam']['nms_thres']
         self.relu_detector = nn.ReLU()
-        self.zero_int_detector = config['steam']['zero_int_detector']
+        self.sigmoid = torch.nn.Sigmoid()
+        self.mask_detector_scores = config['steam']['mask_detector_scores']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
 
     def forward(self, batch):
@@ -40,13 +40,13 @@ class SteamPoseModel(torch.nn.Module):
 
         detector_scores, weight_scores, desc = self.unet(data)
 
-        if self.zero_int_detector:
+        if self.mask_detector_scores:
             detector_scores = self.relu_detector(detector_scores)
             detector_scores *= mask
 
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
 
-        pseudo_coords, match_weights, key_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, weight_scores, desc)
+        pseudo_coords, match_weights, key_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
         keypoint_coords = keypoint_coords[key_ids]
 
         pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution,
@@ -64,17 +64,22 @@ class SteamPoseModel(torch.nn.Module):
         pseudo_coords_xy[:, :, 1] *= -1.0
         keypoint_coords_xy[:, :, 1] *= -1.0
 
-        # binary masks
-        keypoint_ints_zif = self.zero_intensity_filter(mask[key_ids]) >= self.solver.zero_int_thresh
-        keypoint_ints_bf = self.border_filter(keypoint_coords)
-        keypoint_ints = keypoint_ints_zif * keypoint_ints_bf
+        # binary mask to remove keypoints from 'empty' regions of the input radar scan
+        keypoint_ints = self.mask_intensity_filter(mask[key_ids])
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
-                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords, 'key_ids': key_ids}
+                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords,
+                'key_ids': key_ids}
+
+    def mask_intensity_filter(self, data):
+        int_patches = F.unfold(data, kernel_size=(self.patch_size, self.patch_size),
+                               stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
+        keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)
+        return keypoint_int >= self.patch_mean_thres
 
     def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints, scores, batch):
         point_loss = 0
@@ -94,14 +99,14 @@ class SteamPoseModel(torch.nn.Module):
 
             # loop for each window frame
             for w in range(i, i + self.solver.window_size - 1):
-                # filter by zero intensity and/or border
+                # filter by zero intensity patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
 
                 # points must be list of N x 3
                 zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
                 points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
-                weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                weights_mat, weights_d = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
 
                 # get R_21 and t_12_in_2
                 R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
@@ -110,8 +115,8 @@ class SteamPoseModel(torch.nn.Module):
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
                 # error threshold
-                errorT = min(self.mah_thresh**2, self.nms_thresh**2 * torch.max(error2))
-                if self.mah_thresh > 0:
+                errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(error2))
+                if self.mah_thres > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
                 else:
                     ids = torch.arange(mah2_error.size(0))
@@ -136,9 +141,7 @@ class SteamPoseModel(torch.nn.Module):
                 # log det (ignore 3rd dim since it's a constant)
                 logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1))
 
-                # mask loss
-                # bceloss = torch.nn.BCELoss()
-                # mask_loss += bceloss(scores[w], mask[w])
+                mask_loss += self.scoreToMaskLoss(scores[w], mask[w])
 
         # average over batches
         if bcount > 0:
@@ -149,21 +152,16 @@ class SteamPoseModel(torch.nn.Module):
         dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
         return total_loss, dict_loss
 
-    def zero_intensity_filter(self, data):
-        int_patches = F.unfold(data, kernel_size=(self.patch_size, self.patch_size),
-                               stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
-        keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)
-
-        return keypoint_int
-
-    def border_filter(self, keypoint_coords):
-        # self.cart_pixel_width
-        width = self.cart_pixel_width
-        border = self.border
-        keypoint_int = (keypoint_coords[:, :, 0] >= border) * (keypoint_coords[:, :, 0] <= width - border) \
-                       * (keypoint_coords[:, :, 1] >= border) * (keypoint_coords[:, :, 1] <= width - border)
-        return keypoint_int.unsqueeze(1)
-
+    def scoreToMaskLoss(self, scores, mask):
+        # scores: 1 x H x W or 3 x H x W, mask: 1 x H x W
+        bceloss = torch.nn.BCELoss()
+        if scores.size(0) == 1:
+            return bceloss(scores, mask)
+        elif scores.size(0) == 3:
+            # weight scores represent (l1, d1, d2) --> LDL^T decomp of 2x2 covariance matrix W
+            return bceloss(torch.sigmoid(scores[1] + scores[2]), mask)
+        else:
+            assert False, "Weight scores should be dim 1 or 3"
 
 class SteamSolver():
     """
@@ -194,7 +192,7 @@ class SteamSolver():
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
                                                self.window_size, config['steam']['zero_vel_prior'])
-        self.zero_int_thresh = config['steam']['zero_int_thresh']
+        self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
@@ -230,7 +228,7 @@ class SteamSolver():
             weights = []
             # loop for each window frame
             for w in range(i, i + self.window_size - 1):
-                # filter by zero intensity and/or border
+                # filter by zero intensity patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
                 ids_cpu = ids.cpu()
 
@@ -248,7 +246,7 @@ class SteamSolver():
                 weights += [weights_temp.detach().cpu().numpy()]
 
             # solver
-            self.solver_cpp.resetTraj()
+            # self.solver_cpp.resetTraj()
             self.solver_cpp.setMeas(points2, points1, weights)
             self.solver_cpp.optimize()
 
@@ -300,6 +298,6 @@ class SteamSolver():
             d = torch.ones(w.size(0), 3, device=w.device)*self.z_weight
             d[:, 0:2] = w[:, 1:]
         else:
-            assert False, "Weight should be dim 1 or 3"
+            assert False, "Weight scores should be dim 1 or 3"
 
         return A, d
