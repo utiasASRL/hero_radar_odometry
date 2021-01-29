@@ -5,7 +5,7 @@ import torch
 
 from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
-#from networks.steam_pose_model import SteamPoseModel
+from networks.steam_pose_model import SteamPoseModel
 from utils.utils import supervised_loss, pointmatch_loss, get_lr
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch

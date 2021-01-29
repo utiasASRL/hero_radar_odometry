@@ -14,11 +14,10 @@ class SoftmaxRefMatcher(nn.Module):
         self.gpuid = config['gpuid']
         # self.score_comp = config['networks']['matcher_block']['score_comp']
 
-    def forward(self, keypoint_scores, keypoint_desc, scores_dense, desc_dense):
+    def forward(self, keypoint_scores, keypoint_desc, desc_dense):
         """
             keypoint_scores: Bx1xN
             keypoint_desc: BxCxN
-            scores_dense: Bx1xHxW
             desc_dense: BxCxHxW
         """
 

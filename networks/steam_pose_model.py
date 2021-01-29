@@ -32,6 +32,7 @@ class SteamPoseModel(torch.nn.Module):
         self.relu_detector = nn.ReLU()
         self.sigmoid = torch.nn.Sigmoid()
         self.mask_detector_scores = config['steam']['mask_detector_scores']
+        self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
 
     def forward(self, batch):
@@ -106,7 +107,7 @@ class SteamPoseModel(torch.nn.Module):
                 zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
                 points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
-                weights_mat, weights_d = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
 
                 # get R_21 and t_12_in_2
                 R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
@@ -115,7 +116,7 @@ class SteamPoseModel(torch.nn.Module):
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
                 # error threshold
-                errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(error2))
+                errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
                 if self.mah_thres > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
                 else:
@@ -192,7 +193,6 @@ class SteamSolver():
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
                                                self.window_size, config['steam']['zero_vel_prior'])
-        self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
