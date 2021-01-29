@@ -147,9 +147,11 @@ class SteamPoseModel(torch.nn.Module):
         if bcount > 0:
             point_loss /= (bcount * (self.solver.window_size - 1))
             logdet_loss /= (bcount * (self.solver.window_size - 1))
-            mask_loss /= (bcount * (self.solver.window_size - 1))
-        total_loss = point_loss + logdet_loss + mask_loss
-        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
+            # mask_loss /= (bcount * (self.solver.window_size - 1))
+        # total_loss = point_loss + logdet_loss + mask_loss
+        total_loss = point_loss + logdet_loss
+        # dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
+        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss}
         return total_loss, dict_loss
 
     def zero_intensity_filter(self, data):
