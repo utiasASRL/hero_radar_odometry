@@ -1,8 +1,8 @@
 {
     "model": "SteamPoseModel",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2021-01-27/run6_window_4_2x2Weight/",
-    "gpuid": "cuda:1",
+    "log_dir": "/workspace/Documents/logs/2021-01-27/run11_window_4_2x2Weight/",
+    "gpuid": "cuda:3",
     "min_range": 58,
     "radar_resolution": 0.0432,
     "cart_resolution": 0.3456,
