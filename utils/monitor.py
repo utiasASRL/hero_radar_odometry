@@ -173,8 +173,8 @@ class SteamMonitor(MonitorBase):
         """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""
         time_used = []
         valid_loss = 0
-        valid_point_loss = 0
-        valid_logdet_loss = 0
+        aux_losses = {}
+        aux_init = False
         T_gt = []
         R_pred = []
         t_pred = []
@@ -185,12 +185,15 @@ class SteamMonitor(MonitorBase):
             out = self.model(batch)
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
-            #loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'])
             loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
-            if loss != 0:
-                valid_loss += loss.detach().cpu().item()
-                valid_point_loss += dict_loss['point_loss'].detach().cpu().item()
-                valid_logdet_loss += dict_loss['logdet_loss'].detach().cpu().item()
+            valid_loss += loss.detach().cpu().item()
+            if not aux_init:
+                for loss_name in dict_loss:
+                    aux_losses[loss_name] = dict_loss[loss_name].detach().cpu().item()
+                aux_init = True
+            else:
+                for loss_name in dict_loss:
+                    aux_losses[loss_name] += dict_loss[loss_name].detach().cpu().item()
             time_used.append(time() - ts)
             if batchi == 0:
                 # append entire window
@@ -210,8 +213,8 @@ class SteamMonitor(MonitorBase):
         t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
-        self.writer.add_scalar('val/point_loss', valid_point_loss, self.counter)
-        self.writer.add_scalar('val/logdet_loss', valid_logdet_loss, self.counter)
+        for loss_name in aux_losses:
+            self.writer.add_scalar('val/' + loss_name, aux_losses[loss_name], self.counter)
         self.writer.add_scalar('val/avg_time_per_batch', sum(time_used)/len(time_used), self.counter)
         self.writer.add_scalar('val/t_err_med', results[0], self.counter)
         self.writer.add_scalar('val/t_err_std', results[1], self.counter)
