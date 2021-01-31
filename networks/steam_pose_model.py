@@ -102,6 +102,9 @@ class SteamPoseModel(torch.nn.Module):
             for w in range(i, i + self.solver.window_size - 1):
                 # filter by zero intensity patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
+                if ids.size(0) == 0:
+                    print('WARNING: filtering by zero intensity patches resulted in zero keypoints!')
+                    continue
 
                 # points must be list of N x 3
                 zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
@@ -117,8 +120,12 @@ class SteamPoseModel(torch.nn.Module):
 
                 # error threshold
                 errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
-                if self.mah_thres > 0:
+                #errorT = self.nms_thres**2 * torch.max(mah2_error)
+                if errorT > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
+                    if len(ids.size()) == 0:
+                        print('WARNING: adaptive MAH thresholding resulted in zero keypoints!')
+                        continue
                 else:
                     ids = torch.arange(mah2_error.size(0))
 
