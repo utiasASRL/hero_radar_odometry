@@ -186,14 +186,15 @@ class SteamMonitor(MonitorBase):
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
             loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
-            valid_loss += loss.detach().cpu().item()
-            if not aux_init:
-                for loss_name in dict_loss:
-                    aux_losses[loss_name] = dict_loss[loss_name].detach().cpu().item()
-                aux_init = True
-            else:
-                for loss_name in dict_loss:
-                    aux_losses[loss_name] += dict_loss[loss_name].detach().cpu().item()
+            if loss != 0:
+                valid_loss += loss.detach().cpu().item()
+                if not aux_init:
+                    for loss_name in dict_loss:
+                        aux_losses[loss_name] = dict_loss[loss_name].detach().cpu().item()
+                    aux_init = True
+                else:
+                    for loss_name in dict_loss:
+                        aux_losses[loss_name] += dict_loss[loss_name].detach().cpu().item()
             time_used.append(time() - ts)
             if batchi == 0:
                 # append entire window

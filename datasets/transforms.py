@@ -3,7 +3,7 @@ import cv2
 import torch
 from utils.utils import get_transform, get_inverse_tf
 
-def augmentBatch(batch, config):
+def augmentBatch2(batch, config):
     rot_max = config['augmentation']['rot_max']
     batch_size = config['batch_size']
     window_size = config['window_size']
@@ -20,7 +20,7 @@ def augmentBatch(batch, config):
             mmg = mask[k].squeeze()
             M = cv2.getRotationMatrix2D((W / 2, H / 2), rot * 180 * j / np.pi, 1.0)
             data[i] = cv2.warpAffine(img, M, (W, H), flags=cv2.INTER_CUBIC).reshape(C, H, W)
-            mask[i] = cv2.warpAffine(mmg, M, (W, H), flags=cv2.INTER_CUBIC).reshape(C, H, W)
+            mask[i] = cv2.warpAffine(mmg, M, (W, H), flags=cv2.INTER_CUBIC).reshape(1, H, W)
             T_21[i - 1] = np.matmul(T, T_21[i - 1])
     batch['data'] = torch.from_numpy(data)
     batch['mask'] = torch.from_numpy(mask > 0.5).type(batch['data'].dtype)    # make into a binary mask
@@ -28,7 +28,7 @@ def augmentBatch(batch, config):
     return batch
 
 # apply a random transformation to every other frame and adjust the ground truth transform accordingly
-def augmentBatch2(batch, config):
+def augmentBatch(batch, config):
     rot_max = config['augmentation']['rot_max']
     data = batch['data'].numpy()    # this seems to return a reference, not a copy
     mask = batch['mask'].numpy()

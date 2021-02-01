@@ -86,6 +86,7 @@ class SteamPoseModel(torch.nn.Module):
         point_loss = 0
         logdet_loss = 0
         mask_loss = 0
+        unweighted_point_loss = 0
         mask = batch['mask'].to(self.gpuid)
 
         # loop through each batch
@@ -111,6 +112,7 @@ class SteamPoseModel(torch.nn.Module):
                 points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                ones = torch.ones(weights_mat.shape).to(self.gpuid)
 
                 # get R_21 and t_12_in_2
                 R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
@@ -119,12 +121,13 @@ class SteamPoseModel(torch.nn.Module):
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
                 # error threshold
-                errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
+                #errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
                 #errorT = self.nms_thres**2 * torch.max(mah2_error)
+                errorT = self.mah_thres**2
                 if errorT > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
                     if len(ids.size()) == 0:
-                        print('WARNING: adaptive MAH thresholding resulted in zero keypoints!')
+                        print('WARNING: MAH thresholding resulted in zero keypoints!')
                         continue
                 else:
                     ids = torch.arange(mah2_error.size(0))
@@ -133,6 +136,7 @@ class SteamPoseModel(torch.nn.Module):
                 if self.expect_approx_opt == 0:
                     # only mean
                     point_loss += torch.mean(error[ids].transpose(1, 2)@weights_mat[ids]@error[ids])
+                    unweighted_point_loss += torch.mean(error[ids].transpose(1, 2) @ ones[ids] @ error[ids])
                 elif self.expect_approx_opt == 1:
                     # sigmapoints
                     Rsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, :3]).to(self.gpuid).unsqueeze(1)  # s x 1 x 3 x 3
@@ -142,6 +146,7 @@ class SteamPoseModel(torch.nn.Module):
                     points1_in_2 = Rsp@(points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
                     error = points2 - points1_in_2  # s x n x 3 x 1
                     temp = torch.sum(error.transpose(2, 3)@weights_mat[ids].unsqueeze(0)@error, dim=0)/Rsp.size(0)
+                    unweighted_point_loss += torch.mean(error.transpose(2, 3) @ ones[ids].unsqueeze(0) @ error)
                     point_loss += torch.mean(temp)
                 else:
                     raise NotImplementedError('Steam loss method not implemented!')
@@ -149,15 +154,15 @@ class SteamPoseModel(torch.nn.Module):
                 # log det (ignore 3rd dim since it's a constant)
                 logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1))
 
-                mask_loss += self.scoreToMaskLoss(scores[w], mask[w])
+                #mask_loss += self.scoreToMaskLoss(scores[w], mask[w])
 
         # average over batches
         if bcount > 0:
             point_loss /= (bcount * (self.solver.window_size - 1))
             logdet_loss /= (bcount * (self.solver.window_size - 1))
-            mask_loss /= (bcount * (self.solver.window_size - 1))
-        total_loss = point_loss + logdet_loss + mask_loss
-        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
+            #mask_loss /= (bcount * (self.solver.window_size - 1))
+        total_loss = point_loss + logdet_loss #+ mask_loss
+        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'unweighted_point_loss': unweighted_point_loss}
         return total_loss, dict_loss
 
     def scoreToMaskLoss(self, scores, mask):

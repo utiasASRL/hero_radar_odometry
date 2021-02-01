@@ -1,7 +1,7 @@
 {
     "model": "SteamPoseModel",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
-    "log_dir": "/workspace/Documents/logs/2021-01-27/run11_window_4_2x2Weight/",
+    "log_dir": "/workspace/Documents/logs/2021-01-27/run16_wind_2_2x2W_aug_no_mask/",
     "gpuid": "cuda:3",
     "min_range": 58,
     "radar_resolution": 0.0432,
@@ -34,18 +34,18 @@
         "expect_approx": ["mean", "2NP1", "linearize"],
         "expect_approx_opt": 1,
         "patch_mean_thres": 0.05,
-        "min_abs_vel": 1.0,
+        "min_abs_vel": -1.0,
         "mah_thres": 4,
         "nms_thres": 0.75,
-        "mask_detector_scores": true,
+        "mask_detector_scores": false,
         "zero_vel_prior": true,
         "weight_matrix": true
     },
     "lr": 0.00001,
     "weight_decay": 0,
-    "clip_norm": 1.0,
+    "clip_norm": 10.0,
     "batch_size": 1,
-    "window_size": 4,
+    "window_size": 2,
     "num_workers": 4,
     "max_iterations": 300000,
     "max_epochs": 3,
@@ -56,7 +56,7 @@
     "vis_num": 6,
     "vis_keypoint_nms": 0,
     "augmentation": {
-        "augment": false,
-        "rot_max": 0.1
+        "augment": true,
+        "rot_max": 0.2
     }
 }
