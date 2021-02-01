@@ -34,6 +34,8 @@ class SteamPoseModel(torch.nn.Module):
         self.mask_detector_scores = config['steam']['mask_detector_scores']
         self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
+        self.topk_backup = config['steam']['topk_backup']
+        self.mask_loss_flag = config['steam']['mask_loss_flag']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -116,11 +118,20 @@ class SteamPoseModel(torch.nn.Module):
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
                 # error threshold
-                errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
+                if self.nms_thres <= 0:
+                    errorT = self.mah_thres**2
+                else:
+                    errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
+
                 if self.mah_thres > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
                 else:
                     ids = torch.arange(mah2_error.size(0))
+
+                if ids.squeeze().nelement() <= 1:
+                    print('Warning: MAH threshold output has 1 or 0 elements.')
+                    error2 = error.transpose(1, 2)@error
+                    _, ids = torch.topk(error2.squeeze(), self.topk_backup, largest=False)
 
                 # squared mah error
                 if self.expect_approx_opt == 0:
@@ -149,8 +160,12 @@ class SteamPoseModel(torch.nn.Module):
             point_loss /= (bcount * (self.solver.window_size - 1))
             logdet_loss /= (bcount * (self.solver.window_size - 1))
             mask_loss /= (bcount * (self.solver.window_size - 1))
-        total_loss = point_loss + logdet_loss + mask_loss
-        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
+        if self.mask_loss_flag:
+            total_loss = point_loss + logdet_loss + mask_loss
+            dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'mask_loss': mask_loss}
+        else:
+            total_loss = point_loss + logdet_loss
+            dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss}
         return total_loss, dict_loss
 
     def scoreToMaskLoss(self, scores, mask):

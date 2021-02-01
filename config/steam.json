@@ -39,7 +39,9 @@
         "nms_thres": 0.75,
         "mask_detector_scores": true,
         "zero_vel_prior": true,
-        "weight_matrix": true
+        "weight_matrix": true,
+        "topk_backup": 30,
+        "mask_loss_flag": false
     },
     "lr": 0.00001,
     "weight_decay": 0,
