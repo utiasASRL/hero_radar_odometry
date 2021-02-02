@@ -6,6 +6,8 @@ import torch
 import torchvision.utils as vutils
 from torchvision.transforms import ToTensor
 from utils.utils import get_transform2, enforce_orthog, get_inverse_tf
+from matplotlib.patches import Ellipse
+import matplotlib.transforms as transforms
 
 def convert_plt_to_img():
     buf = io.BytesIO()
@@ -133,6 +135,69 @@ def draw_batch_steam(batch, out, config):
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
            vutils.make_grid([p2p_img])
 
+def draw_batch_steam_eval(batch, out, model):
+    # get radar image
+    radar = batch['data'][0].squeeze().numpy()
+    radar_tgt = batch['data'][-1].squeeze().numpy()
+
+    # Draw keypoint matches
+    src = out['src_rc'][-1].squeeze().detach().cpu().numpy()
+    tgt = out['tgt_rc'][-1].squeeze().detach().cpu().numpy()
+    keypoint_ints = out['keypoint_ints']
+
+    ids = torch.nonzero(keypoint_ints[-1, 0] > 0, as_tuple=False).squeeze(1)
+    ids_cpu = ids.cpu()
+
+    plt.imshow(np.concatenate((radar, radar_tgt), axis=1), cmap='gray')
+    delta = radar.shape[1]
+    for i in range(src.shape[0]):
+        if i in ids_cpu:
+            custom_colour = 'g'
+            plt.plot([src[i, 0], tgt[i, 0] + delta], [src[i, 1], tgt[i, 1]], c='y', linewidth=0.5, zorder=2)
+            plt.scatter(src[i, 0], src[i, 1], c=custom_colour, s=5, zorder=3)
+            plt.scatter(tgt[i, 0] + delta, tgt[i, 1], c=custom_colour, s=5, zorder=4)
+    plt.title('matches')
+    match_img = convert_plt_to_tensor()
+
+    plt.imshow(np.concatenate((radar, radar_tgt), axis=0), cmap='gray')
+    delta = radar.shape[1]
+    for i in range(src.shape[0]):
+        if i in ids_cpu:
+            custom_colour = 'g'
+            plt.plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1] + delta], c='y', linewidth=0.5, zorder=2)
+            plt.scatter(src[i, 0], src[i, 1], c=custom_colour, s=5, zorder=3)
+            plt.scatter(tgt[i, 0], tgt[i, 1] + delta, c=custom_colour, s=5, zorder=4)
+    plt.title('matches')
+    match_img2 = convert_plt_to_tensor()
+
+    # draw radar image
+    plt.imshow(np.concatenate((radar, radar_tgt), axis=1), cmap='gray')
+    delta = radar.shape[1]
+    for i in range(src.shape[0]):
+        if i in ids_cpu:
+            custom_colour = 'g'
+            plt.scatter(src[i, 0], src[i, 1], c=custom_colour, s=5, zorder=3)
+            plt.scatter(tgt[i, 0] + delta, tgt[i, 1], c=custom_colour, s=5, zorder=4)
+    plt.title('radar src-tgt pair')
+    radar_img = convert_plt_to_tensor()
+
+    # plot points and covariance
+    _, ax = plt.subplots()
+    plt.axis('equal')
+    tgt_coords = out['tgt'][-1].squeeze().detach().cpu().numpy()
+    match_weights = out['match_weights']
+    weights_mat, weights_d = model.solver.convert_to_weight_matrix(match_weights[-1].T, match_weights.size(0)-1)
+    for i in range(src.shape[0]):
+        if i in ids_cpu:
+            custom_colour = 'g'
+            cov = np.linalg.inv(weights_mat[i, :2, :2].detach().cpu().numpy())
+            confidence_ellipse_2D(tgt_coords[i, :2], cov, ax, n_std=3.0, facecolor='y')
+            plt.scatter(tgt_coords[i, 0], tgt_coords[i, 1], c=custom_colour, s=5, zorder=4)
+    points_cov_img = convert_plt_to_tensor()
+
+    return vutils.make_grid([radar_img, points_cov_img]), vutils.make_grid([match_img, match_img2])
+
+
 def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
@@ -171,3 +236,64 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
         else:
             imgs.append(convert_plt_to_img())
     return imgs
+
+def confidence_ellipse_2D(mean, cov, ax, n_std=3.0, facecolor='none', **kwargs):
+    """
+    Modified for 2x1 mean and 2x2 covariance input  (David Yoon)
+    -----
+    Create a plot of the covariance confidence ellipse of `x` and `y`
+
+    See how and why this works: https://carstenschelp.github.io/2018/09/14/Plot_Confidence_Ellipse_001.html
+
+    This function has made it into the matplotlib examples collection:
+    https://matplotlib.org/devdocs/gallery/statistics/confidence_ellipse.html#sphx-glr-gallery-statistics-confidence-ellipse-py
+
+    Or, once matplotlib 3.1 has been released:
+    https://matplotlib.org/gallery/index.html#statistics
+
+    I update this gist according to the version there, because thanks to the matplotlib community
+    the code has improved quite a bit.
+    Parameters
+    ----------
+    x, y : array_like, shape (n, )
+        Input data.
+    ax : matplotlib.axes.Axes
+        The axes object to draw the ellipse into.
+    n_std : float
+        The number of standard deviations to determine the ellipse's radiuses.
+    Returns
+    -------
+    matplotlib.patches.Ellipse
+    Other parameters
+    ----------------
+    kwargs : `~matplotlib.patches.Patch` properties
+    """
+
+    pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
+    # Using a special case to obtain the eigenvalues of this
+    # two-dimensionl dataset.
+    ell_radius_x = np.sqrt(1 + pearson)
+    ell_radius_y = np.sqrt(1 - pearson)
+    ellipse = Ellipse((0, 0),
+        width=ell_radius_x * 2,
+        height=ell_radius_y * 2,
+        facecolor=facecolor,
+        **kwargs)
+
+    # Calculating the stdandard deviation of x from
+    # the squareroot of the variance and multiplying
+    # with the given number of standard deviations.
+    scale_x = np.sqrt(cov[0, 0]) * n_std
+    mean_x = mean[0]
+
+    # calculating the stdandard deviation of y ...
+    scale_y = np.sqrt(cov[1, 1]) * n_std
+    mean_y = mean[1]
+
+    transf = transforms.Affine2D() \
+        .rotate_deg(45) \
+        .scale(scale_x, scale_y) \
+        .translate(mean_x, mean_y)
+
+    ellipse.set_transform(transf + ax.transData)
+    return ax.add_patch(ellipse)

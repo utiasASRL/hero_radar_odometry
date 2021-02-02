@@ -1,0 +1,13 @@
+{
+    "model_path": "logs/aug_win2_rot45deg/90000.pt",
+    "train_config": "config/steam.json",
+    "log_dir": "logs/evaltest/",
+    "gpuid": "cuda:1",
+    "print_rate": 10,
+    "vis_skip": 10,
+    "window_size": 2,
+    "augmentation": {
+        "augment": true,
+        "rot_max": 0.8
+    }
+}
