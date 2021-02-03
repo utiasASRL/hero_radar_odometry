@@ -184,6 +184,8 @@ def draw_batch_steam_eval(batch, out, model):
     # plot points and covariance
     _, ax = plt.subplots()
     plt.axis('equal')
+    ax.set_xlim([-130, 130])
+    ax.set_ylim([-130, 130])
     tgt_coords = out['tgt'][-1].squeeze().detach().cpu().numpy()
     match_weights = out['match_weights']
     weights_mat, weights_d = model.solver.convert_to_weight_matrix(match_weights[-1].T, match_weights.size(0)-1)
