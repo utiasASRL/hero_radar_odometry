@@ -4,7 +4,8 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics, get_inverse_tf
+from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics, get_inverse_tf,
+    get_T_ba
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
 class MonitorBase(object):
@@ -13,7 +14,7 @@ class MonitorBase(object):
         self.model = model
         self.log_dir = config['log_dir']
         self.valid_loader = valid_loader
-        self.seq_len = valid_loader.dataset.seq_len
+        self.seq_lens = valid_loader.dataset.seq_lens
         self.sequences = valid_loader.dataset.sequences
         self.config = config
         self.gpuid = config['gpuid']
@@ -110,7 +111,7 @@ class SVDMonitor(MonitorBase):
             t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
 
         results = computeMedianError(T_gt, R_pred, t_pred)
-        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
+        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_lens)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         for loss_name in aux_losses:
@@ -123,7 +124,7 @@ class SVDMonitor(MonitorBase):
         self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
         self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
 
-        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
+        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_lens)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img)
         return valid_loss
@@ -200,18 +201,18 @@ class SteamMonitor(MonitorBase):
                 # append entire window
                 for w in range(batch['T_21'].size(0)-1):
                     T_gt.append(batch['T_21'][w].numpy().squeeze())
-                    T_pred = self.get_T_ba(out, a=w, b=w+1)
+                    T_pred = get_T_ba(out, a=w, b=w+1)
                     R_pred.append(T_pred[:3, :3].squeeze())
                     t_pred.append(T_pred[:3, 3].squeeze())
             else:
                 # append only the front of window
                 T_gt.append(batch['T_21'][-2].numpy().squeeze())
-                T_pred = self.get_T_ba(out, a=-2, b=-1)
+                T_pred = get_T_ba(out, a=-2, b=-1)
                 R_pred.append(T_pred[:3, :3].squeeze())
                 t_pred.append(T_pred[:3, 3].squeeze())
 
         results = computeMedianError(T_gt, R_pred, t_pred)
-        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
+        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_lens)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         for loss_name in aux_losses:
@@ -224,16 +225,7 @@ class SteamMonitor(MonitorBase):
         self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
         self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
 
-        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
+        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_lens)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img, self.counter)
         return valid_loss
-
-    def get_T_ba(self, out, a, b):
-        T_b0 = np.eye(4)
-        T_b0[:3, :3] = out['R'][0, b].detach().cpu().numpy()
-        T_b0[:3, 3:4] = out['t'][0, b].detach().cpu().numpy()
-        T_a0 = np.eye(4)
-        T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
-        T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
-        return T_b0@get_inverse_tf(T_a0)

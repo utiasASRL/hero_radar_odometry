@@ -133,11 +133,11 @@ def draw_batch_steam(batch, out, config):
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
            vutils.make_grid([p2p_img])
 
-def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True, T_icra=None):
+def plot_sequences(T_gt, R_pred, t_pred, seq_lens, returnTensor=True, T_icra=None):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
     idx = 0
-    for s in seq_len:
+    for s in seq_lens:
         seq_indices.append(list(range(idx, idx + s - 1)))
         idx += (s - 1)
 

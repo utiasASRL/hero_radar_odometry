@@ -7,7 +7,7 @@ import torch
 from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
 from networks.steam_pose_model import SteamPoseModel
-from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format
+from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format, get_T_ba
 from utils.vis import plot_sequences
 
 def get_folder_from_file_path(path):
@@ -26,7 +26,7 @@ if __name__ == '__main__':
         config = json.load(f)
 
     _, _, test_loader = get_dataloaders(config)
-    seq_len = test_loader.dataset.seq_len
+    seq_lens = test_loader.dataset.seq_lens
     seq_names = test_loader.dataset.sequences
 
     if config['model'] == 'SVDPoseModel':
@@ -47,7 +47,19 @@ if __name__ == '__main__':
         if (batchi + 1) % config['print_rate'] == 0:
             print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-config['print_rate']:])))
         out = model(batch)
-        T_gt.append(batch['T_21'][0].numpy().squeeze())
+        if batchi == 0:
+            # append entire window
+            for w in range(batch['T_21'].size(0)-1):
+                T_gt.append(batch['T_21'][w].numpy().squeeze())
+                T_pred = get_T_ba(out, a=w, b=w+1)
+                R_pred.append(T_pred[:3, :3].squeeze())
+                t_pred.append(T_pred[:3, 3].squeeze())
+        else:
+            # append only the front of window
+            T_gt.append(batch['T_21'][-2].numpy().squeeze())
+            T_pred = get_T_ba(out, a=-2, b=-1)
+            R_pred.append(T_pred[:3, :3].squeeze())
+            t_pred.append(T_pred[:3, 3].squeeze())
         R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
         t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
         timestamps.append(batch['times'][0].numpy().squeeze())
@@ -57,15 +69,15 @@ if __name__ == '__main__':
     results = computeMedianError(T_gt, R_pred, t_pred)
     print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
 
-    t_err, r_err, err = computeKittiMetrics(T_gt, R_pred, t_pred, seq_len)
+    t_err, r_err, err = computeKittiMetrics(T_gt, R_pred, t_pred, seq_lens)
     print('KITTI t_err: {} %'.format(t_err))
     print('KITTI r_err: {} deg/m'.format(r_err))
     root = get_folder_from_file_path(args.pretrain)
     saveKittiErrors(err, root + "kitti_err.obj")
 
     T_icra = load_icra21_results('./results/icra21/', seq_names)
-    imgs = plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=False, T_icra)
+    imgs = plot_sequences(T_gt, R_pred, t_pred, seq_lens, returnTensor=False, T_icra)
     for i, img in enumerate(imgs):
         imgs[i].save(root + seq_names[i] + '.png')
 
-    save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_len, seq_names, root)
+    save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, root)

@@ -176,11 +176,11 @@ def getStats(err):
     r_err /= float(len(err))
     return t_err, r_err
 
-def computeKittiMetrics(T_gt, R_pred, t_pred, seq_len):
+def computeKittiMetrics(T_gt, R_pred, t_pred, seq_lens):
     """Computes the translational (%) and rotational drift (deg/m) in the KITTI style."""
     seq_indices = []
     idx = 0
-    for s in seq_len:
+    for s in seq_lens:
         seq_indices.append(list(range(idx, idx + s - 1)))
         idx += (s - 1)
     err = []
@@ -206,12 +206,12 @@ def saveKittiErrors(err, fname):
 def loadKittiErrors(fname):
     return pickle.load(open(fname, 'rb'))
 
-def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_len, seq_names, root='./'):
+def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, root='./'):
     """This function converts outputs to a format that is backwards compatible with the yeti repository."""
 
     seq_indices = []
     idx = 0
-    for s in seq_len:
+    for s in seq_lens:
         seq_indices.append(list(range(idx, idx + s - 1)))
         idx += (s - 1)
 
@@ -227,7 +227,7 @@ def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_len, seq_names, ro
                 f.write('{},{},{},{},{},{},{},{}\n'.format(t[0, 0], t[1, 0], yaw, T[0, 3], T[1, 3], gtyaw,
                                                            timestamps[i][0], timestamps[i][1]))
 
-def load_icra21_results(results_loc, seq_names, seq_len):
+def load_icra21_results(results_loc, seq_names, seq_lens):
     T_icra = []
     for i, seq_name in enumerate(seq_names):
         fname = results_loc + 'accuracy' + seq_name + '.csv'
@@ -241,9 +241,9 @@ def load_icra21_results(results_loc, seq_names, seq_len):
                 T_icra.append(get_inverse_tf(get_transform(float(line[11]), float(line[12]), float(line[13]))))
                 count += 1
             # Append identity transforms at the end in case the ICRA results ended early by a couple frames
-            if count < seq_len[i]:
-                print('WARNING: ICRA results shorter than seq_len by {}. Append identity.'.format((seq_len[i] - count)))
-            while count < seq_len[i]:
+            if count < seq_lens[i]:
+                print('WARNING: ICRA results shorter than seq_len by {}. Append identity.'.format((seq_lens[i] - count)))
+            while count < seq_lens[i]:
                 T_icra.append(np.identity(4, dtype=np.float32))
                 count += 1
     return T_icra
@@ -272,3 +272,12 @@ def get_indices(batch_size, window_size):
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
+
+def get_T_ba(out, a, b):
+    T_b0 = np.eye(4)
+    T_b0[:3, :3] = out['R'][0, b].detach().cpu().numpy()
+    T_b0[:3, 3:4] = out['t'][0, b].detach().cpu().numpy()
+    T_a0 = np.eye(4)
+    T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
+    T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
+    return T_b0 @ get_inverse_tf(T_a0)

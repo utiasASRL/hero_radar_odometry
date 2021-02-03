@@ -2,9 +2,9 @@ from itertools import accumulate
 from torch.utils.data import Sampler, SubsetRandomSampler
 
 class RandomWindowBatchSampler(Sampler):
-    def __init__(self, batch_size, window_size, seq_len, drop_last=True, speed_filter=0.0, frame_speeds=None):
+    def __init__(self, batch_size, window_size, seq_lens, drop_last=True, speed_filter=0.0, frame_speeds=None):
         valid_frames = []
-        seq_len_cumsum = list(accumulate([0] + seq_len))
+        seq_len_cumsum = list(accumulate([0] + seq_lens))
         for j, len_j in enumerate(seq_len_cumsum[1:]):
             if speed_filter > 0.0 and frame_speeds is not None:
                 valid_frame_temp = list(range(seq_len_cumsum[j], len_j - window_size + 1))
@@ -37,9 +37,9 @@ class RandomWindowBatchSampler(Sampler):
         return (len(self.sampler) + total_size - 1) // total_size
 
 class SequentialWindowBatchSampler(Sampler):
-    def __init__(self, batch_size, window_size, seq_len, drop_last=True):
+    def __init__(self, batch_size, window_size, seq_lens, drop_last=True):
         self.valid_frames = []
-        seq_len_cumsum = list(accumulate([0] + seq_len))
+        seq_len_cumsum = list(accumulate([0] + seq_lens))
         for j, len_j in enumerate(seq_len_cumsum[1:]):
             self.valid_frames += list(range(seq_len_cumsum[j], len_j - window_size + 1))
         self.batch_size = batch_size

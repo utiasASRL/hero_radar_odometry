@@ -100,14 +100,14 @@ class OxfordDataset(Dataset):
         self.seq_idx_range = {}
         self.frames = []
         self.frame_speeds = []
-        self.seq_len = []
+        self.seq_lens = []
         self.mean_int_mask_mult = config['mean_int_mask_mult']
         for seq in self.sequences:
             seq_frames = get_frames(self.data_dir + seq + '/radar/')
             seq_frames = get_frames_with_gt(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
             seq_frame_speeds = get_frame_speeds(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
             self.seq_idx_range[seq] = [len(self.frames), len(self.frames) + len(seq_frames)]
-            self.seq_len.append(len(seq_frames))
+            self.seq_lens.append(len(seq_frames))
             self.frames.extend(seq_frames)
             self.frame_speeds.extend(seq_frame_speeds)
 
@@ -159,9 +159,9 @@ def get_dataloaders(config):
     train_dataset = OxfordDataset(config, 'train')
     valid_dataset = OxfordDataset(vconfig, 'validation')
     test_dataset = OxfordDataset(vconfig, 'test')
-    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_len)
-    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_len)
-    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_len)
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens)
+    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens)
+    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens)
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
     valid_loader = DataLoader(valid_dataset, batch_sampler=valid_sampler, num_workers=config['num_workers'])
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, num_workers=config['num_workers'])
