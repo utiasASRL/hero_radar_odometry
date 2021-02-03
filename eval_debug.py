@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     model = SteamPoseModel(train_config).to(eval_config['gpuid'])
 
-    # model.load_state_dict(torch.load(eval_config['model_path']), strict=False)
+    model.load_state_dict(torch.load(eval_config['model_path']), strict=False)
     model.eval()
 
     monitor = SteamEvalMonitor(model, valid_loader, train_config, eval_config)
