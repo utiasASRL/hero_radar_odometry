@@ -11,7 +11,7 @@
     "mean_int_mask_mult": 3.0,
     "train_split": [0, 24],
     "validation_split": [24, 25],
-    "test_split": [25, 32],
+    "test_split": [25, 26],
     "networks": {
         "unet": {
             "bilinear": true,

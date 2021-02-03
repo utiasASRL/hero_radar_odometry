@@ -6,6 +6,7 @@ import torch
 
 from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
+from networks.steam_pose_model import SteamPoseModel
 from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format
 from utils.vis import plot_sequences
 
@@ -28,9 +29,12 @@ if __name__ == '__main__':
     seq_len = test_loader.dataset.seq_len
     seq_names = test_loader.dataset.sequences
 
-    model = SVDPoseModel(config)
+    if config['model'] == 'SVDPoseModel':
+        model = SVDPoseModel(config).to(config['gpuid'])
+    elif config['model'] == 'SteamPoseModel':
+        model = SteamPoseModel(config).to(config['gpuid'])
+    assert(args.pretrain is not None)
     model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
-    model.to(config['gpuid'])
     model.eval()
 
     time_used = []
@@ -59,7 +63,8 @@ if __name__ == '__main__':
     root = get_folder_from_file_path(args.pretrain)
     saveKittiErrors(err, root + "kitti_err.obj")
 
-    imgs = plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=False)
+    T_icra = load_icra21_results('./results/icra21/', seq_names)
+    imgs = plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=False, T_icra)
     for i, img in enumerate(imgs):
         imgs[i].save(root + seq_names[i] + '.png')
 

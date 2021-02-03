@@ -133,7 +133,7 @@ def draw_batch_steam(batch, out, config):
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
            vutils.make_grid([p2p_img])
 
-def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
+def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True, T_icra=None):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
     idx = 0
@@ -145,10 +145,13 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     for indices in seq_indices:
         T_gt_ = np.identity(4)
         T_pred_ = np.identity(4)
+        T_icra_ = np.identity(4)
         x_gt = []
         y_gt = []
         x_pred = []
         y_pred = []
+        x_icra = []
+        y_icra = []
         for i in indices:
             T_gt_ = np.matmul(T_gt[i], T_gt_)
             T_pred_ = np.matmul(get_transform2(R_pred[i], t_pred[i]), T_pred_)
@@ -160,12 +163,20 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
             y_gt.append(T_gt_temp[1, 3])
             x_pred.append(T_pred_temp[0, 3])
             y_pred.append(T_pred_temp[1, 3])
+            if T_icra is not None:
+                T_icra_ = np.matmul(T_icra[i], T_icra_)
+                enforce_orthog(T_icra_)
+                T_icra_temp = get_inverse_tf(T_icra_)
+                x_icra.append(T_icra_temp[0, 3])
+                y_icra.append(T_icra_temp[1, 3])
 
         plt.subplots()
         plt.grid(which='both', linestyle='--', alpha=0.5)
         plt.axes().set_aspect('equal')
         plt.plot(x_gt, y_gt, 'k', label='GT')
-        plt.plot(x_pred, y_pred, 'r', label='PRED')
+        plt.plot(x_pred, y_pred, 'r', label='UNSUP')
+        if len(x_icra) > 0 and len(y_icra) > 0:
+            plt.plot(x_icra, y_icra, 'g', label='YETI')
         if returnTensor:
             imgs.append(convert_plt_to_tensor())
         else:

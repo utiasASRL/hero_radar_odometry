@@ -80,17 +80,29 @@ def get_transform2(R, t):
 
 def enforce_orthog(T):
     """Enforces the orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix."""
-    if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
-        return T
-    c1 = T[0:3, 1]
-    c2 = T[0:3, 2]
-    c1 /= np.linalg.norm(c1)
-    c2 /= np.linalg.norm(c2)
-    newcol0 = np.cross(c1, c2)
-    newcol1 = np.cross(c2, newcol0)
-    T[0:3, 0] = newcol0
-    T[0:3, 1] = newcol1
-    T[0:3, 2] = c2
+    # if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
+    #     return T
+    # c1 = T[0:3, 1]
+    # c2 = T[0:3, 2]
+    # c1 /= np.linalg.norm(c1)
+    # c2 /= np.linalg.norm(c2)
+    # newcol0 = np.cross(c1, c2)
+    # newcol1 = np.cross(c2, newcol0)
+    # T[0:3, 0] = newcol0
+    # T[0:3, 1] = newcol1
+    # T[0:3, 2] = c2
+    R = T[0:2, 0:2]
+    epsilon = 0.001
+    if abs(R[0, 0] - R[1, 1]) > epsilon or abs(R[1, 0] + R[0, 1]) > epsilon:
+        print("WARNING: this is not a proper rigid transformation:", R)
+    a = (R[0, 0] + R[1, 1]) / 2
+    b = (-R[1, 0] + R[0, 1]) / 2
+    sum = np.sqrt(a**2 + b**2)
+    a /= sum
+    b /= sum
+    R[0, 0] = a; R[0, 1] = b
+    R[1, 0] = -b; R[1, 1] = a
+    T[0:2, 0:2] = R
     return T
 
 # Use axis-angle representation to get a single number for rotation error
@@ -98,7 +110,7 @@ def rotationError(T):
     return abs(np.arcsin(T[0, 1]))  # SO(2)
 
 def translationError(T):
-    return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
+    return np.sqrt(T[0, 3]**2 + T[1, 3]**2)  # + T[2, 3]**2
 
 def computeMedianError(T_gt, R_pred, t_pred):
     """Computes the median translation and rotation error along with their standard deviations."""
@@ -214,6 +226,27 @@ def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_len, seq_names, ro
                 T = get_inverse_tf(T_gt[i])
                 f.write('{},{},{},{},{},{},{},{}\n'.format(t[0, 0], t[1, 0], yaw, T[0, 3], T[1, 3], gtyaw,
                                                            timestamps[i][0], timestamps[i][1]))
+
+def load_icra21_results(results_loc, seq_names, seq_len):
+    T_icra = []
+    for i, seq_name in enumerate(seq_names):
+        fname = results_loc + 'accuracy' + seq_name + '.csv'
+        with open(fname, 'r') as f:
+            f.readline()  # Clear out the header
+            lines = f.readlines()
+            count = 0
+            for line in lines:
+                line = line.split(',')
+                # Retrieve the transform estimated by MC-RANSAC + DOPPLER compensation
+                T_icra.append(get_inverse_tf(get_transform(float(line[11]), float(line[12]), float(line[13]))))
+                count += 1
+            # Append identity transforms at the end in case the ICRA results ended early by a couple frames
+            if count < seq_len[i]:
+                print('WARNING: ICRA results shorter than seq_len by {}. Append identity.'.format((seq_len[i] - count)))
+            while count < seq_len[i]:
+                T_icra.append(np.identity(4, dtype=np.float32))
+                count += 1
+    return T_icra
 
 def convert_to_radar_frame(pixel_coords, cart_pixel_width, cart_resolution, gpuid):
     """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
