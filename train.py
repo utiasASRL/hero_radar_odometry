@@ -58,6 +58,8 @@ if __name__ == '__main__':
                     loss, dict_loss = pointmatch_loss(out, batch, config)
             elif config['model'] == 'SteamPoseModel':
                 loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
+            print(out['R'].shape)
+            print(out['t'])
             if loss == 0:
                 print("No movement predicted. Skipping mini-batch.")
                 continue

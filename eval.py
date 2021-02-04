@@ -8,6 +8,7 @@ from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
 from networks.steam_pose_model import SteamPoseModel
 from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format, get_T_ba
+from utils.utils import load_icra21_results
 from utils.vis import plot_sequences
 
 def get_folder_from_file_path(path):
@@ -19,7 +20,7 @@ def get_folder_from_file_path(path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/radar.json', type=str, help='config file path')
+    parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
     args = parser.parse_args()
     with open(args.config) as f:
@@ -33,6 +34,7 @@ if __name__ == '__main__':
         model = SVDPoseModel(config).to(config['gpuid'])
     elif config['model'] == 'SteamPoseModel':
         model = SteamPoseModel(config).to(config['gpuid'])
+        model.solver.sliding_flag = True
     assert(args.pretrain is not None)
     model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
     model.eval()
@@ -60,8 +62,6 @@ if __name__ == '__main__':
             T_pred = get_T_ba(out, a=-2, b=-1)
             R_pred.append(T_pred[:3, :3].squeeze())
             t_pred.append(T_pred[:3, 3].squeeze())
-        R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
-        t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
         timestamps.append(batch['times'][0].numpy().squeeze())
         time_used.append(time() - ts)
 
@@ -75,9 +75,10 @@ if __name__ == '__main__':
     root = get_folder_from_file_path(args.pretrain)
     saveKittiErrors(err, root + "kitti_err.obj")
 
-    T_icra = load_icra21_results('./results/icra21/', seq_names)
-    imgs = plot_sequences(T_gt, R_pred, t_pred, seq_lens, returnTensor=False, T_icra)
+    save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, root)
+
+    T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
+    imgs = plot_sequences(T_gt, R_pred, t_pred, seq_lens, returnTensor=False, T_icra=T_icra)
     for i, img in enumerate(imgs):
         imgs[i].save(root + seq_names[i] + '.png')
 
-    save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, root)
