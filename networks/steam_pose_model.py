@@ -126,11 +126,13 @@ class SteamPoseModel(torch.nn.Module):
                 errorT = self.mah_thres**2
                 if errorT > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
-                    if len(ids.size()) == 0:
-                        print('WARNING: MAH thresholding resulted in zero keypoints!')
-                        continue
                 else:
                     ids = torch.arange(mah2_error.size(0))
+
+                if ids.squeeze().nelement() <= 1:
+                    print('Warning: MAH threshold output has 1 or 0 elements.')
+                    error2 = error.transpose(1, 2)@error
+                    _, ids = torch.topk(error2.squeeze(), 30, largest=False)
 
                 # squared mah error
                 if self.expect_approx_opt == 0:
@@ -298,11 +300,11 @@ class SteamSolver():
             D[:, (0, 3)] = torch.exp(w[:, 1:])
             D = D.reshape((-1, 2, 2))
 
-            A2x2 = L@D@L.transpose(1, 2)
+            A2x2 = L @ D @ L.transpose(1, 2)
 
             if self.T_aug:  # if list is not empty
                 Rot = self.T_aug[id].to(w.device)[:2, :2].unsqueeze(0)
-                A2x2 = Rot@A2x2@Rot.transpose(1, 2)
+                A2x2 = Rot.transpose(1, 2) @ A2x2 @ Rot
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
             A[:, 0:2, 0:2] = A2x2
