@@ -17,9 +17,14 @@ class Keypoint(torch.nn.Module):
         v_coords, u_coords = torch.meshgrid([torch.arange(0, self.width), torch.arange(0, self.width)])
         v_coords = v_coords.unsqueeze(0).float()  # 1 x H x W
         u_coords = u_coords.unsqueeze(0).float()
-        self.coords = torch.stack([u_coords, v_coords], dim=0).to(self.gpuid)  # 2 x H x W
-        self.patch_elems = self.patch_size**2
-        self.num_patches = int(self.width / self.patch_size)**2
+        self.coords = torch.cat((u_coords, v_coords), dim=0).to(self.gpuid)  # 2 x H x W
+        BW = config['batch_size'] * config['window_size']
+        self.v_patches = F.unfold(v_coords.expand(BW, 1, self.width, self.width),
+                                  kernel_size=self.patch_size,
+                                  stride=self.patch_size).to(self.gpuid)  # BW x patch_elems x num_patches
+        self.u_patches = F.unfold(u_coords.expand(BW, 1, self.width, self.width),
+                                  kernel_size=self.patch_size,
+                                  stride=self.patch_size).to(self.gpuid)
 
     def forward(self, detector_scores, weight_scores, descriptors):
         """
@@ -28,43 +33,23 @@ class Keypoint(torch.nn.Module):
             descriptors: BWxCxHxW
         """
         BW = descriptors.size(0)
-
-        # v_coords, u_coords = torch.meshgrid([torch.arange(0, height), torch.arange(0, width)])
-        # v_coords = v_coords.unsqueeze(0).float()  # 1 x H x W
-        # u_coords = u_coords.unsqueeze(0).float()
-        #
-        # v_patches = F.unfold(v_coords.expand(BW, 1, height, width),
-        #                      kernel_size=(self.patch_size, self.patch_size),
-        #                      stride=(self.patch_size, self.patch_size)).to(self.gpuid)  # BW x patch_elems x num_patches
-        # u_patches = F.unfold(u_coords.expand(BW, 1, height, width),
-        #                      kernel_size=(self.patch_size, self.patch_size),
-        #                      stride=(self.patch_size, self.patch_size)).to(self.gpuid)
-
-        # detector_patches = F.unfold(detector_scores, kernel_size=(self.patch_size, self.patch_size),
-        #                             stride=(self.patch_size, self.patch_size))  # BW x patch_elements x num_patches
-
-        # softmax_attention = F.softmax(detector_patches / self.temperature, dim=1)  # BW x patch_elements x num_patches
-        #
-        # expected_v = torch.sum(v_patches * softmax_attention, dim=1)
-        # expected_u = torch.sum(u_patches * softmax_attention, dim=1)
-        # keypoint_coords = torch.stack([expected_u, expected_v], dim=2)  # BW x num_patches x 2
-
-        exps = torch.exp(detector_scores)
-        exps_patch_sum = torch.nn.AvgPool2d(exps, kernel_size=(self.patch_size, self.patch_size),
-                           stride=(self.patch_size, self.patch_size)) * self.patch_elems
-        exps_coord_sum = torch.nn.AvgPool2d(exps * self.coords, kernel_size=(self.patch_size, self.patch_size),
-                           stride=(self.patch_size, self.patch_size)) * self.patch_elems
-        keypoint_tensor = exps_coord_sum / exps_patch_sum
-        keypoint_coords = keypoint_tensor.view(BW, 2, self.num_patches).transpose(2, 1)
+        v_coords, u_coords = torch.meshgrid([torch.arange(0, self.width), torch.arange(0, self.width)])
+        v_coords = v_coords.unsqueeze(0).float()  # 1 x H x W
+        u_coords = u_coords.unsqueeze(0).float()
+        detector_patches = F.unfold(detector_scores, kernel_size=self.patch_size, stride=self.patch_size)  # BW x patch_elements x num_patches
+        softmax_attention = F.softmax(detector_patches / self.temperature, dim=1)  # BW x patch_elements x num_patches
+        expected_v = torch.sum(self.v_patches * softmax_attention, dim=1)
+        expected_u = torch.sum(self.u_patches * softmax_attention, dim=1)
+        keypoint_coords = torch.stack([expected_u, expected_v], dim=2)  # BW x num_patches x 2
 
         if self.grid_sample:
             norm_keypoints2D = normalize_coords(keypoint_coords, self.width, self.width).unsqueeze(1)
 
             keypoint_desc = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear')
-            keypoint_desc = keypoint_desc.reshape(BW, descriptors.size(1), keypoint_coords.size(1))  # BW x C x num_patches
+            keypoint_desc = keypoint_desc.view(BW, descriptors.size(1), keypoint_coords.size(1))  # BW x C x num_patches
 
             keypoint_scores = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')
-            keypoint_scores = keypoint_scores.reshape(BW, weight_scores.size(1), keypoint_coords.size(1))  # BW x 1 x n_patch
+            keypoint_scores = keypoint_scores.view(BW, weight_scores.size(1), keypoint_coords.size(1))  # BW x 1 x n_patch
         else:
             softmax_attention = softmax_attention.unsqueeze(1)
 
