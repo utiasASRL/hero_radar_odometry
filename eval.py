@@ -49,20 +49,22 @@ if __name__ == '__main__':
         if (batchi + 1) % config['print_rate'] == 0:
             print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-config['print_rate']:])))
         out = model(batch)
-        if batchi == 0:
+        if batchi == len(test_loader):
             # append entire window
             for w in range(batch['T_21'].size(0)-1):
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
                 T_pred = get_T_ba(out, a=w, b=w+1)
                 R_pred.append(T_pred[:3, :3].squeeze())
                 t_pred.append(T_pred[:3, 3].squeeze())
+                timestamps.append(batch['times'][w].numpy().squeeze())
         else:
-            # append only the front of window
-            T_gt.append(batch['T_21'][-2].numpy().squeeze())
-            T_pred = get_T_ba(out, a=-2, b=-1)
+            # append only the back of window
+            w = 0
+            T_gt.append(batch['T_21'][w].numpy().squeeze())
+            T_pred = get_T_ba(out, a=w, b=w+1)
             R_pred.append(T_pred[:3, :3].squeeze())
             t_pred.append(T_pred[:3, 3].squeeze())
-        timestamps.append(batch['times'][0].numpy().squeeze())
+            timestamps.append(batch['times'][w].numpy().squeeze())
         time_used.append(time() - ts)
 
     print('time_used: {}'.format(sum(time_used) / len(time_used)))

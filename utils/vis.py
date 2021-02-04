@@ -177,6 +177,7 @@ def plot_sequences(T_gt, R_pred, t_pred, seq_lens, returnTensor=True, T_icra=Non
         plt.plot(x_pred, y_pred, 'r', label='UNSUP')
         if len(x_icra) > 0 and len(y_icra) > 0:
             plt.plot(x_icra, y_icra, 'g', label='YETI')
+        plt.legend(loc="upper left")
         if returnTensor:
             imgs.append(convert_plt_to_tensor())
         else:

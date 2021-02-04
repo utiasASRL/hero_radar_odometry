@@ -5,8 +5,8 @@
     "gpuid": "cuda:3",
     "min_range": 58,
     "radar_resolution": 0.0432,
-    "cart_resolution": 0.2592,
-    "cart_pixel_width": 760,
+    "cart_resolution": 0.3456,
+    "cart_pixel_width": 640,
     "input_channels": 1,
     "mean_int_mask_mult": 3.0,
     "train_split": [0, 24],
@@ -20,7 +20,7 @@
             "kaiming": false
         },
         "keypoint_block": {
-            "patch_size": 38,
+            "patch_size": 32,
             "softmax_temp": 1.0,
             "grid_sample": true
         },
@@ -45,7 +45,7 @@
     "weight_decay": 0,
     "clip_norm": 10.0,
     "batch_size": 1,
-    "window_size": 2,
+    "window_size": 4,
     "num_workers": 4,
     "max_iterations": 300000,
     "max_epochs": 3,
