@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.utils import get_indices
+from utils.utils import get_indices, normalize_coords
 
 class SoftmaxMatcher(nn.Module):
     """
@@ -64,10 +64,3 @@ class SoftmaxMatcher(nn.Module):
             match_weights = src_scores
 
         return pseudo_coords, match_weights, kp_inds
-
-def normalize_coords(coords_2D, width, height):
-    """Normalizes coords_2D (B x N x 2) to be within [-1, 1] """
-    batch_size = coords_2D.size(0)
-    u_norm = (2 * coords_2D[:, :, 0].reshape(batch_size, -1) / (width - 1)) - 1
-    v_norm = (2 * coords_2D[:, :, 1].reshape(batch_size, -1) / (height - 1)) - 1
-    return torch.stack([u_norm, v_norm], dim=2)  # B x num_patches x 2

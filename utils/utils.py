@@ -78,31 +78,34 @@ def get_transform2(R, t):
     T[0:3, 3] = t.squeeze()
     return T
 
-def enforce_orthog(T):
+def enforce_orthog(T, dim=2):
     """Enforces the orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix."""
-    # if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
-    #     return T
-    # c1 = T[0:3, 1]
-    # c2 = T[0:3, 2]
-    # c1 /= np.linalg.norm(c1)
-    # c2 /= np.linalg.norm(c2)
-    # newcol0 = np.cross(c1, c2)
-    # newcol1 = np.cross(c2, newcol0)
-    # T[0:3, 0] = newcol0
-    # T[0:3, 1] = newcol1
-    # T[0:3, 2] = c2
-    R = T[0:2, 0:2]
-    epsilon = 0.001
-    if abs(R[0, 0] - R[1, 1]) > epsilon or abs(R[1, 0] + R[0, 1]) > epsilon:
-        print("WARNING: this is not a proper rigid transformation:", R)
-    a = (R[0, 0] + R[1, 1]) / 2
-    b = (-R[1, 0] + R[0, 1]) / 2
-    sum = np.sqrt(a**2 + b**2)
-    a /= sum
-    b /= sum
-    R[0, 0] = a; R[0, 1] = b
-    R[1, 0] = -b; R[1, 1] = a
-    T[0:2, 0:2] = R
+    if dim == 3:
+        if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
+            return T
+        c1 = T[0:3, 1]
+        c2 = T[0:3, 2]
+        c1 /= np.linalg.norm(c1)
+        c2 /= np.linalg.norm(c2)
+        newcol0 = np.cross(c1, c2)
+        newcol1 = np.cross(c2, newcol0)
+        T[0:3, 0] = newcol0
+        T[0:3, 1] = newcol1
+        T[0:3, 2] = c2
+    if dim == 2:
+        R = T[0:2, 0:2]
+        epsilon = 0.001
+        if abs(R[0, 0] - R[1, 1]) > epsilon or abs(R[1, 0] + R[0, 1]) > epsilon:
+            print("WARNING: this is not a proper rigid transformation:", R)
+            return T
+        a = (R[0, 0] + R[1, 1]) / 2
+        b = (-R[1, 0] + R[0, 1]) / 2
+        sum = np.sqrt(a**2 + b**2)
+        a /= sum
+        b /= sum
+        R[0, 0] = a; R[0, 1] = b
+        R[1, 0] = -b; R[1, 1] = a
+        T[0:2, 0:2] = R
     return T
 
 # Use axis-angle representation to get a single number for rotation error
@@ -208,7 +211,6 @@ def loadKittiErrors(fname):
 
 def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, root='./'):
     """This function converts outputs to a format that is backwards compatible with the yeti repository."""
-
     seq_indices = []
     idx = 0
     for s in seq_lens:
@@ -247,6 +249,13 @@ def load_icra21_results(results_loc, seq_names, seq_lens):
                 T_icra.append(np.identity(4, dtype=np.float32))
                 count += 1
     return T_icra
+
+def normalize_coords(coords_2D, width, height):
+    """Normalizes coords_2D (BW x N x 2) to be within [-1, 1] """
+    batch_size = coords_2D.size(0)
+    u_norm = (2 * coords_2D[:, :, 0].reshape(batch_size, -1) / (width - 1)) - 1
+    v_norm = (2 * coords_2D[:, :, 1].reshape(batch_size, -1) / (height - 1)) - 1
+    return torch.stack([u_norm, v_norm], dim=2)  # BW x num_patches x 2
 
 def convert_to_radar_frame(pixel_coords, cart_pixel_width, cart_resolution, gpuid):
     """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""

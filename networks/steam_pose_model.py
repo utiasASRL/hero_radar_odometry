@@ -190,50 +190,40 @@ class SteamSolver():
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
         self.T_aug = []
-
         # z weight value
         # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
-        self.z_weight = 9.2103     # TODO: should this be a config parameter?
-
+        self.z_weight = 9.2103
         # state variables
-        self.poses = np.tile(
-            np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
-            (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
+        self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
+                             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
-        self.poses_sp = np.tile(
-            np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
-            (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
-
+        self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
+                                (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
                                                self.window_size, config['steam']['zero_vel_prior'])
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
-        """optimize for training"""
-        # update batch size
-        self.batch_size = int(keypoint_coords.size(0) / (self.window_size-1))
-        self.poses = np.tile(
-            np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
-            (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
+        """
+            keypoint_coords: B*(W-1)x400x2
+            pseudo_coords: B*(W-1)x400x2
+            match_weights: B*(W-1)xSx400
+        """
+        self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
+                             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
-        self.poses_sp = np.tile(
-            np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
-            (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
-
+        self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
+                                (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         if self.sliding_flag:
             self.solver_cpp.slideTraj()
         else:
             self.solver_cpp.resetTraj()
-        # keypoint_coords B*(W-1) x 400 x 2
-        # weights B*(W-1) x 1 x 400
-        # pseudo_coords B*(W-1) x 400 x 2
         num_points = keypoint_coords.size(1)
         zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
 
         R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
         t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
-
         # loop through each batch
         for b in range(self.batch_size):
             i = b * (self.window_size-1)    # first index of window
@@ -245,47 +235,45 @@ class SteamSolver():
                 # filter by zero intensity patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
                 ids_cpu = ids.cpu()
-
                 # points must be list of N x 3
                 points1_temp = pseudo_coords[w, ids].detach().cpu().numpy()
                 points2_temp = keypoint_coords[w, ids].detach().cpu().numpy()
                 zeros_vec_temp = zeros_vec[ids_cpu]
-
                 # weights must be list of N x 3 x 3
                 weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
-
                 # append
                 points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
                 points2 += [np.concatenate((points2_temp, zeros_vec_temp), 1)]
                 weights += [weights_temp.detach().cpu().numpy()]
-
             # solver
-            # self.solver_cpp.resetTraj()
             self.solver_cpp.setMeas(points2, points1, weights)
             self.solver_cpp.optimize()
-
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
             self.solver_cpp.getVelocities(self.vels[b])
-
             # sigmapoints output
             if self.sigmapoints_flag:
                 self.solver_cpp.getSigmapoints2NP1(self.poses_sp[b])
-
             # set output
             R_tgt_src[b] = self.poses[b, :, :3, :3]
             t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
 
-    def convert_to_weight_matrix(self, w, id):
-        if w.size(1) == 1:
+    def convert_to_weight_matrix(self, W, window_id):
+        """
+            W: n_points x S
+            This function converts the S-dimensional weights estimated for each keypoint into
+            a 2x2 weight (inverse covariance) matrix for each keypoint.
+            If S = 1, Wout = diag(exp(w), exp(w), 1e4)
+            If S = 3, use LDL^T to obtain 2x2 covariance, place on top-LH corner. 1e4 bottom-RH corner.
+        """
+        if W.size(1) == 1:
             # scalar weight
             A = torch.zeros(w.size(0), 9, device=w.device)
             A[:, (0, 4)] = torch.exp(w)
             A[:, 8] = torch.exp(torch.tensor(self.z_weight))
             A = A.reshape((-1, 3, 3))
-
             d = torch.zeros(w.size(0), 3, device=w.device)
             d[:, 0:2] += w
             d[:, 2] += self.z_weight
@@ -295,15 +283,13 @@ class SteamSolver():
             L[:, (0, 3)] = 1
             L[:, 2] = w[:, 0]
             L = L.reshape((-1, 2, 2))
-
             D = torch.zeros(w.size(0), 4, device=w.device)
             D[:, (0, 3)] = torch.exp(w[:, 1:])
             D = D.reshape((-1, 2, 2))
-
             A2x2 = L @ D @ L.transpose(1, 2)
 
             if self.T_aug:  # if list is not empty
-                Rot = self.T_aug[id].to(w.device)[:2, :2].unsqueeze(0)
+                Rot = self.T_aug[window_id].to(w.device)[:2, :2].unsqueeze(0)
                 A2x2 = Rot.transpose(1, 2) @ A2x2 @ Rot
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
