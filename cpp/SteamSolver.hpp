@@ -2,12 +2,13 @@
 #define STEAMSOLVER_HPP
 
 #include <vector>
+#include <deque>
 #include "SteamPyHelper.hpp"
 
 class SteamSolver {
 public:
     SteamSolver(const double& dt, const unsigned int& window_size, const bool& zero_vel_prior_flag) :
-            dt_(dt), window_size_(window_size), zero_vel_prior_flag_(zero_vel_prior_flag) {
+        dt_(dt), window_size_(window_size), zero_vel_prior_flag_(zero_vel_prior_flag) {
         // Make Qc_inv
         Eigen::Array<double, 1, 6> Qc_diag;
         Qc_diag << 0.3678912639416186958207788393338,
@@ -36,7 +37,6 @@ public:
 private:
     // Solver
     typedef steam::VanillaGaussNewtonSolver SolverType;
-//    typedef boost::shared_ptr<steam::SolverBase> SolverBasePtr;
     typedef boost::shared_ptr<SolverType> SolverBasePtr;
     SolverBasePtr solver_;
     // States

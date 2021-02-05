@@ -55,7 +55,7 @@ def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
 
 def get_inverse_tf(T):
     """Returns the inverse of a given 4x4 homogeneous transform."""
-    T2 = np.identity(4, dtype=np.float32)
+    T2 = np.identity(4, dtype=np.float64)
     R = T[0:3, 0:3]
     t = T[0:3, 3].reshape(3, 1)
     T2[0:3, 0:3] = R.transpose()
@@ -66,7 +66,7 @@ def get_inverse_tf(T):
 def get_transform(x, y, theta):
     """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
     R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
-    T = np.identity(4, dtype=np.float32)
+    T = np.identity(4, dtype=np.float64)
     T[0:2, 0:2] = R
     T[0, 3] = x
     T[1, 3] = y
@@ -80,19 +80,9 @@ def get_transform2(R, t):
 
 def enforce_orthog(T, dim=2):
     """Enforces the orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix."""
-    if dim == 3:
-        if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
-            return T
-        c1 = T[0:3, 1]
-        c2 = T[0:3, 2]
-        c1 /= np.linalg.norm(c1)
-        c2 /= np.linalg.norm(c2)
-        newcol0 = np.cross(c1, c2)
-        newcol1 = np.cross(c2, newcol0)
-        T[0:3, 0] = newcol0
-        T[0:3, 1] = newcol1
-        T[0:3, 2] = c2
     if dim == 2:
+        if abs(np.linalg.det(T[0:2, 0:2]) - 1) < 1e-10:
+            return T
         R = T[0:2, 0:2]
         epsilon = 0.001
         if abs(R[0, 0] - R[1, 1]) > epsilon or abs(R[1, 0] + R[0, 1]) > epsilon:
@@ -106,14 +96,32 @@ def enforce_orthog(T, dim=2):
         R[0, 0] = a; R[0, 1] = b
         R[1, 0] = -b; R[1, 1] = a
         T[0:2, 0:2] = R
+    if dim == 3:
+        if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
+            return T
+        c1 = T[0:3, 1]
+        c2 = T[0:3, 2]
+        c1 /= np.linalg.norm(c1)
+        c2 /= np.linalg.norm(c2)
+        newcol0 = np.cross(c1, c2)
+        newcol1 = np.cross(c2, newcol0)
+        T[0:3, 0] = newcol0
+        T[0:3, 1] = newcol1
+        T[0:3, 2] = c2
     return T
 
 # Use axis-angle representation to get a single number for rotation error
-def rotationError(T):
-    return abs(np.arcsin(T[0, 1]))  # SO(2)
+def rotationError(T, dim=2):
+    if dim == 2:
+        return abs(np.arcsin(T[0, 1]))
+    if dim == 3:
+        return abs(np.arccos((np.trace(T[0:3, 0:3]) - 1) / 2))
 
-def translationError(T):
-    return np.sqrt(T[0, 3]**2 + T[1, 3]**2)  # + T[2, 3]**2
+def translationError(T, dim=2):
+    if dim == 2:
+        return np.sqrt(T[0, 3]**2 + T[1, 3]**2)
+    if dim == 3:
+        return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
 
 def computeMedianError(T_gt, R_pred, t_pred):
     """Computes the median translation and rotation error along with their standard deviations."""
@@ -180,7 +188,12 @@ def getStats(err):
     return t_err, r_err
 
 def computeKittiMetrics(T_gt, R_pred, t_pred, seq_lens):
-    """Computes the translational (%) and rotational drift (deg/m) in the KITTI style."""
+    """
+        Computes the translational (%) and rotational drift (deg/m) in the KITTI style.
+        T_gt: List of 4x4 homogeneous transforms (Frame t to Frame t+1)
+        T_pred: List of 4x4 homogeneous transforms (Frame t to Frame t+1)
+        seq_lens: List of sequence lengths
+    """
     seq_indices = []
     idx = 0
     for s in seq_lens:
@@ -246,7 +259,7 @@ def load_icra21_results(results_loc, seq_names, seq_lens):
             if count < seq_lens[i]:
                 print('WARNING: ICRA results shorter than seq_len by {}. Append identity.'.format((seq_lens[i] - count)))
             while count < seq_lens[i]:
-                T_icra.append(np.identity(4, dtype=np.float32))
+                T_icra.append(np.identity(4, dtype=np.float64))
                 count += 1
     return T_icra
 

@@ -2,10 +2,8 @@
 #define STEAMPYHELPER_HPP
 
 #include <vector>
-// boost
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
-// steam
 #include <steam/steam.hpp>
 
 namespace p = boost::python;

@@ -9,10 +9,9 @@ void SteamSolver::resetTraj() {
     Eigen::Matrix<double, 6, 1> zero_vel;
     zero_vel.setZero();
     states_.clear();
-//    states_.reserve(window_size_);
     for (uint k = 0; k < window_size_; ++k) {
         TrajStateVar temp;
-        temp.time = steam::Time(k*dt_);
+        temp.time = steam::Time(k * dt_);
         temp.pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_identity));
         temp.velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(zero_vel));
         states_.push_back(temp);

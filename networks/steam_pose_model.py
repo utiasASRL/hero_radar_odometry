@@ -222,8 +222,8 @@ class SteamSolver():
         num_points = keypoint_coords.size(1)
         zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
 
-        R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
-        t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
+        R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float64)
+        t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float64)
         # loop through each batch
         for b in range(self.batch_size):
             i = b * (self.window_size-1)    # first index of window
