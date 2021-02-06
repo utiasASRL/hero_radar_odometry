@@ -90,7 +90,8 @@ class SVDMonitor(MonitorBase):
             ts = time()
             if (batchi + 1) % self.config['print_rate'] == 0:
                 print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.config['print_rate']:])))
-            out = self.model(batch)
+            with torch.no_grad():
+                out = self.model(batch)
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
             if self.config['loss'] == 'supervised_loss':
@@ -183,7 +184,8 @@ class SteamMonitor(MonitorBase):
             ts = time()
             if (batchi + 1) % self.config['print_rate'] == 0:
                 print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.config['print_rate']:])))
-            out = self.model(batch)
+            with torch.no_grad():
+                out = self.model(batch)
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
             loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)

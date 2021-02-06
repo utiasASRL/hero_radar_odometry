@@ -11,6 +11,9 @@ from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors
 from utils.utils import load_icra21_results
 from utils.vis import plot_sequences
 
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.enabled = True
+
 def get_folder_from_file_path(path):
     elems = path.split('/')
     newpath = ""
@@ -48,7 +51,8 @@ if __name__ == '__main__':
         ts = time()
         if (batchi + 1) % config['print_rate'] == 0:
             print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-config['print_rate']:])))
-        out = model(batch)
+        with torch.no_grad():
+            out = model(batch)
         if batchi == len(test_loader):
             # append entire window
             for w in range(batch['T_21'].size(0)-1):

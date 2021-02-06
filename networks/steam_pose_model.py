@@ -222,8 +222,8 @@ class SteamSolver():
         num_points = keypoint_coords.size(1)
         zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
 
-        R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float64)
-        t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float64)
+        R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
+        t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
         # loop through each batch
         for b in range(self.batch_size):
             i = b * (self.window_size-1)    # first index of window
@@ -260,15 +260,15 @@ class SteamSolver():
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
 
-    def convert_to_weight_matrix(self, W, window_id):
+    def convert_to_weight_matrix(self, w, window_id):
         """
-            W: n_points x S
+            w: n_points x S
             This function converts the S-dimensional weights estimated for each keypoint into
             a 2x2 weight (inverse covariance) matrix for each keypoint.
             If S = 1, Wout = diag(exp(w), exp(w), 1e4)
             If S = 3, use LDL^T to obtain 2x2 covariance, place on top-LH corner. 1e4 bottom-RH corner.
         """
-        if W.size(1) == 1:
+        if w.size(1) == 1:
             # scalar weight
             A = torch.zeros(w.size(0), 9, device=w.device)
             A[:, (0, 4)] = torch.exp(w)

@@ -55,7 +55,7 @@ def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
 
 def get_inverse_tf(T):
     """Returns the inverse of a given 4x4 homogeneous transform."""
-    T2 = np.identity(4, dtype=np.float64)
+    T2 = np.identity(4, dtype=np.float32)
     R = T[0:3, 0:3]
     t = T[0:3, 3].reshape(3, 1)
     T2[0:3, 0:3] = R.transpose()
@@ -66,7 +66,7 @@ def get_inverse_tf(T):
 def get_transform(x, y, theta):
     """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
     R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
-    T = np.identity(4, dtype=np.float64)
+    T = np.identity(4, dtype=np.float32)
     T[0:2, 0:2] = R
     T[0, 3] = x
     T[1, 3] = y
@@ -259,7 +259,7 @@ def load_icra21_results(results_loc, seq_names, seq_lens):
             if count < seq_lens[i]:
                 print('WARNING: ICRA results shorter than seq_len by {}. Append identity.'.format((seq_lens[i] - count)))
             while count < seq_lens[i]:
-                T_icra.append(np.identity(4, dtype=np.float64))
+                T_icra.append(np.identity(4, dtype=np.float32))
                 count += 1
     return T_icra
 
