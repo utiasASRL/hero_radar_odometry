@@ -111,11 +111,9 @@ def enforce_orthog(T, dim=2):
     return T
 
 # Use axis-angle representation to get a single number for rotation error
-def rotationError(T, dim=2):
-    if dim == 2:
-        return abs(np.arcsin(T[0, 1]))
-    if dim == 3:
-        return abs(np.arccos((np.trace(T[0:3, 0:3]) - 1) / 2))
+def rotationError(T):
+    d = 0.5 * (np.trace(T[0:3, 0:3]) - 1)
+    return np.arccos(max(min(d, 1.0), -1.0))
 
 def translationError(T, dim=2):
     if dim == 2:

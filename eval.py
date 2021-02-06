@@ -23,7 +23,7 @@ def get_folder_from_file_path(path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
+    parser.add_argument('--config', default='config/eval.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
     args = parser.parse_args()
     with open(args.config) as f:
