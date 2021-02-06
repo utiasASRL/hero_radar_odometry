@@ -27,6 +27,8 @@ public:
     void slideTraj();
     void setQcInv(const np::ndarray& Qc_inv_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
+    void setMeas2(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
+        const p::object& p2_ind, const p::object& p1_ind);
     // solve
     void optimize();
     // output
@@ -44,6 +46,8 @@ private:
     // Measurements
     std::vector<np::ndarray> p1_;  // reference
     std::vector<np::ndarray> p2_;  // frame points
+    std::vector<int> p1_ind_;
+    std::vector<int> p2_ind_;
     std::vector<np::ndarray> w_;   // weights
     // Constants
     double dt_;  // trajectory time step
@@ -62,6 +66,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("slideTraj", &SteamSolver::slideTraj)
         .def("setQcInv", &SteamSolver::setQcInv)
         .def("setMeas", &SteamSolver::setMeas)
+        .def("setMeas2", &SteamSolver::setMeas2)
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)

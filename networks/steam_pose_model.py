@@ -47,8 +47,12 @@ class SteamPoseModel(torch.nn.Module):
 
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
 
-        pseudo_coords, match_weights, key_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
-        keypoint_coords = keypoint_coords[key_ids]
+        pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
+        tgt_coords = torch.zeros(pseudo_coords.shape)
+        for i, key in enumerate(tgt_ids):
+            tgt_coords[i] = keypoint_coords[key]
+        keypoint_coords = tgt_coords
+        #keypoint_coords = keypoint_coords[tgt_ids]
 
         pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution,
                                                   self.gpuid)
@@ -66,28 +70,27 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_coords_xy[:, :, 1] *= -1.0
 
         # binary mask to remove keypoints from 'empty' regions of the input radar scan
-        keypoint_ints = self.mask_intensity_filter(mask[key_ids])
+        keypoint_ints = self.mask_intensity_filter(mask, tgt_ids)
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
-                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords,
-                'key_ids': key_ids}
+                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords}
 
-    def mask_intensity_filter(self, data):
-        int_patches = F.unfold(data, kernel_size=(self.patch_size, self.patch_size),
-                               stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
-        keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)
-        return keypoint_int >= self.patch_mean_thres
+    def mask_intensity_filter(self, data, key_ids):
+        keypoint_ints = []
+        for key in key_ids:
+            # N x patch_elements x num_patches
+            int_patches = F.unfold(data[key:key+1], kernel_size=self.patch_size, stride=self.patch_size)
+            keypoint_ints.append(torch.mean(int_patches, dim=1, keepdim=True) >= self.patch_mean_thres)
+        return torch.cat(keypoint_ints, dim=0)
 
     def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints, scores, batch):
         point_loss = 0
         logdet_loss = 0
-        mask_loss = 0
         unweighted_point_loss = 0
-        mask = batch['mask'].to(self.gpuid)
 
         # loop through each batch
         bcount = 0

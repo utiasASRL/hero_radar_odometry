@@ -12,6 +12,7 @@ class SoftmaxRefMatcher(nn.Module):
         self.softmax_temp = config['networks']['matcher_block']['softmax_temp']
         self.window_size = config['window_size']
         self.B = config['batch_size']
+        self.P = self.get_num_pairs()
         self.gpuid = config['gpuid']
         self.width = config['cart_pixel_width']
         v_coord, u_coord = torch.meshgrid([torch.arange(0, self.width), torch.arange(0, self.width)])
@@ -20,11 +21,11 @@ class SoftmaxRefMatcher(nn.Module):
         coords = torch.stack((u_coord, v_coord), dim=1)  # HW x 2
         self.src_coords_dense = coords.unsqueeze(0).to(self.gpuid)  # 1 x HW x 2
 
-    def forward(self, keypoint_scores, keypoint_desc, desc_dense):
+    def forward2(self, keypoint_scores, keypoint_desc, desc_dense):
         """
-            keypoint_scores: Bx1xN
-            keypoint_desc: BxCxN
-            desc_dense: BxCxHxW
+            keypoint_scores: BWx1xN
+            keypoint_desc: BWxCxN
+            desc_dense: BWxCxHxW
         """
         bsz, encoder_dim, n_points = keypoint_desc.size()
         src_desc_dense = desc_dense[::self.window_size]
@@ -45,3 +46,47 @@ class SoftmaxRefMatcher(nn.Module):
                 soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (window - 1) x N x 2
             tgt_ids[pseudo_ids] = win_ids
         return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids
+
+    def forward(self, keypoint_scores, keypoint_desc, desc_dense):
+        """
+            keypoint_scores: BWx1xN
+            keypoint_desc: BWxCxN
+            desc_dense: BWxCxHxW
+        """
+        BW, encoder_dim, n_points = keypoint_desc.size()
+        src_desc_unrolled = F.normalize(desc_dense.view(BW, encoder_dim, -1), dim=1)  # B x C x HW
+
+        # build pseudo_coords
+        pseudo_coords = torch.zeros((self.B * self.P, n_points, 2), device=self.gpuid) # B*P x N x 2
+        tgt_ids = torch.zeros(self.B * self.P, dtype=torch.int64)    # B*P
+        src_ids = torch.zeros(self.B * self.P, dtype=torch.int64)    # B*P
+        tgt_scores = torch.zeros(self.B * self.P, 1, n_points)
+
+        p = 0
+        for b in range(self.B):
+            for w in range(self.window_size - 1):
+                src_idx = w + b * self.window_size
+                win_ids = torch.arange(w + 1, self.window_size) + b * self.window_size
+                tgt_desc = keypoint_desc[win_ids]
+                tgt_desc = F.normalize(tgt_desc, dim=1)
+                match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc_unrolled[src_idx:src_idx+1])  # * x N x HW
+                soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # * x N x HW
+                pseudo_ids = torch.arange(p, p + len(win_ids))
+                p += len(win_ids)
+                pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
+                    soft_match_vals.transpose(2, 1)).transpose(2, 1)  # * x N x 2
+                tgt_ids[pseudo_ids] = win_ids
+                src_ids[pseudo_ids] = src_idx
+                tgt_scores[pseudo_ids] = keypoint_scores[win_ids]
+        return pseudo_coords, tgt_scores, tgt_ids, src_ids
+
+    def get_num_pairs(self):
+        if self.window_size == 2:
+            return 1
+        elif self.window_size == 3:
+            return 3
+        elif self.window_size == 4:
+            return 6
+        else:
+            assert(False),"Unsupported window size: {}".format(self.window_size)
+        return self.window_size - 1

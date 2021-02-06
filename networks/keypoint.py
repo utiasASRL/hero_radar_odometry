@@ -20,11 +20,9 @@ class Keypoint(torch.nn.Module):
         u_coords = u_coords.unsqueeze(0).float()
         self.coords = torch.cat((u_coords, v_coords), dim=0).to(self.gpuid)  # 2 x H x W
         BW = config['batch_size'] * config['window_size']
-        self.v_patches = F.unfold(v_coords.expand(BW, 1, self.width, self.width),
-                                  kernel_size=self.patch_size,
+        self.v_patches = F.unfold(v_coords.expand(BW, 1, self.width, self.width), kernel_size=self.patch_size,
                                   stride=self.patch_size).to(self.gpuid)  # BW x patch_elems x num_patches
-        self.u_patches = F.unfold(u_coords.expand(BW, 1, self.width, self.width),
-                                  kernel_size=self.patch_size,
+        self.u_patches = F.unfold(u_coords.expand(BW, 1, self.width, self.width), kernel_size=self.patch_size,
                                   stride=self.patch_size).to(self.gpuid)
 
     def forward(self, detector_scores, weight_scores, descriptors):

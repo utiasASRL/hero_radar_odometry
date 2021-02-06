@@ -51,10 +51,24 @@ void SteamSolver::setQcInv(const np::ndarray& Qc_diag) {
 }
 
 // Set measurements
-void SteamSolver::setMeas(const p::object& p2_list,
-    const p::object& p1_list, const p::object& weight_list) {
+void SteamSolver::setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list) {
     p2_ = toStdVector<np::ndarray>(p2_list);
     p1_ = toStdVector<np::ndarray>(p1_list);
+    w_ = toStdVector<np::ndarray>(weight_list);
+    p2_ind_.clear();
+    p1_ind_.clear();
+    for (uint i = 0; i < p2_.size(); ++i) {
+        p2_ind_.push_back(i % (window_size - 1) + 1);
+        p1_ind_.push_back(0);
+    }
+}
+
+void SteamSolver::setMeas2(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
+    const p::object& p2_ind, const p::object& p1_ind) {
+    p2_ = toStdVector<np::ndarray>(p2_list);
+    p1_ = toStdVector<np::ndarray>(p1_list);
+    p2_ind_ = toStdVector<int>(p2_ind);
+    p1_ind_ = toStdVector<int>(p1_ind);
     w_ = toStdVector<np::ndarray>(weight_list);
 }
 
@@ -77,11 +91,17 @@ void SteamSolver::optimize() {
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
 
-    // loop through every frame
-    for (uint i = 1; i < window_size_; ++i) {
-//        auto T_k0_eval_ptr = traj.getInterpPoseEval(steam::Time(i * dt_));
-        steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
-            steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
+    for (uint i = 0; i < p1_.size(); ++i) {
+        steam::se3::TransformStateEvaluator::Ptr T_eval_ptr
+        if (p1_ind_[i] == 0) {
+            T_eval_ptr = steam::se3::TransformStateEvaluator::MakeShared(states_[p2_ind_[i]].pose);
+        } else {
+            steam::se3::TransformStateEvaluator::Ptr Ta0 =
+                steam::se3::TransformStateEvaluator::MakeShared(states_[p1_ind_[i]].pose);
+            steam::se3::TransformStateEvaluator::Ptr Tb0 =
+                steam::se3::TransformStateEvaluator::MakeShared(states_[p2_ind_[i]].pose);
+            T_eval_ptr = steam::se3::composeInverse(Tb0, Ta0);  // Tba
+        }
         uint num_meas = p2_[i - 1].shape(0);
         for (uint j = 0; j < num_meas; ++j) {
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
@@ -100,7 +120,7 @@ void SteamSolver::optimize() {
             ref << double(p::extract<float>(p1_[i-1][j][0])), double(p::extract<float>(p1_[i-1][j][1])),
                  double(p::extract<float>(p1_[i-1][j][2])), 1.0;
 
-            steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_k0_eval_ptr));
+            steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));
             costTerms->add(cost);
