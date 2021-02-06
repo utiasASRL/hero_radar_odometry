@@ -73,11 +73,12 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_ints = self.mask_intensity_filter(mask, tgt_ids)
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
-                                                              keypoint_ints)
+                                                              keypoint_ints, tgt_ids, src_ids)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
-                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords}
+                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords,
+                'tgt_ids': tgt_ids, 'src_ids': src_ids}
 
     def mask_intensity_filter(self, data, key_ids):
         keypoint_ints = []
@@ -87,24 +88,28 @@ class SteamPoseModel(torch.nn.Module):
             keypoint_ints.append(torch.mean(int_patches, dim=1, keepdim=True) >= self.patch_mean_thres)
         return torch.cat(keypoint_ints, dim=0)
 
-    def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints, scores, batch):
+    def loss(self, out):
+        src_coords = out['src']
+        tgt_coords = out['tgt']
+        match_weights = out['match_weights']
+        keypoint_ints = out['keypoint_ints']
+        scores = out['scores']
+        tgt_ids = out['tgt_ids']
+        src_ids = out['src_ids']
         point_loss = 0
         logdet_loss = 0
         unweighted_point_loss = 0
 
         # loop through each batch
         bcount = 0
+        P = int(len(tgt_ids) / self.batch_size)  # Number of frame pairs per batch
         for b in range(self.solver.batch_size):
-            # check average velocity
-            #if np.mean(np.sqrt(np.sum(self.solver.vels[b]*self.solver.vels[b], axis=1))) < self.min_abs_vel:
-            #if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
-            #    continue
             bcount += 1
-            i = b * (self.solver.window_size-1)    # first index of window
-
-            # loop for each window frame
-            for w in range(i, i + self.solver.window_size - 1):
-                # filter by zero intensity patches
+            # i = b * (self.solver.window_size-1)    # first index of window
+            i = b * P  # first index of window
+            # for w in range(i, i + self.solver.window_size - 1):
+            for w in range(i, i + P):
+                # filter out keypoints from "empty" patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
                 if ids.size(0) == 0:
                     print('WARNING: filtering by zero intensity patches resulted in zero keypoints!')
@@ -117,11 +122,14 @@ class SteamPoseModel(torch.nn.Module):
                 weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
                 ones = torch.ones(weights_mat.shape).to(self.gpuid)
 
+                # get T_21
+                T_21 = get_T_ba(out, src_ids[w], tgt_ids[w], b)
+                error = points2 - T_21 @ points1
                 # get R_21 and t_12_in_2
-                R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
-                t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
-                error = points2 - (R_21 @ points1 + t_12_in_2)
-                mah2_error = error.transpose(1, 2)@weights_mat@error
+                # R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
+                # t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
+                # error = points2 - (R_21 @ points1 + t_12_in_2)
+                mah2_error = error.transpose(1, 2) @ weights_mat @ error
 
                 # error threshold
                 #errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
@@ -156,18 +164,15 @@ class SteamPoseModel(torch.nn.Module):
                 else:
                     raise NotImplementedError('Steam loss method not implemented!')
 
-                # log det (ignore 3rd dim since it's a constant)
-                logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1))
-
-                #mask_loss += self.scoreToMaskLoss(scores[w], mask[w])
+                logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1)) # ignore 3rd dim since it's a constant
 
         # average over batches
         if bcount > 0:
             point_loss /= (bcount * (self.solver.window_size - 1))
             logdet_loss /= (bcount * (self.solver.window_size - 1))
-            #mask_loss /= (bcount * (self.solver.window_size - 1))
-        total_loss = point_loss + logdet_loss #+ mask_loss
-        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'unweighted_point_loss': unweighted_point_loss}
+        total_loss = point_loss + logdet_loss
+        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss,
+                     'unweighted_point_loss': unweighted_point_loss}
         return total_loss, dict_loss
 
     def scoreToMaskLoss(self, scores, mask):
@@ -207,7 +212,7 @@ class SteamSolver():
                                                self.window_size, config['steam']['zero_vel_prior'])
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
-    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
+    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, tgt_ids, src_ids):
         """
             keypoint_coords: B*(W-1)x400x2
             pseudo_coords: B*(W-1)x400x2
@@ -228,13 +233,18 @@ class SteamSolver():
         R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
         t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
         # loop through each batch
+        P = int(len(tgt_ids) / self.batch_size) # Number of frame pairs per batch
         for b in range(self.batch_size):
-            i = b * (self.window_size-1)    # first index of window
+            # i = b * (self.window_size-1)    # first index of window
+            i = b * P  # first index of window
             points1 = []
             points2 = []
             weights = []
+            p1_inds = []
+            p2_inds = []
             # loop for each window frame
-            for w in range(i, i + self.window_size - 1):
+            # for w in range(i, i + self.window_size - 1):
+            for w in range(i, i + P):
                 # filter by zero intensity patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
                 ids_cpu = ids.cpu()
@@ -248,8 +258,10 @@ class SteamSolver():
                 points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
                 points2 += [np.concatenate((points2_temp, zeros_vec_temp), 1)]
                 weights += [weights_temp.detach().cpu().numpy()]
+                p1_inds.append(src[w])
+                p2_inds.append(tgt[w])
             # solver
-            self.solver_cpp.setMeas(points2, points1, weights)
+            self.solver_cpp.setMeas(points2, points1, weights, p2_inds, p1_inds)
             self.solver_cpp.optimize()
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
