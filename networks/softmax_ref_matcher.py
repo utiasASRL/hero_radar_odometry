@@ -49,7 +49,7 @@ class SoftmaxRefMatcher(nn.Module):
 
     def forward(self, keypoint_scores, keypoint_desc, desc_dense):
         """
-            keypoint_scores: BWx1xN
+            keypoint_scores: BWxSxN
             keypoint_desc: BWxCxN
             desc_dense: BWxCxHxW
         """
@@ -58,20 +58,20 @@ class SoftmaxRefMatcher(nn.Module):
 
         # build pseudo_coords
         pseudo_coords = torch.zeros((self.B * self.P, n_points, 2), device=self.gpuid) # B*P x N x 2
-        tgt_ids = torch.zeros(self.B * self.P, dtype=torch.int64)    # B*P
-        src_ids = torch.zeros(self.B * self.P, dtype=torch.int64)    # B*P
-        tgt_scores = torch.zeros(self.B * self.P, 1, n_points)
+        tgt_ids = torch.zeros(self.B * self.P, dtype=torch.int64, device=self.gpuid)    # B*P
+        src_ids = torch.zeros(self.B * self.P, dtype=torch.int64, device=self.gpuid)    # B*P
+        tgt_scores = torch.zeros(self.B * self.P, keypoint_scores.size(1), n_points, device=self.gpuid)
 
         p = 0
         for b in range(self.B):
             for w in range(self.window_size - 1):
                 src_idx = w + b * self.window_size
-                win_ids = torch.arange(w + 1, self.window_size) + b * self.window_size
+                win_ids = torch.arange(w + 1, self.window_size, device=self.gpuid) + b * self.window_size
                 tgt_desc = keypoint_desc[win_ids]
                 tgt_desc = F.normalize(tgt_desc, dim=1)
                 match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc_unrolled[src_idx:src_idx+1])  # * x N x HW
                 soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # * x N x HW
-                pseudo_ids = torch.arange(p, p + len(win_ids))
+                pseudo_ids = torch.arange(p, p + len(win_ids), device=self.gpuid)
                 p += len(win_ids)
                 pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
                     soft_match_vals.transpose(2, 1)).transpose(2, 1)  # * x N x 2

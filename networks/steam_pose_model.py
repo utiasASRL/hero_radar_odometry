@@ -6,7 +6,7 @@ from networks.unet import UNet
 from networks.keypoint import Keypoint
 from networks.softmax_ref_matcher import SoftmaxRefMatcher
 import cpp.build.SteamSolver as steamcpp
-from utils.utils import convert_to_radar_frame
+from utils.utils import convert_to_radar_frame, get_T_ba
 
 class SteamPoseModel(torch.nn.Module):
     """
@@ -19,6 +19,8 @@ class SteamPoseModel(torch.nn.Module):
         super().__init__()
         self.config = config
         self.gpuid = config['gpuid']
+        self.batch_size = config['batch_size']
+        self.window_size = config['window_size']
         self.cart_pixel_width = config['cart_pixel_width']
         self.cart_resolution = config['cart_resolution']
         self.unet = UNet(config)
@@ -45,23 +47,25 @@ class SteamPoseModel(torch.nn.Module):
             detector_scores = self.relu_detector(detector_scores)
             detector_scores *= mask
 
-        keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
-
+        keypoint_coords1, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
         pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
-        tgt_coords = torch.zeros(pseudo_coords.shape)
+        tgt_coords = torch.zeros(pseudo_coords.shape, device=self.gpuid)
         for i, key in enumerate(tgt_ids):
-            tgt_coords[i] = keypoint_coords[key]
+            tgt_coords[i] = keypoint_coords1[key]
         keypoint_coords = tgt_coords
         #keypoint_coords = keypoint_coords[tgt_ids]
 
         pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution,
                                                   self.gpuid)
-        keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
+        keypoint_coords_xy1 = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
                                                     self.gpuid)
+        keypoint_coords_xy = torch.zeros(keypoint_coords_xy1.shape, device=self.gpuid)
+
         # rotate back if augmented
         if 'T_aug' in batch:
             T_aug = torch.stack(batch['T_aug'], dim=0).to(self.gpuid)
-            keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug[:, :2, :2].transpose(1, 2))
+            for i, key in enumerate(tgt_ids):
+                keypoint_coords_xy[i] = torch.matmul(keypoint_coords_xy1[i], T_aug[key, :2, :2].transpose(0, 1))
             self.solver.T_aug = batch['T_aug']
         else:
             self.solver.T_aug = []
@@ -74,6 +78,7 @@ class SteamPoseModel(torch.nn.Module):
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints, tgt_ids, src_ids)
+
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
@@ -119,16 +124,20 @@ class SteamPoseModel(torch.nn.Module):
                 zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
                 points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
-                weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                aug_id = tgt_ids[w]
+                weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, aug_id)
                 ones = torch.ones(weights_mat.shape).to(self.gpuid)
 
                 # get T_21
                 T_21 = get_T_ba(out, b=tgt_ids[w]%self.window_size, a=src_ids[w]%self.window_size, batch=batchi)
-                error = points2 - T_21 @ points1
+                T_21 = torch.from_numpy(T_21).to(self.gpuid)
+                R_21 = T_21[:3, :3].unsqueeze(0)
+                t_12_in_2 = T_21[:3, 3:4].unsqueeze(0)
+                #error = points2 - T_21 @ points1
                 # get R_21 and t_12_in_2
                 # R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
                 # t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
-                # error = points2 - (R_21 @ points1 + t_12_in_2)
+                error = points2 - (R_21 @ points1 + t_12_in_2)
                 mah2_error = error.transpose(1, 2) @ weights_mat @ error
 
                 # error threshold
@@ -253,13 +262,16 @@ class SteamSolver():
                 points2_temp = keypoint_coords[w, ids].detach().cpu().numpy()
                 zeros_vec_temp = zeros_vec[ids_cpu]
                 # weights must be list of N x 3 x 3
-                weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                aug_id = tgt_ids[w]
+                weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T, aug_id)
                 # append
                 points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
                 points2 += [np.concatenate((points2_temp, zeros_vec_temp), 1)]
                 weights += [weights_temp.detach().cpu().numpy()]
-                p1_inds.append(src_ids[w] % self.window_size)
-                p2_inds.append(tgt_ids[w] % self.window_size)
+                src_id = int(src_ids[w].cpu().item())
+                tgt_id = int(tgt_ids[w].cpu().item())
+                p1_inds.append(src_id % self.window_size)
+                p2_inds.append(tgt_id % self.window_size)
             # solver
             self.solver_cpp.setMeas2(points2, points1, weights, p2_inds, p1_inds)
             self.solver_cpp.optimize()

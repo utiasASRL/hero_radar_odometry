@@ -118,7 +118,7 @@ class OxfordDataset(Dataset):
             self.split = self.config['validation_split']
         elif split == 'test':
             self.split = self.config['test_split']
-        return self.split
+        return [seq for i, seq in enumerate(sequences) if i in self.split]
 
     def __len__(self):
         return len(self.frames)

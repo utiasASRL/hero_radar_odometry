@@ -11,6 +11,7 @@ def augmentBatch(batch, config):
     T_aug = []
     for i in range(B):
         if np.mod(i, config['window_size']) == 0:
+            T_aug += [torch.from_numpy(get_transform(0, 0, 0))]
             continue
         img = data[i].squeeze()
         rot = np.random.uniform(-rot_max, rot_max)

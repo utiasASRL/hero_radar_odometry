@@ -14,6 +14,7 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 
 if __name__ == '__main__':
+    torch.autograd.set_detect_anomaly(True)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')

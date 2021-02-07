@@ -58,7 +58,7 @@ void SteamSolver::setMeas(const p::object& p2_list, const p::object& p1_list, co
     p2_ind_.clear();
     p1_ind_.clear();
     for (uint i = 0; i < p2_.size(); ++i) {
-        p2_ind_.push_back(i % (window_size - 1) + 1);
+        p2_ind_.push_back(i % (window_size_ - 1) + 1);
         p1_ind_.push_back(0);
     }
 }
@@ -92,13 +92,13 @@ void SteamSolver::optimize() {
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
 
     for (uint i = 0; i < p1_.size(); ++i) {
-        steam::se3::TransformStateEvaluator::Ptr T_eval_ptr
+        steam::se3::TransformEvaluator::Ptr T_eval_ptr;
         if (p1_ind_[i] == 0) {
             T_eval_ptr = steam::se3::TransformStateEvaluator::MakeShared(states_[p2_ind_[i]].pose);
         } else {
-            steam::se3::TransformStateEvaluator::Ptr Ta0 =
+            steam::se3::TransformEvaluator::Ptr Ta0 =
                 steam::se3::TransformStateEvaluator::MakeShared(states_[p1_ind_[i]].pose);
-            steam::se3::TransformStateEvaluator::Ptr Tb0 =
+            steam::se3::TransformEvaluator::Ptr Tb0 =
                 steam::se3::TransformStateEvaluator::MakeShared(states_[p2_ind_[i]].pose);
             T_eval_ptr = steam::se3::composeInverse(Tb0, Ta0);  // Tba = Tb0 * inv(Ta0)
         }
