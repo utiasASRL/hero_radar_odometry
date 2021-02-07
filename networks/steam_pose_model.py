@@ -103,10 +103,10 @@ class SteamPoseModel(torch.nn.Module):
         # loop through each batch
         bcount = 0
         P = int(len(tgt_ids) / self.batch_size)  # Number of frame pairs per batch
-        for b in range(self.solver.batch_size):
+        for batchi in range(self.solver.batch_size):
             bcount += 1
             # i = b * (self.solver.window_size-1)    # first index of window
-            i = b * P  # first index of window
+            i = batchi * P  # first index of window
             # for w in range(i, i + self.solver.window_size - 1):
             for w in range(i, i + P):
                 # filter out keypoints from "empty" patches
@@ -123,7 +123,7 @@ class SteamPoseModel(torch.nn.Module):
                 ones = torch.ones(weights_mat.shape).to(self.gpuid)
 
                 # get T_21
-                T_21 = get_T_ba(out, src_ids[w], tgt_ids[w], b)
+                T_21 = get_T_ba(out, b=tgt_ids[w]%self.window_size, a=src_ids[w]%self.window_size, batch=batchi)
                 error = points2 - T_21 @ points1
                 # get R_21 and t_12_in_2
                 # R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
@@ -258,10 +258,10 @@ class SteamSolver():
                 points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
                 points2 += [np.concatenate((points2_temp, zeros_vec_temp), 1)]
                 weights += [weights_temp.detach().cpu().numpy()]
-                p1_inds.append(src[w])
-                p2_inds.append(tgt[w])
+                p1_inds.append(src_ids[w] % self.window_size)
+                p2_inds.append(tgt_ids[w] % self.window_size)
             # solver
-            self.solver_cpp.setMeas(points2, points1, weights, p2_inds, p1_inds)
+            self.solver_cpp.setMeas2(points2, points1, weights, p2_inds, p1_inds)
             self.solver_cpp.optimize()
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])

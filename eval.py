@@ -57,7 +57,7 @@ if __name__ == '__main__':
             # append entire window
             for w in range(batch['T_21'].size(0)-1):
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
-                T_pred = get_T_ba(out, a=w, b=w+1)
+                T_pred = get_T_ba(out, b=w+1, a=w)
                 R_pred.append(T_pred[:3, :3].squeeze())
                 t_pred.append(T_pred[:3, 3].squeeze())
                 timestamps.append(batch['times'][w].numpy().squeeze())
@@ -65,7 +65,7 @@ if __name__ == '__main__':
             # append only the back of window
             w = 0
             T_gt.append(batch['T_21'][w].numpy().squeeze())
-            T_pred = get_T_ba(out, a=w, b=w+1)
+            T_pred = get_T_ba(out, b=w+1, a=w)
             R_pred.append(T_pred[:3, :3].squeeze())
             t_pred.append(T_pred[:3, 3].squeeze())
             timestamps.append(batch['times'][w].numpy().squeeze())
@@ -87,4 +87,3 @@ if __name__ == '__main__':
     imgs = plot_sequences(T_gt, R_pred, t_pred, seq_lens, returnTensor=False, T_icra=T_icra)
     for i, img in enumerate(imgs):
         imgs[i].save(root + seq_names[i] + '.png')
-

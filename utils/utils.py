@@ -293,7 +293,7 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-def get_T_ba(out, a, b, batch=0):
+def get_T_ba(out, b, a, batch=0):
     T_b0 = np.eye(4)
     T_b0[:3, :3] = out['R'][batch, b].detach().cpu().numpy()
     T_b0[:3, 3:4] = out['t'][batch, b].detach().cpu().numpy()
