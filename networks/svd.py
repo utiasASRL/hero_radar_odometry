@@ -10,10 +10,9 @@ class SVD(torch.nn.Module):
     """
     def __init__(self, config):
         super().__init__()
+        self.config = config
         self.window_size = config['window_size']
         self.batch_size = config['batch_size']
-        self.cart_pixel_width = config['cart_pixel_width']
-        self.cart_resolution = config['cart_resolution']
         self.gpuid = config['gpuid']
 
     def forward(self, src_coords, tgt_coords, weights, convert_from_pixels=True):
@@ -25,8 +24,8 @@ class SVD(torch.nn.Module):
          assert(src_coords.size() == tgt_coords.size())
          B = src_coords.size(0)  # B x N x 2
          if convert_from_pixels:
-             src_coords = convert_to_radar_frame(src_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
-             tgt_coords = convert_to_radar_frame(tgt_coords, self.cart_pixel_width, self.cart_resolution, self.gpuid)
+             src_coords = convert_to_radar_frame(src_coords, self.config)
+             tgt_coords = convert_to_radar_frame(tgt_coords, self.config)
          if src_coords.size(2) < 3:
              pad = 3 - src_coords.size(2)
              src_coords = F.pad(src_coords, [0, pad, 0, 0])

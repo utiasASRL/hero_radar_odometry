@@ -57,7 +57,7 @@ class TestSVD(unittest.TestCase):
                   'batch_size': 1, 'networks': {'keypoint_block': {'patch_size': 32}}}
         model = SVD(config)
         model.eval()
-        tgt2 = convert_to_radar_frame(src, cart_pixel_width, cart_resolution, config['gpuid'])
+        tgt2 = convert_to_radar_frame(src, config)
         self.assertTrue(torch.sum(tgt - tgt2) < 1e-4)
 
 if __name__ == '__main__':

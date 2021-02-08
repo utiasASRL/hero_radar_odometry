@@ -118,7 +118,7 @@ class OxfordDataset(Dataset):
             self.split = self.config['validation_split']
         elif split == 'test':
             self.split = self.config['test_split']
-        return [seq for i, seq in enumerate(sequences) if (self.split[0] <= i and i < self.split[1])]
+        return [seq for i, seq in enumerate(sequences) if i in self.split]
 
     def __len__(self):
         return len(self.frames)
@@ -140,8 +140,9 @@ class OxfordDataset(Dataset):
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         polar_mask = mean_intensity_mask(polar, self.mean_int_mask_mult)
         mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
-                                             self.config['cart_resolution'],
-                                             self.config['cart_pixel_width']).astype(np.float32)
+                                        self.config['cart_resolution'],
+                                        self.config['cart_pixel_width']).astype(np.float32)
+        mask = (mask > 0.5).astype(np.float32)
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
         if idx + 1 < len(self.frames):

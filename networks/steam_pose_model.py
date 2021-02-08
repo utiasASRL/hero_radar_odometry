@@ -19,19 +19,15 @@ class SteamPoseModel(torch.nn.Module):
         super().__init__()
         self.config = config
         self.gpuid = config['gpuid']
-        self.cart_pixel_width = config['cart_pixel_width']
-        self.cart_resolution = config['cart_resolution']
         self.unet = UNet(config)
         self.keypoint = Keypoint(config)
         self.softmax_matcher = SoftmaxRefMatcher(config)
         self.solver = SteamSolver(config)
         self.patch_size = config['networks']['keypoint_block']['patch_size']
-        self.min_abs_vel = config['steam']['min_abs_vel']
+        #self.min_abs_vel = config['steam']['min_abs_vel']
         self.mah_thres = config['steam']['mah_thres']
-        self.nms_thres = config['steam']['nms_thres']
-        self.relu_detector = nn.ReLU()
-        self.sigmoid = torch.nn.Sigmoid()
-        self.mask_detector_scores = config['steam']['mask_detector_scores']
+        #self.nms_thres = config['steam']['nms_thres']
+        #self.sigmoid = torch.nn.Sigmoid()
         self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
 
@@ -40,20 +36,12 @@ class SteamPoseModel(torch.nn.Module):
         mask = batch['mask'].to(self.gpuid)
 
         detector_scores, weight_scores, desc = self.unet(data)
-
-        if self.mask_detector_scores:
-            detector_scores = self.relu_detector(detector_scores)
-            detector_scores *= mask
-
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
+        pseudo_coords, match_weights, tgt_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
+        keypoint_coords = keypoint_coords[tgt_ids]
 
-        pseudo_coords, match_weights, key_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
-        keypoint_coords = keypoint_coords[key_ids]
-
-        pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution,
-                                                  self.gpuid)
-        keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
-                                                    self.gpuid)
+        pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.config)
+        keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.config)
         # rotate back if augmented
         if 'T_aug' in batch:
             T_aug = torch.stack(batch['T_aug'], dim=0).to(self.gpuid)
@@ -66,39 +54,30 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_coords_xy[:, :, 1] *= -1.0
 
         # binary mask to remove keypoints from 'empty' regions of the input radar scan
-        keypoint_ints = self.mask_intensity_filter(mask[key_ids])
+        keypoint_ints = self.mask_intensity_filter(mask[tgt_ids])
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
-                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords,
-                'key_ids': key_ids}
+                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords}
 
     def mask_intensity_filter(self, data):
-        int_patches = F.unfold(data, kernel_size=(self.patch_size, self.patch_size),
-                               stride=(self.patch_size, self.patch_size))  # N x patch_elements x num_patches
-        keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)
+        int_patches = F.unfold(data, kernel_size=self.patch_size, stride=self.patch_size)
+        keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)  # BW x 1 x num_patches
         return keypoint_int >= self.patch_mean_thres
 
     def loss(self, src_coords, tgt_coords, match_weights, keypoint_ints, scores, batch):
         point_loss = 0
         logdet_loss = 0
-        mask_loss = 0
         unweighted_point_loss = 0
-        mask = batch['mask'].to(self.gpuid)
 
         # loop through each batch
         bcount = 0
         for b in range(self.solver.batch_size):
-            # check average velocity
-            #if np.mean(np.sqrt(np.sum(self.solver.vels[b]*self.solver.vels[b], axis=1))) < self.min_abs_vel:
-            #if np.linalg.norm(self.solver.vels[b, 1]) < self.min_abs_vel:
-            #    continue
             bcount += 1
             i = b * (self.solver.window_size-1)    # first index of window
-
             # loop for each window frame
             for w in range(i, i + self.solver.window_size - 1):
                 # filter by zero intensity patches
@@ -121,8 +100,6 @@ class SteamPoseModel(torch.nn.Module):
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
                 # error threshold
-                #errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
-                #errorT = self.nms_thres**2 * torch.max(mah2_error)
                 errorT = self.mah_thres**2
                 if errorT > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
@@ -156,27 +133,13 @@ class SteamPoseModel(torch.nn.Module):
                 # log det (ignore 3rd dim since it's a constant)
                 logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1))
 
-                #mask_loss += self.scoreToMaskLoss(scores[w], mask[w])
-
         # average over batches
         if bcount > 0:
             point_loss /= (bcount * (self.solver.window_size - 1))
             logdet_loss /= (bcount * (self.solver.window_size - 1))
-            #mask_loss /= (bcount * (self.solver.window_size - 1))
-        total_loss = point_loss + logdet_loss #+ mask_loss
+        total_loss = point_loss + logdet_loss
         dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'unweighted_point_loss': unweighted_point_loss}
         return total_loss, dict_loss
-
-    def scoreToMaskLoss(self, scores, mask):
-        # scores: 1 x H x W or 3 x H x W, mask: 1 x H x W
-        bceloss = torch.nn.BCELoss()
-        if scores.size(0) == 1:
-            return bceloss(scores, mask)
-        elif scores.size(0) == 3:
-            # weight scores represent (l1, d1, d2) --> LDL^T decomp of 2x2 covariance matrix W
-            return bceloss(torch.sigmoid(scores[1] + scores[2]), mask)
-        else:
-            assert False, "Weight scores should be dim 1 or 3"
 
 class SteamSolver():
     """

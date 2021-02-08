@@ -22,9 +22,9 @@ class SoftmaxRefMatcher(nn.Module):
 
     def forward(self, keypoint_scores, keypoint_desc, desc_dense):
         """
-            keypoint_scores: Bx1xN
-            keypoint_desc: BxCxN
-            desc_dense: BxCxHxW
+            keypoint_scores: BWxSxN
+            keypoint_desc: BWxCxN
+            desc_dense: BWxCxHxW
         """
         bsz, encoder_dim, n_points = keypoint_desc.size()
         src_desc_dense = desc_dense[::self.window_size]

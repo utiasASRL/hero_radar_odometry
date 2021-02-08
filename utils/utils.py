@@ -268,7 +268,10 @@ def normalize_coords(coords_2D, width, height):
     v_norm = (2 * coords_2D[:, :, 1].reshape(batch_size, -1) / (height - 1)) - 1
     return torch.stack([u_norm, v_norm], dim=2)  # BW x num_patches x 2
 
-def convert_to_radar_frame(pixel_coords, cart_pixel_width, cart_resolution, gpuid):
+def convert_to_radar_frame(pixel_coords, config):
+    cart_pixel_width = config['cart_pixel_width']
+    cart_resolution = config['cart_resolution']
+    gpuid = config['gpuid']
     """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
     if (cart_pixel_width % 2) == 0:
         cart_min_range = (cart_pixel_width / 2 - 0.5) * cart_resolution
