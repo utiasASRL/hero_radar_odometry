@@ -265,13 +265,13 @@ class SteamSolver():
 
                 # threshold on log determinant
                 if self.log_det_thres_flag:
-                    ids = torch.nonzero(torch.sum(weights_d[:, 0:2], dim=1) > self.log_det_thres_val).detach().cpu()
+                    ids = torch.nonzero(torch.sum(weights_d[:, 0:2], dim=1) > self.log_det_thres_val, as_tuple=False).squeeze().detach().cpu()
                     if ids.squeeze().nelement() <= 3:
                         print('Warning: Log det threshold output has 3 or less elements.')
                         _, ids = torch.topk(torch.sum(weights_d[:, 0:2], dim=1), self.log_det_topk, largest=True)
-                        ids = ids.detach().cpu()
+                        ids = ids.squeeze().detach().cpu()
                 else:
-                    ids = np.arange(weights_temp.size(0))
+                    ids = np.arange(weights_temp.size(0)).squeeze()
 
                 # append
                 points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)]
