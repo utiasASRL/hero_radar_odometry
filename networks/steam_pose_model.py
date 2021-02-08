@@ -180,8 +180,8 @@ class SteamPoseModel(torch.nn.Module):
 
         # average over batches
         if bcount > 0:
-            point_loss /= (bcount * (self.solver.window_size - 1))
-            logdet_loss /= (bcount * (self.solver.window_size - 1))
+            point_loss /= (bcount * P)
+            logdet_loss /= (bcount * P)
         total_loss = point_loss + logdet_loss
         dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss,
                      'unweighted_point_loss': unweighted_point_loss}
