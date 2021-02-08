@@ -8,10 +8,10 @@ def augmentBatch(batch, config):
     rot_max = config['augmentation']['rot_max']
     data = batch['data'].numpy()    # this seems to return a reference, not a copy
     mask = batch['mask'].numpy()
-    B, C, H, W = data.shape
+    BW, C, H, W = data.shape
     T_aug = []
-    for i in range(B):
-        if np.mod(i, config['window_size']) == 0:
+    for i in range(BW):
+        if np.mod(i + 1, config['window_size']) == 0:
             continue
         img = data[i].squeeze()
         mmg = mask[i].squeeze()

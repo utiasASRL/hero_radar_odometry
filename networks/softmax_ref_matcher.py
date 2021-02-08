@@ -26,22 +26,22 @@ class SoftmaxRefMatcher(nn.Module):
             keypoint_desc: BWxCxN
             desc_dense: BWxCxHxW
         """
-        bsz, encoder_dim, n_points = keypoint_desc.size()
-        src_desc_dense = desc_dense[::self.window_size]
-        src_desc_unrolled = F.normalize(src_desc_dense.view(self.B, encoder_dim, -1), dim=1)  # B x C x HW
+        BW, encoder_dim, n_points = keypoint_desc.size()
+        desc_unrolled = F.normalize(desc_dense.view(BW, encoder_dim, -1), dim=1)  # B x C x HW
         # build pseudo_coords
         pseudo_coords = torch.zeros((self.B * (self.window_size - 1), n_points, 2),
                                     device=self.gpuid) # B*(window - 1) x N x 2
         tgt_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64)    # B*(window - 1)
         # loop for each batch
         for i in range(self.B):
-            win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size)
-            tgt_desc = keypoint_desc[win_ids]  # (window - 1) x C x N
+            src_idx = self.window_size - 1 + i * self.window_size
+            win_ids = torch.arange(i * self.window_size, i * self.window_size + self.window_size - 1)
+            tgt_desc = keypoint_desc[win_ids]  # (wind-1)xCxN
             tgt_desc = F.normalize(tgt_desc, dim=1)
-            match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc_unrolled[i:i+1])  # (window - 1) x N x HW
-            soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # (window - 1) x N x HW
+            match_vals = torch.matmul(tgt_desc.transpose(2, 1), desc_unrolled[i:i+1])  # (wind-1)xNxHW
+            soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # (wind-1)xNxHW
             pseudo_ids = torch.arange(i * (self.window_size - 1), i * (self.window_size - 1) + self.window_size - 1)
             pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
-                soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (window - 1) x N x 2
+                soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (wind-1)xNx2
             tgt_ids[pseudo_ids] = win_ids
         return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids
