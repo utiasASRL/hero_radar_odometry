@@ -191,6 +191,14 @@ class SteamSolver():
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
         self.T_aug = []
+        if 'log_det_thres_flag' in config['steam']:
+            self.log_det_thres_val = config['steam']['log_det_thres_val']
+            self.log_det_topk = config['steam']['log_det_topk']
+            self.log_det_thres_flag = config['steam']['log_det_thres_flag']
+        else:
+            self.log_det_thres_val = 0
+            self.log_det_topk = 0
+            self.log_det_thres_flag = False
 
         # z weight value
         # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
@@ -253,15 +261,23 @@ class SteamSolver():
                 zeros_vec_temp = zeros_vec[ids_cpu]
 
                 # weights must be list of N x 3 x 3
-                weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                weights_temp, weights_d = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+
+                # threshold on log determinant
+                if self.log_det_thres_flag:
+                    ids = torch.nonzero(torch.sum(weights_d[:, 0:2], dim=1) > self.log_det_thres_val).detach().cpu()
+                    if ids.squeeze().nelement() <= 3:
+                        print('Warning: Log det threshold output has 3 or less elements.')
+                        _, ids = torch.topk(torch.sum(weights_d[:, 0:2], dim=1), self.log_det_topk, largest=True)
+                else:
+                    ids = np.arange(weights_temp.size(0))
 
                 # append
-                points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
-                points2 += [np.concatenate((points2_temp, zeros_vec_temp), 1)]
-                weights += [weights_temp.detach().cpu().numpy()]
+                points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)]
+                points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)]
+                weights += [weights_temp[ids].detach().cpu().numpy()]
 
             # solver
-            # self.solver_cpp.resetTraj()
             self.solver_cpp.setMeas(points2, points1, weights)
             self.solver_cpp.optimize()
 
@@ -305,7 +321,8 @@ class SteamSolver():
 
             if self.T_aug:  # if list is not empty
                 Rot = self.T_aug[id].to(w.device)[:2, :2].unsqueeze(0)
-                A2x2 = Rot@A2x2@Rot.transpose(1, 2)
+                # A2x2 = Rot@A2x2@Rot.transpose(1, 2)
+                A2x2 = Rot.transpose(1, 2)@A2x2@Rot
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
             A[:, 0:2, 0:2] = A2x2

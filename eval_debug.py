@@ -21,6 +21,9 @@ if __name__ == '__main__':
     with open(eval_config["train_config"]) as f:
         train_config = json.load(f)
     train_config['gpuid'] = eval_config['gpuid']
+    train_config['steam']['log_det_thres_flag'] = eval_config['log_det_thres_flag']
+    train_config['steam']['log_det_topk'] = eval_config['log_det_topk']
+    train_config['steam']['log_det_thres_val'] = eval_config['log_det_thres_val']
 
     train_loader, valid_loader, _ = get_dataloaders(train_config)
 

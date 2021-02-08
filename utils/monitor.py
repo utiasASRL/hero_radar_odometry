@@ -264,40 +264,44 @@ class SteamEvalMonitor(object):
         # self.writer.add_image('val/points_img', points_img, global_step=batchi)
 
     def evaluate(self):
-        time_used = []
-        T_gt = []
-        R_pred = []
-        t_pred = []
-        for batchi, batch in enumerate(self.valid_loader):
-            if self.eval_config['augmentation']['augment']:
-                batch = augmentBatch(batch, self.eval_config)
-            ts = time()
-            if (batchi + 1) % self.eval_config['print_rate'] == 0:
-                print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.eval_config['print_rate']:])))
-            out = self.model(batch)
-            if batchi % self.eval_config['vis_skip'] == 0:
-                self.vis(batchi, batch, out)
-            time_used.append(time() - ts)
-            if batchi == 0:
-                # append entire window
-                for w in range(batch['T_21'].size(0)-1):
-                    T_gt.append(batch['T_21'][w].numpy().squeeze())
-                    T_pred = get_T_ba(out, a=w, b=w+1)
+        self.model.eval()
+        self.model.solver.sliding_flag = True
+        with torch.no_grad():
+            time_used = []
+            T_gt = []
+            R_pred = []
+            t_pred = []
+            for batchi, batch in enumerate(self.valid_loader):
+                if self.eval_config['augmentation']['augment']:
+                    batch = augmentBatch(batch, self.eval_config)
+                ts = time()
+                if (batchi + 1) % self.eval_config['print_rate'] == 0:
+                    print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.eval_config['print_rate']:])))
+                out = self.model(batch)
+                if batchi % self.eval_config['vis_skip'] == 0:
+                    self.vis(batchi, batch, out)
+                time_used.append(time() - ts)
+                if batchi == 0:
+                    # append entire window
+                    for w in range(batch['T_21'].size(0)-1):
+                        T_gt.append(batch['T_21'][w].numpy().squeeze())
+                        T_pred = get_T_ba(out, a=w, b=w+1)
+                        R_pred.append(T_pred[:3, :3].squeeze())
+                        t_pred.append(T_pred[:3, 3].squeeze())
+                else:
+                    # append only the front of window
+                    T_gt.append(batch['T_21'][-2].numpy().squeeze())
+                    T_pred = get_T_ba(out, a=-2, b=-1)
                     R_pred.append(T_pred[:3, :3].squeeze())
                     t_pred.append(T_pred[:3, 3].squeeze())
-            else:
-                # append only the front of window
-                T_gt.append(batch['T_21'][-2].numpy().squeeze())
-                T_pred = get_T_ba(out, a=-2, b=-1)
-                R_pred.append(T_pred[:3, :3].squeeze())
-                t_pred.append(T_pred[:3, 3].squeeze())
 
-        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
+            t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_len)
 
-        self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
-        self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
+            self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
+            self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
 
-        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
-        for i, img in enumerate(imgs):
-            self.writer.add_image('val/' + self.sequences[i], img)
+            imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
+            for i, img in enumerate(imgs):
+                self.writer.add_image('val/' + self.sequences[i], img)
 
+        self.model.solver.sliding_flag = False

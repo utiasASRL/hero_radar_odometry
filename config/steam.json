@@ -41,7 +41,10 @@
         "zero_vel_prior": true,
         "weight_matrix": true,
         "topk_backup": 30,
-        "mask_loss_flag": false
+        "mask_loss_flag": false,
+        "log_det_thres_flag": false,
+        "log_det_thres_val": 4.0,
+        "log_det_topk": 20
     },
     "lr": 0.00001,
     "weight_decay": 0,

@@ -98,7 +98,7 @@ def rotationError(T):
     return abs(np.arcsin(T[0, 1]))  # SO(2)
 
 def translationError(T):
-    return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
+    return np.sqrt(T[0, 3]**2 + T[1, 3]**2)  # + T[2, 3]**2)
 
 def computeMedianError(T_gt, R_pred, t_pred):
     """Computes the median translation and rotation error along with their standard deviations."""

@@ -1,13 +1,16 @@
 {
-    "model_path": "logs/aug_win2_rot45deg/90000.pt",
-    "train_config": "config/steam.json",
-    "log_dir": "logs/evaltest/",
+    "model_path": "logs/rot_fix_win3_rot0-4_16f_nzv/110000.pt",
+    "train_config": "config/rot_fix_win3_rot0-4_16f_nzv.json",
+    "log_dir": "logs/win3_rot0-4_12f_nzv_logdet4_eval/",
     "gpuid": "cuda:1",
     "print_rate": 10,
-    "vis_skip": 10,
-    "window_size": 2,
+    "vis_skip": 1000,
+    "window_size": 3,
+    "log_det_thres_flag": true,
+    "log_det_thres_val": 4.0,
+    "log_det_topk": 20,
     "augmentation": {
-        "augment": true,
-        "rot_max": 0.8
+        "augment": false,
+        "rot_max": 0.4
     }
 }
