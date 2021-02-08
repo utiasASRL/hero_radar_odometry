@@ -269,6 +269,7 @@ class SteamSolver():
                     if ids.squeeze().nelement() <= 3:
                         print('Warning: Log det threshold output has 3 or less elements.')
                         _, ids = torch.topk(torch.sum(weights_d[:, 0:2], dim=1), self.log_det_topk, largest=True)
+                        ids = ids.detach().cpu()
                 else:
                     ids = np.arange(weights_temp.size(0))
 
