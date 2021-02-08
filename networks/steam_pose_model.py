@@ -66,7 +66,9 @@ class SteamPoseModel(torch.nn.Module):
         if 'T_aug' in batch:
             T_aug = torch.stack(batch['T_aug'], dim=0).to(self.gpuid)
             T_aug2 = T_aug.index_select(0, tgt_ids)
+            T_aug3 = T_aug.index_select(0, src_ids)
             keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug2[:, :2, :2].transpose(1, 2))
+            pseudo_coords_xy = torch.matmul(pseudo_coords_xy, T_aug3[:, :2, :2].transpose(1, 2))
             #for i, key in enumerate(tgt_ids):
             #    keypoint_coords_xy[i] = torch.matmul(keypoint_coords_xy1[i], T_aug[key, :2, :2].transpose(0, 1))
             self.solver.T_aug = batch['T_aug']
