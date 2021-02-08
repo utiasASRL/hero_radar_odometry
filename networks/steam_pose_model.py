@@ -49,23 +49,26 @@ class SteamPoseModel(torch.nn.Module):
 
         keypoint_coords1, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
         pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
-        tgt_coords = torch.zeros(pseudo_coords.shape, device=self.gpuid)
-        for i, key in enumerate(tgt_ids):
-            tgt_coords[i] = keypoint_coords1[key]
-        keypoint_coords = tgt_coords
+        #tgt_coords = torch.zeros(pseudo_coords.shape, device=self.gpuid)
+        #for i, key in enumerate(tgt_ids):
+        #    tgt_coords[i] = keypoint_coords1[key]
+        keypoint_coords = keypoint_coords1.index_select(0, tgt_ids)
+        #keypoint_coords = tgt_coords
         #keypoint_coords = keypoint_coords[tgt_ids]
 
         pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution,
                                                   self.gpuid)
-        keypoint_coords_xy1 = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
+        keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
                                                     self.gpuid)
-        keypoint_coords_xy = torch.zeros(keypoint_coords_xy1.shape, device=self.gpuid)
+        #keypoint_coords_xy = torch.zeros(keypoint_coords_xy1.shape, device=self.gpuid)
 
         # rotate back if augmented
         if 'T_aug' in batch:
             T_aug = torch.stack(batch['T_aug'], dim=0).to(self.gpuid)
-            for i, key in enumerate(tgt_ids):
-                keypoint_coords_xy[i] = torch.matmul(keypoint_coords_xy1[i], T_aug[key, :2, :2].transpose(0, 1))
+            T_aug2 = T_aug.index_select(0, tgt_ids)
+            keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug2[:, :2, :2].transpose(1, 2))
+            #for i, key in enumerate(tgt_ids):
+            #    keypoint_coords_xy[i] = torch.matmul(keypoint_coords_xy1[i], T_aug[key, :2, :2].transpose(0, 1))
             self.solver.T_aug = batch['T_aug']
         else:
             self.solver.T_aug = []

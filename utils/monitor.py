@@ -185,7 +185,12 @@ class SteamMonitor(MonitorBase):
             if (batchi + 1) % self.config['print_rate'] == 0:
                 print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.config['print_rate']:])))
             with torch.no_grad():
-                out = self.model(batch)
+                try:
+                    out = self.model(batch)
+                except RuntimeError as e:
+                    print(e)
+                    print('WARNING: exception encountered... skipping this batch.')
+                    continue
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
             loss, dict_loss = self.model.loss(out)
