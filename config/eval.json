@@ -15,7 +15,7 @@
     "networks": {
         "unet": {
             "bilinear": true,
-            "first_feature_dimension": 12,
+            "first_feature_dimension": 8,
             "score_sigmoid": false,
             "kaiming": false
         },
@@ -32,7 +32,7 @@
     "steam": {
         "time_step": 0.25,
         "expect_approx": ["mean", "2NP1", "linearize"],
-        "expect_approx_opt": 1,
+        "expect_approx_opt": 0,
         "patch_mean_thres": 0.05,
         "min_abs_vel": -1.0,
         "mah_thres": 4,
