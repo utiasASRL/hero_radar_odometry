@@ -6,7 +6,7 @@ from networks.unet import UNet
 from networks.keypoint import Keypoint
 from networks.softmax_ref_matcher import SoftmaxRefMatcher
 import cpp.build.SteamSolver as steamcpp
-from utils.utils import convert_to_radar_frame
+from utils.utils import convert_to_radar_frame, get_T_ba
 
 class SteamPoseModel(torch.nn.Module):
     """
@@ -75,11 +75,13 @@ class SteamPoseModel(torch.nn.Module):
 
         # loop through each batch
         bcount = 0
-        for b in range(self.solver.batch_size):
+        for batchi in range(self.solver.batch_size):
             bcount += 1
-            i = b * (self.solver.window_size-1)    # first index of window
+            i = batchi * (self.solver.window_size-1)    # first index of window
             # loop for each window frame
+            src_id = self.solver.window_size - 1
             for w in range(i, i + self.solver.window_size - 1):
+                tgt_id = w - i
                 # filter by zero intensity patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
                 if ids.size(0) == 0:
@@ -94,8 +96,12 @@ class SteamPoseModel(torch.nn.Module):
                 ones = torch.ones(weights_mat.shape).to(self.gpuid)
 
                 # get R_21 and t_12_in_2
-                R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
-                t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
+                T_21 = get_T_ba(out, b=tgt_id, a=src_id, batchi=batchi)
+                T_21 = torch.from_numpy(T_21).to(self.gpuid)
+                R_21 = T_21[:3, :3].unsqueeze(0)
+                t_12_in_2 = T_21[:3, 3:4].unsqueeze(0)
+                # R_21 = torch.from_numpy(self.solver.poses[batchi, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
+                # t_12_in_2 = torch.from_numpy(self.solver.poses[batchi, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
                 error = points2 - (R_21 @ points1 + t_12_in_2)
                 mah2_error = error.transpose(1, 2)@weights_mat@error
 
@@ -116,17 +122,17 @@ class SteamPoseModel(torch.nn.Module):
                     # only mean
                     point_loss += torch.mean(error[ids].transpose(1, 2)@weights_mat[ids]@error[ids])
                     unweighted_point_loss += torch.mean(error[ids].transpose(1, 2) @ ones[ids] @ error[ids])
-                elif self.expect_approx_opt == 1:
-                    # sigmapoints
-                    Rsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, :3]).to(self.gpuid).unsqueeze(1)  # s x 1 x 3 x 3
-                    tsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, 3:4]).to(self.gpuid).unsqueeze(1) # s x 1 x 3 x 1
-
-                    points2 = points2[ids].unsqueeze(0)  # 1 x n x 3 x 1
-                    points1_in_2 = Rsp@(points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
-                    error = points2 - points1_in_2  # s x n x 3 x 1
-                    temp = torch.sum(error.transpose(2, 3)@weights_mat[ids].unsqueeze(0)@error, dim=0)/Rsp.size(0)
-                    unweighted_point_loss += torch.mean(error.transpose(2, 3) @ ones[ids].unsqueeze(0) @ error)
-                    point_loss += torch.mean(temp)
+                # elif self.expect_approx_opt == 1:
+                #     # sigmapoints
+                #     Rsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, :3]).to(self.gpuid).unsqueeze(1)  # s x 1 x 3 x 3
+                #     tsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, 3:4]).to(self.gpuid).unsqueeze(1) # s x 1 x 3 x 1
+                #
+                #     points2 = points2[ids].unsqueeze(0)  # 1 x n x 3 x 1
+                #     points1_in_2 = Rsp@(points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
+                #     error = points2 - points1_in_2  # s x n x 3 x 1
+                #     temp = torch.sum(error.transpose(2, 3)@weights_mat[ids].unsqueeze(0)@error, dim=0)/Rsp.size(0)
+                #     unweighted_point_loss += torch.mean(error.transpose(2, 3) @ ones[ids].unsqueeze(0) @ error)
+                #     point_loss += torch.mean(temp)
                 else:
                     raise NotImplementedError('Steam loss method not implemented!')
 

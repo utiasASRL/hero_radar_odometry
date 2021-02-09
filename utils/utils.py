@@ -296,11 +296,11 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-def get_T_ba(out, a, b):
+def get_T_ba(out, a, b, batchi=0):
     T_b0 = np.eye(4)
-    T_b0[:3, :3] = out['R'][0, b].detach().cpu().numpy()
-    T_b0[:3, 3:4] = out['t'][0, b].detach().cpu().numpy()
+    T_b0[:3, :3] = out['R'][batchi, b].detach().cpu().numpy()
+    T_b0[:3, 3:4] = out['t'][batchi, b].detach().cpu().numpy()
     T_a0 = np.eye(4)
-    T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
-    T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
+    T_a0[:3, :3] = out['R'][batchi, a].detach().cpu().numpy()
+    T_a0[:3, 3:4] = out['t'][batchi, a].detach().cpu().numpy()
     return T_b0 @ get_inverse_tf(T_a0)

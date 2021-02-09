@@ -78,29 +78,31 @@ void SteamSolver::optimize() {
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
 
     // loop through every frame
-    for (uint i = 1; i < window_size_; ++i) {
-//        auto T_k0_eval_ptr = traj.getInterpPoseEval(steam::Time(i * dt_));
-        steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
-            steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
-        uint num_meas = p2_[i - 1].shape(0);
+    int src_id = window_size_ - 1;
+    for (uint i = 0; i < window_size_ - 1; ++i) {
+        int tgt_id = i;
+        steam::se3::TransformEvaluator::Ptr Ta0 = steam::se3::TransformStateEvaluator::MakeShared(states_[src_id].pose);
+        steam::se3::TransformEvaluator::Ptr Tb0 = steam::se3::TransformStateEvaluator::MakeShared(states_[tgt_id].pose);
+        steam::se3::TransformEvaluator::Ptr T_eval_ptr = steam::se3::composeInverse(Tb0, Ta0);  // Tba = Tb0 * inv(Ta0)
+        uint num_meas = p2_[i].shape(0);
         for (uint j = 0; j < num_meas; ++j) {
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
             for (uint r = 0; r < 3; ++r) {
                 for (uint c = 0; c < 3; ++c) {
-                    R(r, c) = p::extract<float>(w_[i - 1][j][r][c]);
+                    R(r, c) = p::extract<float>(w_[i][j][r][c]);
                 }
             }
             steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(R, steam::INFORMATION));
             // get measurement
             Eigen::Vector4d read;
-            read << double(p::extract<float>(p2_[i-1][j][0])), double(p::extract<float>(p2_[i-1][j][1])),
-                  double(p::extract<float>(p2_[i-1][j][2])), 1.0;
+            read << double(p::extract<float>(p2_[i][j][0])), double(p::extract<float>(p2_[i][j][1])),
+                  double(p::extract<float>(p2_[i][j][2])), 1.0;
 
             Eigen::Vector4d ref;
-            ref << double(p::extract<float>(p1_[i-1][j][0])), double(p::extract<float>(p1_[i-1][j][1])),
-                 double(p::extract<float>(p1_[i-1][j][2])), 1.0;
+            ref << double(p::extract<float>(p1_[i][j][0])), double(p::extract<float>(p1_[i][j][1])),
+                 double(p::extract<float>(p1_[i][j][2])), 1.0;
 
-            steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_k0_eval_ptr));
+            steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));
             costTerms->add(cost);
