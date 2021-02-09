@@ -266,8 +266,8 @@ class SteamSolver():
                 # threshold on log determinant
                 if self.log_det_thres_flag:
                     ids = torch.nonzero(torch.sum(weights_d[:, 0:2], dim=1) > self.log_det_thres_val, as_tuple=False).squeeze().detach().cpu()
-                    if ids.squeeze().nelement() <= 3:
-                        print('Warning: Log det threshold output has 3 or less elements.')
+                    if ids.squeeze().nelement() <= self.log_det_topk:
+                        print('Warning: Log det threshold output less than specified top k.')
                         _, ids = torch.topk(torch.sum(weights_d[:, 0:2], dim=1), self.log_det_topk, largest=True)
                         ids = ids.squeeze().detach().cpu()
                 else:

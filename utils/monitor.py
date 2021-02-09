@@ -278,8 +278,8 @@ class SteamEvalMonitor(object):
                 if (batchi + 1) % self.eval_config['print_rate'] == 0:
                     print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.eval_config['print_rate']:])))
                 out = self.model(batch)
-                if batchi % self.eval_config['vis_skip'] == 0:
-                    self.vis(batchi, batch, out)
+                #if batchi % self.eval_config['vis_skip'] == 0:
+                #    self.vis(batchi, batch, out)
                 time_used.append(time() - ts)
                 if batchi == 0:
                     # append entire window
