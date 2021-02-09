@@ -10,6 +10,9 @@ from utils.utils import supervised_loss, pointmatch_loss, get_lr
 from utils.monitor import SteamEvalMonitor
 from datasets.transforms import augmentBatch
 
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.enabled = True
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/steam_eval.json', type=str, help='eval config file path')
