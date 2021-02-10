@@ -138,6 +138,7 @@ class SteamMonitor(MonitorBase):
         self.dt = time() - self.current_time
         self.current_time = time()
         losses = dict_loss.items()
+        valid_metric = None
 
         if self.counter % self.config['print_rate'] == 0:
             print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, total_loss.detach().cpu().item(), self.dt))
@@ -152,8 +153,10 @@ class SteamMonitor(MonitorBase):
             with torch.no_grad():
                 self.model.eval()
                 self.model.solver.sliding_flag = True
-                self.validation()
+                self.model.log_det_thres_flag = True
+                valid_metric = self.validation()
                 self.model.solver.sliding_flag = False
+                self.model.log_det_thres_flag = False
                 self.model.train()
 
         if self.counter % self.config['save_rate'] == 0:
@@ -163,6 +166,7 @@ class SteamMonitor(MonitorBase):
                 print('saving model', mname)
                 torch.save(self.model.state_dict(), mname)
                 self.model.train()
+        return valid_metric
 
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
@@ -230,4 +234,4 @@ class SteamMonitor(MonitorBase):
         imgs = plot_sequences(T_gt, T_pred, self.seq_lens)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img, self.counter)
-        return valid_loss
+        return t_err

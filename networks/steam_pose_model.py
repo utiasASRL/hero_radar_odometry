@@ -36,32 +36,23 @@ class SteamPoseModel(torch.nn.Module):
         self.mask_detector_scores = config['steam']['mask_detector_scores']
         self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
+        self.topk_backup = config['steam']['topk_backup']
+        self.log_det_thres_flag = config['steam']['log_det_thres_flag']
+        self.log_det_thres_val = config['steam']['log_det_thres_val']
+        self.log_det_topk = config['steam']['log_det_topk']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
         mask = batch['mask'].to(self.gpuid)
 
         detector_scores, weight_scores, desc = self.unet(data)
-
-        if self.mask_detector_scores:
-            detector_scores = self.relu_detector(detector_scores)
-            detector_scores *= mask
-
         keypoint_coords1, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
         pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
-        #tgt_coords = torch.zeros(pseudo_coords.shape, device=self.gpuid)
-        #for i, key in enumerate(tgt_ids):
-        #    tgt_coords[i] = keypoint_coords1[key]
         keypoint_coords = keypoint_coords1.index_select(0, tgt_ids)
-        #keypoint_coords = tgt_coords
-        #keypoint_coords = keypoint_coords[tgt_ids]
-
         pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.cart_pixel_width, self.cart_resolution,
                                                   self.gpuid)
         keypoint_coords_xy = convert_to_radar_frame(keypoint_coords, self.cart_pixel_width, self.cart_resolution,
                                                     self.gpuid)
-        #keypoint_coords_xy = torch.zeros(keypoint_coords_xy1.shape, device=self.gpuid)
-
         # rotate back if augmented
         if 'T_aug' in batch:
             T_aug = torch.stack(batch['T_aug'], dim=0).to(self.gpuid)
@@ -69,21 +60,17 @@ class SteamPoseModel(torch.nn.Module):
             T_aug3 = T_aug.index_select(0, src_ids)
             keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug2[:, :2, :2].transpose(1, 2))
             pseudo_coords_xy = torch.matmul(pseudo_coords_xy, T_aug3[:, :2, :2].transpose(1, 2))
-            #for i, key in enumerate(tgt_ids):
-            #    keypoint_coords_xy[i] = torch.matmul(keypoint_coords_xy1[i], T_aug[key, :2, :2].transpose(0, 1))
             self.solver.T_aug = batch['T_aug']
         else:
             self.solver.T_aug = []
 
         pseudo_coords_xy[:, :, 1] *= -1.0
         keypoint_coords_xy[:, :, 1] *= -1.0
-
         # binary mask to remove keypoints from 'empty' regions of the input radar scan
         keypoint_ints = self.mask_intensity_filter(mask, tgt_ids)
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints, tgt_ids, src_ids)
-
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
@@ -138,16 +125,11 @@ class SteamPoseModel(torch.nn.Module):
                 T_21 = torch.from_numpy(T_21).to(self.gpuid)
                 R_21 = T_21[:3, :3].unsqueeze(0)
                 t_12_in_2 = T_21[:3, 3:4].unsqueeze(0)
-                #error = points2 - T_21 @ points1
-                # get R_21 and t_12_in_2
-                # R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
-                # t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
+
                 error = points2 - (R_21 @ points1 + t_12_in_2)
                 mah2_error = error.transpose(1, 2) @ weights_mat @ error
 
                 # error threshold
-                #errorT = min(self.mah_thres**2, self.nms_thres**2 * torch.max(mah2_error))
-                #errorT = self.nms_thres**2 * torch.max(mah2_error)
                 errorT = self.mah_thres**2
                 if errorT > 0:
                     ids = torch.nonzero(mah2_error.squeeze() < errorT, as_tuple=False).squeeze()
@@ -157,7 +139,7 @@ class SteamPoseModel(torch.nn.Module):
                 if ids.squeeze().nelement() <= 1:
                     print('Warning: MAH threshold output has 1 or 0 elements.')
                     error2 = error.transpose(1, 2)@error
-                    _, ids = torch.topk(error2.squeeze(), 30, largest=False)
+                    _, ids = torch.topk(error2.squeeze(), self.topk_backup, largest=False)
 
                 # squared mah error
                 if self.expect_approx_opt == 0:
@@ -268,11 +250,22 @@ class SteamSolver():
                 zeros_vec_temp = zeros_vec[ids_cpu]
                 # weights must be list of N x 3 x 3
                 aug_id = tgt_ids[w]
-                weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T, aug_id)
+                weights_temp, weights_d = self.convert_to_weight_matrix(match_weights[w, :, ids].T, aug_id)
+
+                # threshold on log determinant
+                if self.log_det_thres_flag:
+                    ids = torch.nonzero(torch.sum(weights_d[:, 0:2], dim=1) > self.log_det_thres_val, as_tuple=False).squeeze().detach().cpu()
+                    if ids.squeeze().nelement() <= self.log_det_topk:
+                        print('Warning: Log det threshold output less than specified top k.')
+                        _, ids = torch.topk(torch.sum(weights_d[:, 0:2], dim=1), self.log_det_topk, largest=True)
+                        ids = ids.squeeze().detach().cpu()
+                else:
+                    ids = np.arange(weights_temp.size(0)).squeeze()
+
                 # append
-                points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
-                points2 += [np.concatenate((points2_temp, zeros_vec_temp), 1)]
-                weights += [weights_temp.detach().cpu().numpy()]
+                points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)]
+                points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)]
+                weights += [weights_temp[ids].detach().cpu().numpy()]
                 src_id = int(src_ids[w].cpu().item())
                 tgt_id = int(tgt_ids[w].cpu().item())
                 p1_inds.append(src_id % self.window_size)

@@ -38,6 +38,7 @@ if __name__ == '__main__':
     elif config['model'] == 'SteamPoseModel':
         model = SteamPoseModel(config).to(config['gpuid'])
         model.solver.sliding_flag = True
+        model.log_det_thres_flag = True
     assert(args.pretrain is not None)
     model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
     model.eval()
