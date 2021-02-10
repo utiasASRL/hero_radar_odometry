@@ -282,8 +282,8 @@ class SteamEvalMonitor(object):
 
                 # mah stats
                 self.mah_stats(out, batch)
-                mah_hist_img = draw_mah_histogram(self.bin_count_total)
-                self.writer.add_image('val/mah_hist', mah_hist_img, global_step=batchi)
+                # mah_hist_img = draw_mah_histogram(self.bin_count_total)
+                # self.writer.add_image('val/mah_hist', mah_hist_img, global_step=batchi)
 
                 if batchi % self.eval_config['vis_skip'] == 0:
                     self.vis(batchi, batch, out)

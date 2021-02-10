@@ -27,6 +27,7 @@ if __name__ == '__main__':
     train_config['steam']['log_det_thres_flag'] = eval_config['log_det_thres_flag']
     train_config['steam']['log_det_topk'] = eval_config['log_det_topk']
     train_config['steam']['log_det_thres_val'] = eval_config['log_det_thres_val']
+    train_config['window_size'] = eval_config['window_size']
 
     train_loader, valid_loader, _ = get_dataloaders(train_config)
 
