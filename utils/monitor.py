@@ -5,7 +5,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics, get_inverse_tf
-from utils.vis import draw_batch, plot_sequences, draw_batch_steam, draw_batch_steam_eval
+from utils.vis import draw_batch, plot_sequences, draw_batch_steam, draw_batch_steam_eval, draw_mah_histogram
 from datasets.transforms import augmentBatch
 
 class MonitorBase(object):
@@ -250,6 +250,7 @@ class SteamEvalMonitor(object):
         self.counter = 0
         self.dt = 0
         self.current_time = 0
+        self.bin_count_total = []
 
         if not os.path.exists(self.log_dir):
             os.mkdir(self.log_dir)
@@ -278,8 +279,17 @@ class SteamEvalMonitor(object):
                 if (batchi + 1) % self.eval_config['print_rate'] == 0:
                     print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-self.eval_config['print_rate']:])))
                 out = self.model(batch)
-                #if batchi % self.eval_config['vis_skip'] == 0:
-                #    self.vis(batchi, batch, out)
+
+                # mah stats
+                self.mah_stats(out, batch)
+                mah_hist_img = draw_mah_histogram(self.bin_count_total)
+                self.writer.add_image('val/mah_hist', mah_hist_img, global_step=batchi)
+
+                if batchi % self.eval_config['vis_skip'] == 0:
+                    self.vis(batchi, batch, out)
+                    mah_hist_img = draw_mah_histogram(self.bin_count_total)
+                    self.writer.add_image('val/mah_hist', mah_hist_img, global_step=batchi)
+
                 time_used.append(time() - ts)
                 if batchi == 0:
                     # append entire window
@@ -302,6 +312,53 @@ class SteamEvalMonitor(object):
 
             imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_len)
             for i, img in enumerate(imgs):
-                self.writer.add_image('val/' + self.sequences[i], img)
+                self.writer.add_image('val/' + self.sequences[i], img, self.counter)
+
+            # plot mah histogram
+            mah_hist_img = draw_mah_histogram(self.bin_count_total)
+            self.writer.add_image('val/mah_hist', mah_hist_img, self.counter)
 
         self.model.solver.sliding_flag = False
+
+    def mah_stats(self, out, batch):
+        src_coords = out['src']
+        tgt_coords = out['tgt']
+        match_weights = out['match_weights']
+        keypoint_ints = out['keypoint_ints']
+
+        # setup histogram parameters
+        # assume delta is always 1
+        max_bin_val = 10    # must be int
+        if not self.bin_count_total:
+            self.bin_count_total = [np.zeros(max_bin_val+1)]*(self.model.solver.window_size - 1)
+
+        # get first pose T_10 (using groundtruth)
+        T_k0 = batch['T_21'][0].to(self.gpuid)
+
+        # loop for each window frame (assume batch_size of 1)
+        for w in range(self.model.solver.window_size - 1):
+            # filter by zero intensity patches
+            ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
+
+            # points must be list of N x 3
+            zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
+            points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
+            points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
+            weights_mat, _ = self.model.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)  # N x 3 x 3
+
+            # get R_21 and t_12_in_2
+            R_21 = T_k0[:3, :3]
+            t_12_in_2 = T_k0[:3, 3:4]
+
+            # compute mah
+            error = points2 - (R_21 @ points1 + t_12_in_2)
+            mah2_error = error.transpose(1, 2)@weights_mat@error
+            mah2_bin_vals = np.floor(np.clip(mah2_error.squeeze().detach().cpu().numpy(), 0, max_bin_val))
+            bin_count = np.bincount(mah2_bin_vals.astype(int))
+            self.bin_count_total[w] += bin_count
+
+            # update T_k0
+            T_kp1_k = batch['T_21'][w+1].to(self.gpuid)
+            T_k0 = T_kp1_k@T_k0
+
+        return

@@ -199,6 +199,23 @@ def draw_batch_steam_eval(batch, out, model):
 
     return vutils.make_grid([radar_img, points_cov_img]), vutils.make_grid([match_img, match_img2])
 
+def draw_mah_histogram(bin_counts):
+    x = np.arange(bin_counts[0].shape[0])  # the label locations
+    labels = []
+    for i in x:
+        labels += ["[" + str(i) + ", " + str(i+1) + ")"]
+    labels[-1] = ">= " + str(x[-1])
+    width = 0.2
+    fig, ax = plt.subplots()
+    for i, bin in enumerate(bin_counts):
+        ax.bar(x+(i-1)*width, bin, width, label=str(i+2))
+    ax.set_ylabel('Occurrences')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend()
+    output_im = convert_plt_to_tensor()
+
+    return output_im
 
 def plot_sequences(T_gt, R_pred, t_pred, seq_len, returnTensor=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
