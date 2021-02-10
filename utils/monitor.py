@@ -84,8 +84,7 @@ class SVDMonitor(MonitorBase):
         aux_losses = {}
         aux_init = False
         T_gt = []
-        R_pred = []
-        t_pred = []
+        T_pred = []
         for batchi, batch in enumerate(self.valid_loader):
             ts = time()
             if (batchi + 1) % self.config['print_rate'] == 0:
@@ -108,11 +107,12 @@ class SVDMonitor(MonitorBase):
                     aux_losses[loss_name] += dict_loss[loss_name].detach().cpu().item()
             time_used.append(time() - ts)
             T_gt.append(batch['T_21'][0].numpy().squeeze())
-            R_pred.append(out['R'][0].detach().cpu().numpy().squeeze())
-            t_pred.append(out['t'][0].detach().cpu().numpy().squeeze())
+            R_pred_ = out['R'][0].detach().cpu().numpy().squeeze()
+            t_pred_ = out['t'][0].detach().cpu().numpy().squeeze()
+            T_pred.append(get_transform2(R_pred_, t_pred_))
 
-        results = computeMedianError(T_gt, R_pred, t_pred)
-        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_lens)
+        results = computeMedianError(T_gt, T_pred)
+        t_err, r_err, _ = computeKittiMetrics(T_gt, T_pred, self.seq_lens)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         for loss_name in aux_losses:
@@ -125,7 +125,7 @@ class SVDMonitor(MonitorBase):
         self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
         self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
 
-        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_lens)
+        imgs = plot_sequences(T_gt, T_pred, self.seq_lens)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img)
         return valid_loss
@@ -178,8 +178,7 @@ class SteamMonitor(MonitorBase):
         aux_losses = {}
         aux_init = False
         T_gt = []
-        R_pred = []
-        t_pred = []
+        T_pred = []
         for batchi, batch in enumerate(self.valid_loader):
             ts = time()
             if (batchi + 1) % self.config['print_rate'] == 0:
@@ -208,18 +207,14 @@ class SteamMonitor(MonitorBase):
                 # append entire window
                 for w in range(batch['T_21'].size(0)-1):
                     T_gt.append(batch['T_21'][w].numpy().squeeze())
-                    T_pred = get_T_ba(out, b=w+1, a=w)
-                    R_pred.append(T_pred[:3, :3].squeeze())
-                    t_pred.append(T_pred[:3, 3].squeeze())
+                    T_pred.append(get_T_ba(out, b=w+1, a=w))
             else:
                 # append only the front of window
                 T_gt.append(batch['T_21'][-2].numpy().squeeze())
-                T_pred = get_T_ba(out, b=-1, a=-2)
-                R_pred.append(T_pred[:3, :3].squeeze())
-                t_pred.append(T_pred[:3, 3].squeeze())
+                T_pred.append(get_T_ba(out, b=-1, a=-2))
 
-        results = computeMedianError(T_gt, R_pred, t_pred)
-        t_err, r_err, _ = computeKittiMetrics(T_gt, R_pred, t_pred, self.seq_lens)
+        results = computeMedianError(T_gt, T_pred)
+        t_err, r_err, _ = computeKittiMetrics(T_gt, T_pred, self.seq_lens)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         for loss_name in aux_losses:
@@ -232,7 +227,7 @@ class SteamMonitor(MonitorBase):
         self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
         self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
 
-        imgs = plot_sequences(T_gt, R_pred, t_pred, self.seq_lens)
+        imgs = plot_sequences(T_gt, T_pred, self.seq_lens)
         for i, img in enumerate(imgs):
             self.writer.add_image('val/' + self.sequences[i], img, self.counter)
         return valid_loss
