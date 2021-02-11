@@ -14,6 +14,7 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 
 if __name__ == '__main__':
+    torch.set_num_threads(8)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
@@ -69,9 +70,9 @@ if __name__ == '__main__':
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
             optimizer.step()
             step = batchi + epoch * len(train_loader.dataset)
-            valid_loss = monitor.step(step, loss, dict_loss)
-            if valid_loss is not None:
-                scheduler.step(valid_loss)
-                print('Learning Rate: {}'.format(get_lr(optimizer)))
+            valid_metric = monitor.step(step, loss, dict_loss)
+            if valid_metric is not None:
+                scheduler.step(valid_metric)
+                monitor.writer.add_scalar('val/learning_rate', get_lr(optimizer), monitor.counter)
             if step >= config['max_iterations']:
                 break

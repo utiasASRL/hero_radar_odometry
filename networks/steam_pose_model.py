@@ -24,12 +24,10 @@ class SteamPoseModel(torch.nn.Module):
         self.softmax_matcher = SoftmaxRefMatcher(config)
         self.solver = SteamSolver(config)
         self.patch_size = config['networks']['keypoint_block']['patch_size']
-        #self.min_abs_vel = config['steam']['min_abs_vel']
         self.mah_thres = config['steam']['mah_thres']
-        #self.nms_thres = config['steam']['nms_thres']
-        #self.sigmoid = torch.nn.Sigmoid()
         self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
+        self.topk_backup = config['steam']['topk_backup']
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -109,7 +107,7 @@ class SteamPoseModel(torch.nn.Module):
                 if ids.squeeze().nelement() <= 1:
                     print('Warning: MAH threshold output has 1 or 0 elements.')
                     error2 = error.transpose(1, 2)@error
-                    _, ids = torch.topk(error2.squeeze(), 30, largest=False)
+                    _, ids = torch.topk(error2.squeeze(), self.topk_backup, largest=False)
 
                 # squared mah error
                 if self.expect_approx_opt == 0:
@@ -152,6 +150,9 @@ class SteamSolver():
         self.batch_size = config['batch_size']
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
+        self.log_det_thres_flag = config['steam']['log_det_thres_flag']
+        self.log_det_thres_val = config['steam']['log_det_thres_val']
+        self.log_det_topk = config['steam']['log_det_topk']
         self.T_aug = []
         # z weight value
         # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
@@ -203,11 +204,20 @@ class SteamSolver():
                 points2_temp = keypoint_coords[w, ids].detach().cpu().numpy()
                 zeros_vec_temp = zeros_vec[ids_cpu]
                 # weights must be list of N x 3 x 3
-                weights_temp, _ = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                weights_temp, weights_d = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
+                # threshold on log determinant
+                if self.log_det_thres_flag:
+                    ids = torch.nonzero(torch.sum(weights_d[:, 0:2], dim=1) > self.log_det_thres_val, as_tuple=False).squeeze().detach().cpu()
+                    if ids.squeeze().nelement() <= self.log_det_topk:
+                        print('Warning: Log det threshold output less than specified top k.')
+                        _, ids = torch.topk(torch.sum(weights_d[:, 0:2], dim=1), self.log_det_topk, largest=True)
+                        ids = ids.squeeze().detach().cpu()
+                else:
+                    ids = np.arange(weights_temp.size(0)).squeeze()
                 # append
-                points1 += [np.concatenate((points1_temp, zeros_vec_temp), 1)]
-                points2 += [np.concatenate((points2_temp, zeros_vec_temp), 1)]
-                weights += [weights_temp.detach().cpu().numpy()]
+                points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)]
+                points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)]
+                weights += [weights_temp[ids].detach().cpu().numpy()]
             # solver
             self.solver_cpp.setMeas(points2, points1, weights)
             self.solver_cpp.optimize()

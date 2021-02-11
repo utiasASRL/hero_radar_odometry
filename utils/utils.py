@@ -121,13 +121,12 @@ def translationError(T, dim=2):
     if dim == 3:
         return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
 
-def computeMedianError(T_gt, R_pred, t_pred):
+def computeMedianError(T_gt, T_pred):
     """Computes the median translation and rotation error along with their standard deviations."""
     t_error = []
     r_error = []
     for i, T in enumerate(T_gt):
-        T_pred = get_transform2(R_pred[i], t_pred[i])
-        T_error = np.matmul(T, get_inverse_tf(T_pred))
+        T_error = np.matmul(T, get_inverse_tf(T_pred[i]))
         t_error.append(translationError(T_error))
         r_error.append(180 * rotationError(T_error) / np.pi)
     t_error = np.array(t_error)
@@ -185,7 +184,7 @@ def getStats(err):
     r_err /= float(len(err))
     return t_err, r_err
 
-def computeKittiMetrics(T_gt, R_pred, t_pred, seq_lens):
+def computeKittiMetrics(T_gt, T_pred, seq_lens):
     """
         Computes the translational (%) and rotational drift (deg/m) in the KITTI style.
         T_gt: List of 4x4 homogeneous transforms (Frame t to Frame t+1)
@@ -205,7 +204,7 @@ def computeKittiMetrics(T_gt, R_pred, t_pred, seq_lens):
         poses_pred = []
         for i in indices:
             T_gt_ = np.matmul(T_gt[i], T_gt_)
-            T_pred_ = np.matmul(get_transform2(R_pred[i], t_pred[i]), T_pred_)
+            T_pred_ = np.matmul(T_pred[i], T_pred_)
             enforce_orthog(T_gt_)
             enforce_orthog(T_pred_)
             poses_gt.append(T_gt_)
@@ -220,7 +219,7 @@ def saveKittiErrors(err, fname):
 def loadKittiErrors(fname):
     return pickle.load(open(fname, 'rb'))
 
-def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, root='./'):
+def save_in_yeti_format(T_gt, T_pred, timestamps, seq_lens, seq_names, root='./'):
     """This function converts outputs to a format that is backwards compatible with the yeti repository."""
     seq_indices = []
     idx = 0
@@ -233,9 +232,11 @@ def save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, r
         with open(fname, 'w') as f:
             f.write('x,y,yaw,gtx,gty,gtyaw,time1,time2\n')
             for i in indices:
-                yaw = -1 * np.arcsin(R_pred[i][0, 1])
+                R_pred = T_pred[i][:3, :3]
+                t_pred = T_pred[i][:3, 3:]
+                yaw = -1 * np.arcsin(R_pred[0, 1])
                 gtyaw = -1 * np.arcsin(T_gt[i][0, 1])
-                t = np.matmul(-1 * R_pred[i].transpose(), np.reshape(t_pred[i], (3, 1)))
+                t = np.matmul(-1 * R_pred.transpose(), np.reshape(t_pred, (3, 1)))
                 T = get_inverse_tf(T_gt[i])
                 f.write('{},{},{},{},{},{},{},{}\n'.format(t[0, 0], t[1, 0], yaw, T[0, 3], T[1, 3], gtyaw,
                                                            timestamps[i][0], timestamps[i][1]))
@@ -255,9 +256,9 @@ def load_icra21_results(results_loc, seq_names, seq_lens):
                 count += 1
             # Append identity transforms at the end in case the ICRA results ended early by a couple frames
             if count < seq_lens[i]:
-                print('WARNING: ICRA results shorter than seq_len by {}. Append identity.'.format((seq_lens[i] - count)))
+                print('WARNING: ICRA results shorter than seq_len by {}. Append last TF.'.format((seq_lens[i] - count)))
             while count < seq_lens[i]:
-                T_icra.append(np.identity(4, dtype=np.float32))
+                T_icra.append(T_icra[-1])
                 count += 1
     return T_icra
 

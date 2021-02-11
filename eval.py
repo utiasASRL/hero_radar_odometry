@@ -22,6 +22,7 @@ def get_folder_from_file_path(path):
     return newpath
 
 if __name__ == '__main__':
+    torch.set_num_threads(8)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/eval.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
@@ -38,14 +39,14 @@ if __name__ == '__main__':
     elif config['model'] == 'SteamPoseModel':
         model = SteamPoseModel(config).to(config['gpuid'])
         model.solver.sliding_flag = True
+        # self.model.solver.log_det_thres_flag = True
     assert(args.pretrain is not None)
     model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
     model.eval()
 
     time_used = []
     T_gt = []
-    R_pred = []
-    t_pred = []
+    T_pred = []
     timestamps = []
     for batchi, batch in enumerate(test_loader):
         ts = time()
@@ -57,34 +58,29 @@ if __name__ == '__main__':
             # append entire window
             for w in range(batch['T_21'].size(0)-1):
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
-                T_pred = get_T_ba(out, a=w, b=w+1)
-                R_pred.append(T_pred[:3, :3].squeeze())
-                t_pred.append(T_pred[:3, 3].squeeze())
+                T_pred.append(get_T_ba(out, a=w, b=w+1))
                 timestamps.append(batch['times'][w].numpy().squeeze())
         else:
             # append only the back of window
             w = 0
             T_gt.append(batch['T_21'][w].numpy().squeeze())
-            T_pred = get_T_ba(out, a=w, b=w+1)
-            R_pred.append(T_pred[:3, :3].squeeze())
-            t_pred.append(T_pred[:3, 3].squeeze())
+            T_pred.append(get_T_ba(out, a=w, b=w+1))
             timestamps.append(batch['times'][w].numpy().squeeze())
         time_used.append(time() - ts)
 
     print('time_used: {}'.format(sum(time_used) / len(time_used)))
-    results = computeMedianError(T_gt, R_pred, t_pred)
+    results = computeMedianError(T_gt, T_pred)
     print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
 
-    t_err, r_err, err = computeKittiMetrics(T_gt, R_pred, t_pred, seq_lens)
+    t_err, r_err, err = computeKittiMetrics(T_gt, T_pred, seq_lens)
     print('KITTI t_err: {} %'.format(t_err))
     print('KITTI r_err: {} deg/m'.format(r_err))
     root = get_folder_from_file_path(args.pretrain)
     saveKittiErrors(err, root + "kitti_err.obj")
 
-    save_in_yeti_format(T_gt, R_pred, t_pred, timestamps, seq_lens, seq_names, root)
+    save_in_yeti_format(T_gt, T_pred, timestamps, seq_lens, seq_names, root)
 
     T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
-    imgs = plot_sequences(T_gt, R_pred, t_pred, seq_lens, returnTensor=False, T_icra=T_icra)
+    imgs = plot_sequences(T_gt, T_pred, seq_lens, returnTensor=False, T_icra=T_icra)
     for i, img in enumerate(imgs):
         imgs[i].save(root + seq_names[i] + '.png')
-
