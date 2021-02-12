@@ -355,7 +355,7 @@ class SteamEvalMonitor(object):
             mah2_error = error.transpose(1, 2)@weights_mat@error
             mah2_bin_vals = np.floor(np.clip(mah2_error.squeeze().detach().cpu().numpy(), 0, max_bin_val))
             bin_count = np.bincount(mah2_bin_vals.astype(int), minlength=max_bin_val+1)
-            self.bin_count_total[w] += bin_count
+            self.bin_count_total[w] = self.bin_count_total[w] + bin_count
 
             # update T_k0
             T_kp1_k = batch['T_21'][w+1].to(self.gpuid)
