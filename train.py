@@ -33,7 +33,7 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(args.pretrain), strict=False)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2e4 / config['val_rate'])
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)
 
     if config['model'] == 'SVDPoseModel':
         monitor = SVDMonitor(model, valid_loader, config)

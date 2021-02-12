@@ -54,7 +54,7 @@ if __name__ == '__main__':
             print('Eval Batch {}: {:.2}s'.format(batchi, np.mean(time_used[-config['print_rate']:])))
         with torch.no_grad():
             out = model(batch)
-        if batchi == len(test_loader):
+        if batchi == len(test_loader) - 1:
             # append entire window
             for w in range(batch['T_21'].size(0)-1):
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
