@@ -7,9 +7,10 @@ namespace steam {
 /// \brief Constructor
 //////////////////////////////////////////////////////////////////////////////////////////////
 SE2VelPriorEval::SE2VelPriorEval(const VectorSpaceStateVar::ConstPtr& vel_state): vel_state_(vel_state) {
-    D_ << 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 1, 0;
+    D_ << 0, 1, 0, 0, 0, 0,
+          0, 0, 1, 0, 0, 0,
+          0, 0, 0, 1, 0, 0,
+          0, 0, 0, 0, 1, 0;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,15 +23,15 @@ bool SE2VelPriorEval::isActive() const {
 //////////////////////////////////////////////////////////////////////////////////////////////
 /// \brief Evaluate the error
 //////////////////////////////////////////////////////////////////////////////////////////////
-Eigen::Matrix<double, 3, 1> SE2VelPriorEval::evaluate() const {
+Eigen::Matrix<double, 4, 1> SE2VelPriorEval::evaluate() const {
     return D_ * vel_state_->getValue();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 /// \brief Evaluate the error and Jacobians
 //////////////////////////////////////////////////////////////////////////////////////////////
-Eigen::Matrix<double, 3, 1> SE2VelPriorEval::evaluate(const Eigen::Matrix<double, 3, 3>& lhs,
-    std::vector<Jacobian<3, 6>>* jacs) const {
+Eigen::Matrix<double, 4, 1> SE2VelPriorEval::evaluate(const Eigen::Matrix<double, 4, 4>& lhs,
+    std::vector<Jacobian<4, 6>>* jacs) const {
 
     // Check and initialize jacobian array
     if (jacs == NULL) {
@@ -40,8 +41,8 @@ Eigen::Matrix<double, 3, 1> SE2VelPriorEval::evaluate(const Eigen::Matrix<double
 
     // Construct Jacobian
     if (!vel_state_->isLocked()) {
-        jacs->push_back(Jacobian<3, 6>());
-        Jacobian<3, 6>& jacref = jacs->back();
+        jacs->push_back(Jacobian<4, 6>());
+        Jacobian<4, 6>& jacref = jacs->back();
         jacref.key = vel_state_->getKey();
         jacref.jac = lhs * D_;
     }

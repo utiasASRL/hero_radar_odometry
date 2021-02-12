@@ -166,6 +166,7 @@ class SteamSolver():
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
                                                self.window_size, config['steam']['zero_vel_prior'])
+        self.solver_cpp.setZeroVelVar(config['steam']['zero_vel_variance'])
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):

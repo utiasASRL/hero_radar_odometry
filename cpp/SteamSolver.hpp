@@ -27,6 +27,9 @@ public:
     void slideTraj();
     void setQcInv(const np::ndarray& Qc_inv_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
+    void setZeroVelVar(const double& variance) {
+        zero_vel_variance_ = variance;
+    }
     // solve
     void optimize();
     // output
@@ -50,6 +53,7 @@ private:
     unsigned int window_size_;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
     bool zero_vel_prior_flag_ = false;
+    double zero_vel_variance_ = 1e-3;
 };
 
 // boost wrapper
@@ -65,7 +69,8 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
-        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
+        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1)
+        .def("setZeroVelVar", &SteamSolver::setZeroVelVar);
 }
 
 #endif  // STEAMSOLVER_HPP
