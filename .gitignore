@@ -3,3 +3,14 @@
 *.idea/*
 cpp/build/*
 results/*
+bin/
+google/
+numpy-1.19.5.dist-info/
+numpy.libs/
+numpy/
+protobuf-3.14.0-py3.6-nspkg.pth
+protobuf-3.14.0.dist-info/
+six-1.15.0.dist-info/
+six.py
+tensorboardX-2.1.dist-info/
+tensorboardX/

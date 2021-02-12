@@ -12,9 +12,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
 # set(BOOST_ROOT "/home/david/anaconda3/envs/pointcloud")
 
 # packages
-find_package(PythonInterp)
+find_package(PythonInterp 3)
 # FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX} numpy${PYTHON_VERSION_SUFFIX} system)
-find_package(Boost COMPONENTS python36 numpy36 system)
+#find_package(Boost COMPONENTS python36 numpy36 system)
 find_package(PythonInterp 3)
 find_package(PythonLibs 3 REQUIRED)
 
@@ -22,10 +22,16 @@ find_package(PythonLibs 3 REQUIRED)
 find_package(OpenMP REQUIRED)
 
 # steam
-find_package(Steam REQUIRED)
+#find_package(Steam REQUIRED)
 
 # boost python
 ENABLE_TESTING()
+set(Boost_INCLUDE_DIRS "/h/keenan/usr/local/include")
+set(Steam_INCLUDE_DIRS "/h/keenan/usr/local/include;/h/keenan/usr/local/include/eigen3;/h/keenan/lgmath/include;/h/keenan/steam_ws/steam/include")
+
+set(Boost_LIBRARIES "/h/keenan/usr/local/lib/libboost_python36.so;/h/keenan/usr/local/lib/libboost_numpy36.so;/h/keenan/usr/local/lib/libboost_system.so")
+set(Steam_LIBRARIES "/h/keenan/steam_ws/steam/build/libsteam.so;/h/keenan/lgmath/build/liblgmath.so")
+
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${Steam_INCLUDE_DIRS})
 
 # single function call version
