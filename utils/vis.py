@@ -183,10 +183,10 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
         plt.xlabel('x (m)', fontsize=16)
         plt.ylabel('y (m)', fontsize=16)
         plt.legend(loc="upper left", fontsize='small')
+        if savePDF and fnames is not None:
+            plt.savefig(fnames[seq_i], bbox_inches='tight', pad_inches=0.0)
         if returnTensor:
             imgs.append(convert_plt_to_tensor())
         else:
             imgs.append(convert_plt_to_img())
-        if savePDF and fnames is not None:
-            plt.savefig(fnames[seq_i], bbox_inches='tight', pad_inches=0.0)
     return imgs
