@@ -1,6 +1,7 @@
 import io
 import PIL.Image
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import torch
 import torchvision.utils as vutils
@@ -133,7 +134,7 @@ def draw_batch_steam(batch, out, config):
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
            vutils.make_grid([p2p_img])
 
-def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None):
+def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, savePDF=False, fnames=None):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
     idx = 0
@@ -141,8 +142,10 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None):
         seq_indices.append(list(range(idx, idx + s - 1)))
         idx += (s - 1)
 
+    matplotlib.rcParams.update({'font.size': 16, 'xtick.labelsize' : 16, 'ytick.labelsize' : 16,
+                                'axes.linewidth' : 1.5, 'font.family' : 'serif', 'pdf.fonttype' : 42})
     imgs = []
-    for indices in seq_indices:
+    for seq_i, indices in enumerate(seq_indices):
         T_gt_ = np.identity(4)
         T_pred_ = np.identity(4)
         T_icra_ = np.identity(4)
@@ -170,16 +173,20 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None):
                 x_icra.append(T_icra_temp[0, 3])
                 y_icra.append(T_icra_temp[1, 3])
 
-        plt.subplots()
+        plt.figure(figsize=(10, 10), tight_layout=True)
         plt.grid(which='both', linestyle='--', alpha=0.5)
         plt.axes().set_aspect('equal')
-        plt.plot(x_gt, y_gt, 'k', label='GT')
-        plt.plot(x_pred, y_pred, 'r', label='UNSUP')
+        plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT')
+        plt.plot(x_pred, y_pred, 'r', linewidth=2.5, label='HERO')
         if len(x_icra) > 0 and len(y_icra) > 0:
-            plt.plot(x_icra, y_icra, 'g', label='YETI')
-        plt.legend(loc="upper left")
+            plt.plot(x_icra, y_icra, 'g', linewidth=2.5, label='YETI')
+        plt.xlabel('x (m)', fontsize=16)
+        plt.ylabel('y (m)', fontsize=16)
+        plt.legend(loc="upper left", fontsize='small')
         if returnTensor:
             imgs.append(convert_plt_to_tensor())
         else:
             imgs.append(convert_plt_to_img())
+        if savePDF and fnames is not None:
+            plt.savefig(fnames[seq_i], bbox_inches='tight', pad_inches=0.0)
     return imgs
