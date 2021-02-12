@@ -207,15 +207,15 @@ class SteamMonitor(MonitorBase):
                     for loss_name in dict_loss:
                         aux_losses[loss_name] += dict_loss[loss_name].detach().cpu().item()
             time_used.append(time() - ts)
-            if batchi == 0:
+            if batchi == len(self.valid_loader) - 1:
                 # append entire window
                 for w in range(batch['T_21'].size(0)-1):
                     T_gt.append(batch['T_21'][w].numpy().squeeze())
                     T_pred.append(get_T_ba(out, a=w, b=w+1))
             else:
                 # append only the front of window
-                T_gt.append(batch['T_21'][-2].numpy().squeeze())
-                T_pred.append(get_T_ba(out, a=-2, b=-1))
+                T_gt.append(batch['T_21'][0].numpy().squeeze())
+                T_pred.append(get_T_ba(out, a=0, b=1))
 
         results = computeMedianError(T_gt, T_pred)
         t_err, r_err, _ = computeKittiMetrics(T_gt, T_pred, self.seq_lens)
@@ -228,6 +228,8 @@ class SteamMonitor(MonitorBase):
         self.writer.add_scalar('val/t_err_std', results[1], self.counter)
         self.writer.add_scalar('val/R_err_med', results[2], self.counter)
         self.writer.add_scalar('val/R_err_std', results[3], self.counter)
+        self.writer.add_scalar('val/t_err_mean', results[4], self.counter)
+        self.writer.add_scalar('val/R_err_mean', results[5], self.counter)
         self.writer.add_scalar('val/KITTI/t_err', t_err, self.counter)
         self.writer.add_scalar('val/KITTI/r_err', r_err, self.counter)
 

@@ -21,7 +21,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     with open(args.config) as f:
         config = json.load(f)
-
+    config['gpuid'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, valid_loader, _ = get_dataloaders(config)
 
     if config['model'] == 'SVDPoseModel':
@@ -31,6 +31,8 @@ if __name__ == '__main__':
 
     if args.pretrain is not None:
         model.load_state_dict(torch.load(args.pretrain), strict=False)
+
+    model = torch.nn.DataParallel(model)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)

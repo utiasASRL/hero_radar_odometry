@@ -131,7 +131,7 @@ def computeMedianError(T_gt, T_pred):
         r_error.append(180 * rotationError(T_error) / np.pi)
     t_error = np.array(t_error)
     r_error = np.array(r_error)
-    return [np.median(t_error), np.std(t_error), np.median(r_error), np.std(r_error)]
+    return [np.median(t_error), np.std(t_error), np.median(r_error), np.std(r_error), np.mean(t_error), np.mean(r_error)]
 
 def trajectoryDistances(poses):
     """Calculates path length along the trajectory."""

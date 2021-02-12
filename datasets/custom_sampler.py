@@ -33,8 +33,8 @@ class RandomWindowBatchSampler(Sampler):
     def __len__(self):
         total_size = self.batch_size*self.window_size
         if self.drop_last:
-            return len(self.sampler) // total_size
-        return (len(self.sampler) + total_size - 1) // total_size
+            return len(self.sampler) // self.batch_size
+        return (len(self.sampler) + total_size - 1) // self.batch_size
 
 class SequentialWindowBatchSampler(Sampler):
     def __init__(self, batch_size, window_size, seq_lens, drop_last=True):
@@ -59,5 +59,5 @@ class SequentialWindowBatchSampler(Sampler):
     def __len__(self):
         total_size = self.batch_size*self.window_size
         if self.drop_last:
-            return len(self.valid_frames) // total_size
-        return (len(self.valid_frames) + total_size - 1) // total_size
+            return len(self.valid_frames) // self.batch_size
+        return (len(self.valid_frames) + total_size - 1) // self.batch_size
