@@ -92,3 +92,4 @@ wheel-0.36.2.dist-info/
 wheel/
 zipp-3.4.0.dist-info/
 zipp.py
+*.pdf

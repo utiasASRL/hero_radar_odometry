@@ -21,7 +21,7 @@ def convert_plt_to_tensor():
 def draw_batch(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
     # Draw radar image
-    radar = batch['data'][0].squeeze().numpy()
+    radar = batch['cart'][0].squeeze().numpy()
     plt.subplots()
     plt.imshow(radar, cmap='gray')
     radar_img = convert_plt_to_tensor()
@@ -53,8 +53,8 @@ def draw_batch(batch, out, config):
 def draw_batch_steam(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
     # Draw radar image
-    radar = batch['data'][0].squeeze().numpy()
-    radar_tgt = batch['data'][-1].squeeze().numpy()
+    radar = batch['cart'][0].squeeze().numpy()
+    radar_tgt = batch['cart'][-1].squeeze().numpy()
     plt.imshow(np.concatenate((radar, radar_tgt), axis=1), cmap='gray')
     plt.title('radar src-tgt pair')
     radar_img = convert_plt_to_tensor()
