@@ -40,6 +40,7 @@ def load_radar(example_path, navtech_version=CTS350):
     azimuths = (raw_example_data[:, 8:10].copy().view(np.uint16) / float(encoder_size) * 2 * np.pi).astype(np.float32)
     valid = raw_example_data[:, 10:11] == 255
     fft_data = raw_example_data[:, 11:].astype(np.float32)[:, :, np.newaxis] / 255.
+    fft_data[:, :42] = 0
     fft_data = np.squeeze(fft_data)
 
     return timestamps, azimuths, valid, fft_data, radar_resolution
