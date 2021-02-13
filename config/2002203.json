@@ -1,7 +1,7 @@
 {
     "model": "SteamPoseModel",
     "data_dir": "/h/keenan/oxford-radar-robotcar-dataset/",
-    "log_dir": "/h/keenan/logs/2021-02-11-vector/run2_movingaug_cnn8_res2160_width740/",
+    "log_dir": "/h/keenan/logs/2021-02-11-vector/run5_movingaug_cnn8_res2160_width740/",
     "gpuid": "cuda:0",
     "min_range": 58,
     "radar_resolution": 0.0432,

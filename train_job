@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=train_job
+#SBATCH --job-name=train-steam-%j
 #SBATCH --time=36:00:00
 #SBATCH --output=/h/keenan/slurm_logs/%j-%N-output.out
 #SBATCH --error=/h/keenan/slurm_logs/%j-%N-error.err
@@ -7,7 +7,7 @@
 #SBATCH --partition=rtx6000
 #SBATCH --cpus-per-task=8
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --gres=gpu:1
 #SBATCH --nodes=1
 #SBATCH --qos=normal		# high, deadline

@@ -12,6 +12,9 @@ from datasets.transforms import augmentBatch
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
+print(torch.__version__)
+print(torch.version.cuda)
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 def get_rot(batchi, epoch, rot_list=[0.2, 0.4, 0.8, 1.6, 2.0]):
     if epoch >= 1:
