@@ -13,6 +13,20 @@ from datasets.transforms import augmentBatch
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 
+def get_rot(batchi, epoch, rot_list=[0.2, 0.4, 0.8, 1.6, 2.0]):
+    if epoch >= 1:
+        return rot_list[-1]
+    if 0 <= batchi and batchi < 5000:
+        return rot_list[0]
+    elif 5000 <= batchi and batchi < 10000:
+        return rot_list[1]
+    elif 10000 <= batchi and batchi < 15000:
+        return rot_list[2]
+    elif 15000 <= batchi and batchi < 20000:
+        return rot_list[3]
+    elif 20000 <= batchi:
+        return rot_list[4]
+
 if __name__ == '__main__':
     torch.set_num_threads(8)
     parser = argparse.ArgumentParser()
@@ -22,6 +36,7 @@ if __name__ == '__main__':
     with open(args.config) as f:
         config = json.load(f)
     config['gpuid'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(config['gpuid'])
     train_loader, valid_loader, _ = get_dataloaders(config)
 
     if config['model'] == 'SVDPoseModel':
@@ -30,9 +45,8 @@ if __name__ == '__main__':
         model = SteamPoseModel(config).to(config['gpuid'])
 
     if args.pretrain is not None:
-        model.load_state_dict(torch.load(args.pretrain), strict=False)
-
-    model = torch.nn.DataParallel(model)
+        model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
+    #model = torch.nn.DataParallel(model)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)
@@ -48,6 +62,8 @@ if __name__ == '__main__':
     step = 0
     for epoch in range(config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
+            config['augmentation']['rot_max'] = get_rot(batchi, epoch)
+            monitor.writer.add_scalar('train/rot_max', config['augmentation']['rot_max'], monitor.counter)
             if config['augmentation']['augment']:
                 batch = augmentBatch(batch, config)
             optimizer.zero_grad()

@@ -85,7 +85,7 @@ if __name__ == '__main__':
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)
-        time_used_.extend(time_used_)
+        time_used_.extend(time_used)
         t_err, r_err, err = computeKittiMetrics(T_gt, T_pred, seq_lens)
         print('SEQ: {} : {}'.format(seq_num, seq_names[0]))
         print('KITTI t_err: {} %'.format(t_err))
