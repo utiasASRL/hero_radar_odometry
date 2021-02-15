@@ -51,6 +51,7 @@ if __name__ == '__main__':
         monitor = SteamMonitor(model, valid_loader, config)
     start_epoch = 0
     if ckpt_path is not None:
+        print('Loading from checkpoint: ' + ckpt_path)
         checkpoint = torch.load(ckpt_path, map_location=torch.device(config['gpuid']))
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -58,12 +59,11 @@ if __name__ == '__main__':
         start_epoch = checkpoint['epoch']
         monitor.counter = checkpoint['counter']
     #model = torch.nn.DataParallel(model)
-    if not os.path.isfile(config['log_dir'] + args.config)
+    if not os.path.isfile(config['log_dir'] + args.config):
         os.system('cp ' + args.config + ' ' + config['log_dir'])
 
     model.train()
 
-    step = 0
     for epoch in range(start_epoch, config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
             config['augmentation']['rot_max'] = get_rot(batchi, epoch)
@@ -91,27 +91,26 @@ if __name__ == '__main__':
                 loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
             optimizer.step()
-            step = batchi + epoch * len(train_loader.dataset)
-            if monitor.counter + 1 % self.config['save_rate'] == 0:
+            if (monitor.counter + 1) % config['save_rate'] == 0:
                 with torch.no_grad():
                     model.eval()
                     mname = os.path.join(config['log_dir'], '{}.pt'.format(monitor.counter))
                     print('saving model', mname)
                     torch.save({
-                                'model_state_dict': model.state_dict()
+                                'model_state_dict': model.state_dict(),
                                 'optimizer_state_dict': optimizer.state_dict(),
                                 'scheduler_state_dict': scheduler.state_dict(),
                                 'counter': monitor.counter,
                                 'epoch': epoch,
                                 }, mname)
                     model.train()
-            if monitor.counter + 1 % self.config['backup_rate'] == 0:
+            if (monitor.counter + 1) % config['backup_rate'] == 0:
                 with torch.no_grad():
                     model.eval()
                     mname = os.path.join(config['log_dir'], 'latest.pt')
                     print('saving model', mname)
                     torch.save({
-                                'model_state_dict': model.state_dict()
+                                'model_state_dict': model.state_dict(),
                                 'optimizer_state_dict': optimizer.state_dict(),
                                 'scheduler_state_dict': scheduler.state_dict(),
                                 'counter': monitor.counter,
@@ -119,9 +118,9 @@ if __name__ == '__main__':
                                 }, mname)
                     model.train()
 
-            valid_metric = monitor.step(step, loss, dict_loss, epoch)
+            valid_metric = monitor.step(loss, dict_loss)
             if valid_metric is not None:
                 scheduler.step(valid_metric)
                 monitor.writer.add_scalar('val/learning_rate', get_lr(optimizer), monitor.counter)
-            if step >= config['max_iterations']:
+            if monitor.counter >= config['max_iterations']:
                 break

@@ -54,7 +54,7 @@
     "max_epochs": 3,
     "print_rate": 10,
     "log_rate": 10,
-    "backup_rate": 1000,
+    "backup_rate": 500,
     "save_rate": 5000,
     "val_rate": 5000,
     "vis_num": 6,
