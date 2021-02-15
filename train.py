@@ -50,6 +50,7 @@ if __name__ == '__main__':
         monitor = SteamMonitor(model, valid_loader, config)
     start_epoch = 0
     if ckpt_path is not None:
+        print('Loading from checkpoint: ' + ckpt_path)
         checkpoint = torch.load(ckpt_path, map_location=torch.device(config['gpuid']))
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -57,7 +58,7 @@ if __name__ == '__main__':
         start_epoch = checkpoint['epoch']
         monitor.counter = checkpoint['counter']
     #model = torch.nn.DataParallel(model)
-    if not os.path.isfile(config['log_dir'] + args.config)
+    if not os.path.isfile(config['log_dir'] + args.config):
         os.system('cp ' + args.config + ' ' + config['log_dir'])
 
     model.train()
@@ -87,26 +88,26 @@ if __name__ == '__main__':
                 loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
             optimizer.step()
-            if monitor.counter + 1 % self.config['save_rate'] == 0:
+            if (monitor.counter + 1) % config['save_rate'] == 0:
                 with torch.no_grad():
                     model.eval()
                     mname = os.path.join(config['log_dir'], '{}.pt'.format(monitor.counter))
                     print('saving model', mname)
                     torch.save({
-                                'model_state_dict': model.state_dict()
+                                'model_state_dict': model.state_dict(),
                                 'optimizer_state_dict': optimizer.state_dict(),
                                 'scheduler_state_dict': scheduler.state_dict(),
                                 'counter': monitor.counter,
                                 'epoch': epoch,
                                 }, mname)
                     model.train()
-            if monitor.counter + 1 % self.config['backup_rate'] == 0:
+            if (monitor.counter + 1) % config['backup_rate'] == 0:
                 with torch.no_grad():
                     model.eval()
                     mname = os.path.join(config['log_dir'], 'latest.pt')
                     print('saving model', mname)
                     torch.save({
-                                'model_state_dict': model.state_dict()
+                                'model_state_dict': model.state_dict(),
                                 'optimizer_state_dict': optimizer.state_dict(),
                                 'scheduler_state_dict': scheduler.state_dict(),
                                 'counter': monitor.counter,
