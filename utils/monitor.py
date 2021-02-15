@@ -39,7 +39,7 @@ class MonitorBase(object):
         valid_metric = None
 
         if self.counter % self.config['print_rate'] == 0:
-            print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, loss.detach().cpu().item(), self.dt))
+            print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(self.counter, loss.detach().cpu().item(), self.dt))
 
         if self.counter % self.config['log_rate'] == 0:
             self.writer.add_scalar('train/loss', loss.detach().cpu().item(), self.counter)
@@ -53,13 +53,6 @@ class MonitorBase(object):
                 valid_metric = self.validation()
                 self.model.train()
 
-        if self.counter % self.config['save_rate'] == 0:
-            with torch.no_grad():
-                self.model.eval()
-                mname = os.path.join(self.log_dir, '{}.pt'.format(self.counter))
-                print('saving model', mname)
-                torch.save(self.model.state_dict(), mname)
-                self.model.train()
         return valid_metric
 
     def vis(self, batchi, batch, out):
@@ -141,7 +134,7 @@ class SteamMonitor(MonitorBase):
         valid_metric = None
 
         if self.counter % self.config['print_rate'] == 0:
-            print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(batchi, total_loss.detach().cpu().item(), self.dt))
+            print('Batch: {}\t\t| Loss: {}\t| Step time: {}'.format(self.counter, total_loss.detach().cpu().item(), self.dt))
 
         if self.counter % self.config['log_rate'] == 0:
             self.writer.add_scalar('train/loss', total_loss.detach().cpu().item(), self.counter)
@@ -159,13 +152,6 @@ class SteamMonitor(MonitorBase):
                 # self.model.solver.log_det_thres_flag = False
                 self.model.train()
 
-        if self.counter % self.config['save_rate'] == 0:
-            with torch.no_grad():
-                self.model.eval()
-                mname = os.path.join(self.log_dir, '{}.pt'.format(self.counter))
-                print('saving model', mname)
-                torch.save(self.model.state_dict(), mname)
-                self.model.train()
         return valid_metric
 
     def vis(self, batchi, batch, out):
