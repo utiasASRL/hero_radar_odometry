@@ -31,7 +31,7 @@ class MonitorBase(object):
         """Returns a list of batch indices which we will use for visualization during validation."""
         return np.linspace(0, len(self.valid_loader.dataset) - 1, self.config['vis_num']).astype(np.int32)
 
-    def step(self, batchi, loss, dict_loss):
+    def step(self, loss, dict_loss):
         """At each step of the monitor, we can print, log, validate, or save model information."""
         self.counter += 1
         self.dt = time() - self.current_time
@@ -125,7 +125,7 @@ class SVDMonitor(MonitorBase):
 
 class SteamMonitor(MonitorBase):
 
-    def step(self, batchi, total_loss, dict_loss):
+    def step(self, total_loss, dict_loss):
         """At each step of the monitor, we can print, log, validate, or save model information."""
         self.counter += 1
         self.dt = time() - self.current_time

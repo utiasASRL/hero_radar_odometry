@@ -62,7 +62,6 @@ if __name__ == '__main__':
 
     model.train()
 
-    step = 0
     for epoch in range(start_epoch, config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
             if config['augmentation']['augment']:
@@ -88,7 +87,6 @@ if __name__ == '__main__':
                 loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
             optimizer.step()
-            step = batchi + epoch * len(train_loader.dataset)
             if monitor.counter + 1 % self.config['save_rate'] == 0:
                 with torch.no_grad():
                     model.eval()
@@ -116,9 +114,9 @@ if __name__ == '__main__':
                                 }, mname)
                     model.train()
 
-            valid_metric = monitor.step(step, loss, dict_loss, epoch)
+            valid_metric = monitor.step(loss, dict_loss)
             if valid_metric is not None:
                 scheduler.step(valid_metric)
                 monitor.writer.add_scalar('val/learning_rate', get_lr(optimizer), monitor.counter)
-            if step >= config['max_iterations']:
+            if monitor.counter >= config['max_iterations']:
                 break
