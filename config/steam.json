@@ -5,7 +5,7 @@
     "gpuid": "cuda:0",
     "min_range": 58,
     "radar_resolution": 0.0432,
-    "cart_resolution": 0.2592,
+    "cart_resolution": 0.2160,
     "cart_pixel_width": 640,
     "input_channels": 1,
     "mean_int_mask_mult": 3.0,
@@ -54,12 +54,13 @@
     "max_epochs": 3,
     "print_rate": 10,
     "log_rate": 10,
+    "backup_rate": 1000,
     "save_rate": 5000,
     "val_rate": 5000,
     "vis_num": 6,
     "vis_keypoint_nms": 0,
     "augmentation": {
         "augment": true,
-        "rot_max": 1.6
+        "rot_max": 0.26
     }
 }

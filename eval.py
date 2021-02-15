@@ -45,7 +45,8 @@ if __name__ == '__main__':
         # self.model.solver.log_det_thres_flag = True
     model.to(config['gpuid'])
     assert(args.pretrain is not None)
-    model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
+    checkpoint = torch.load(args.pretrain, map_location=torch.device(config['gpuid']))
+    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     model.eval()
 
     T_gt_ = []

@@ -138,7 +138,8 @@ class OxfordDataset(Dataset):
         _, azimuths, _, polar, _ = load_radar(frame)
         cart = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
-        data = (cart - cart.mean()) / (cart.std() + 1e-8)
+        #data = (cart - cart.mean()) / (cart.std() + 1e-8)
+        data = cart
         polar_mask = mean_intensity_mask(polar, self.mean_int_mask_mult)
         mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
                                         self.config['cart_resolution'],

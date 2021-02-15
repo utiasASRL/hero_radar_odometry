@@ -2,6 +2,7 @@ import os
 import argparse
 import json
 import torch
+import numpy as np
 
 from datasets.oxford import get_dataloaders
 from networks.svd_pose_model import SVDPoseModel
@@ -10,28 +11,17 @@ from utils.utils import supervised_loss, pointmatch_loss, get_lr
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch
 
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
+torch.backends.cudnn.deterministic = True
+torch.manual_seed(0)
+np.random.seed(0)
+torch.set_num_threads(8)
+torch.multiprocessing.set_sharing_strategy('file_system')
 print(torch.__version__)
 print(torch.version.cuda)
-torch.multiprocessing.set_sharing_strategy('file_system')
-
-def get_rot(batchi, epoch, rot_list=[0.2, 0.4, 0.8, 1.6, 2.0]):
-    if epoch >= 1:
-        return rot_list[-1]
-    if 0 <= batchi and batchi < 5000:
-        return rot_list[0]
-    elif 5000 <= batchi and batchi < 10000:
-        return rot_list[1]
-    elif 10000 <= batchi and batchi < 15000:
-        return rot_list[2]
-    elif 15000 <= batchi and batchi < 20000:
-        return rot_list[3]
-    elif 20000 <= batchi:
-        return rot_list[4]
 
 if __name__ == '__main__':
-    torch.set_num_threads(8)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
@@ -47,23 +37,34 @@ if __name__ == '__main__':
     elif config['model'] == 'SteamPoseModel':
         model = SteamPoseModel(config).to(config['gpuid'])
 
-    if args.pretrain is not None:
-        model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
-    #model = torch.nn.DataParallel(model)
+    ckpt_path = None
+    if os.path.isfile(config['log_dir'] + 'latest.pt'):
+        ckpt_path = config['log_dir'] + 'latest.pt'
+    elif args.pretrain is not None:
+        ckpt_path = args.pretrain
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)
-
     if config['model'] == 'SVDPoseModel':
         monitor = SVDMonitor(model, valid_loader, config)
     elif config['model'] == 'SteamPoseModel':
         monitor = SteamMonitor(model, valid_loader, config)
-    os.system('cp ' + args.config + ' ' + config['log_dir'])
+    start_epoch = 0
+    if ckpt_path is not None:
+        checkpoint = torch.load(ckpt_path, map_location=torch.device(config['gpuid']))
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch']
+        monitor.counter = checkpoint['counter']
+    #model = torch.nn.DataParallel(model)
+    if not os.path.isfile(config['log_dir'] + args.config)
+        os.system('cp ' + args.config + ' ' + config['log_dir'])
 
     model.train()
 
     step = 0
-    for epoch in range(config['max_epochs']):
+    for epoch in range(start_epoch, config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
             config['augmentation']['rot_max'] = get_rot(batchi, epoch)
             monitor.writer.add_scalar('train/rot_max', config['augmentation']['rot_max'], monitor.counter)
@@ -91,7 +92,34 @@ if __name__ == '__main__':
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
             optimizer.step()
             step = batchi + epoch * len(train_loader.dataset)
-            valid_metric = monitor.step(step, loss, dict_loss)
+            if monitor.counter + 1 % self.config['save_rate'] == 0:
+                with torch.no_grad():
+                    model.eval()
+                    mname = os.path.join(config['log_dir'], '{}.pt'.format(monitor.counter))
+                    print('saving model', mname)
+                    torch.save({
+                                'model_state_dict': model.state_dict()
+                                'optimizer_state_dict': optimizer.state_dict(),
+                                'scheduler_state_dict': scheduler.state_dict(),
+                                'counter': monitor.counter,
+                                'epoch': epoch,
+                                }, mname)
+                    model.train()
+            if monitor.counter + 1 % self.config['backup_rate'] == 0:
+                with torch.no_grad():
+                    model.eval()
+                    mname = os.path.join(config['log_dir'], 'latest.pt')
+                    print('saving model', mname)
+                    torch.save({
+                                'model_state_dict': model.state_dict()
+                                'optimizer_state_dict': optimizer.state_dict(),
+                                'scheduler_state_dict': scheduler.state_dict(),
+                                'counter': monitor.counter,
+                                'epoch': epoch,
+                                }, mname)
+                    model.train()
+
+            valid_metric = monitor.step(step, loss, dict_loss, epoch)
             if valid_metric is not None:
                 scheduler.step(valid_metric)
                 monitor.writer.add_scalar('val/learning_rate', get_lr(optimizer), monitor.counter)

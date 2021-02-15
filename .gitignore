@@ -93,3 +93,4 @@ wheel/
 zipp-3.4.0.dist-info/
 zipp.py
 *.pdf
+config/run*.json
