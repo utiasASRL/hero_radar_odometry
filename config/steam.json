@@ -42,7 +42,8 @@
         "topk_backup": 30,
         "log_det_thres_flag": false,
         "log_det_thres_val": 4.0,
-        "log_det_topk": 20
+        "log_det_topk": 20,
+        "extrinsic": false
     },
     "lr": 0.00001,
     "weight_decay": 0,

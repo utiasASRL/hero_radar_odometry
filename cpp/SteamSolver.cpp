@@ -3,7 +3,8 @@
 #include "SE2VelPriorEval.hpp"
 
 // Reset trajectory to identity poses and zero velocities
-void SteamSolver::resetTraj() {
+void SteamSolver::resetTraj(const p::object& times_list) {
+    std::vector<boost::int64_t> times_vec = toStdVector<boost::int64_t>(times_list);
     Eigen::Matrix<double, 4, 4> eig_identity = Eigen::Matrix<double, 4, 4>::Identity();
     lgmath::se3::Transformation T_identity(eig_identity);
     Eigen::Matrix<double, 6, 1> zero_vel;
@@ -11,7 +12,7 @@ void SteamSolver::resetTraj() {
     states_.clear();
     for (uint k = 0; k < window_size_; ++k) {
         TrajStateVar temp;
-        temp.time = steam::Time(k * dt_);
+        temp.time = steam::Time(times_vec[k]*boost::int64_t(1e3));
         temp.pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_identity));
         temp.velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(zero_vel));
         states_.push_back(temp);
@@ -19,7 +20,9 @@ void SteamSolver::resetTraj() {
 }
 
 // Slide window and initialize newest frame with constant velocity
-void SteamSolver::slideTraj() {
+void SteamSolver::slideTraj(const p::object& times_list) {
+    std::vector<boost::int64_t> times_vec = toStdVector<boost::int64_t>(times_list);
+
     // drop first frame
     states_.pop_front();
 
@@ -35,7 +38,7 @@ void SteamSolver::slideTraj() {
     Eigen::Matrix<double, 6, 1> xi = dt_ * states_.back().velocity->getValue();
 
     TrajStateVar temp;
-    temp.time = states_.back().time + steam::Time(dt_);
+    temp.time = steam::Time(times_vec.back()*boost::int64_t(1e3));
     temp.pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(
         lgmath::se3::Transformation(xi)*T_km1_i));
     temp.velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(
