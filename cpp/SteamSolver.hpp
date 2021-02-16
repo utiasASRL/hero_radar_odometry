@@ -19,12 +19,10 @@ public:
                    0.0021394075786459413462958778495704;
         Qc_inv_.setZero();
         Qc_inv_.diagonal() = 1.0/Qc_diag;
-        // Initialize trajectory
-        resetTraj();
     }
     // initialization
-    void resetTraj();
-    void slideTraj();
+    void resetTraj(const p::object& times_list);
+    void slideTraj(const p::object& times_list);
     void setQcInv(const np::ndarray& Qc_inv_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
     // solve

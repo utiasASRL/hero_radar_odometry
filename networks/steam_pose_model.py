@@ -6,7 +6,7 @@ from networks.unet import UNet
 from networks.keypoint import Keypoint
 from networks.softmax_ref_matcher import SoftmaxRefMatcher
 import cpp.build.SteamSolver as steamcpp
-from utils.utils import convert_to_radar_frame
+from utils.utils import convert_to_radar_frame, get_inverse_tf
 
 class SteamPoseModel(torch.nn.Module):
     """
@@ -55,7 +55,7 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_ints = self.mask_intensity_filter(mask[tgt_ids])
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
-                                                              keypoint_ints)
+                                                              keypoint_ints, batch['times'])
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
@@ -70,6 +70,7 @@ class SteamPoseModel(torch.nn.Module):
         point_loss = 0
         logdet_loss = 0
         unweighted_point_loss = 0
+        T_vs = torch.from_numpy(self.solver.T_vs).to(self.gpuid).unsqueeze(0)
 
         # loop through each batch
         bcount = 0
@@ -91,7 +92,11 @@ class SteamPoseModel(torch.nn.Module):
                 weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
                 ones = torch.ones(weights_mat.shape).to(self.gpuid)
 
-                # get R_21 and t_12_in_2
+                # incorporate extrinsic T_vs
+                points1 = T_vs[:, :3, :3]@points1 + T_vs[:, :3, 3:4]
+                points2 = T_vs[:, :3, :3]@points2 + T_vs[:, :3, 3:4]
+
+                # get R_21 and t_12_in_2 (vehicle frame)
                 R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
                 t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
                 error = points2 - (R_21 @ points1 + t_12_in_2)
@@ -157,7 +162,10 @@ class SteamSolver():
         # z weight value
         # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
         self.z_weight = 9.2103
-        # state variables
+        self.T_vs = np.identity(4, dtype=np.float32)
+        if config['steam']['extrinsic']:
+            self.T_vs[0, 3] = 0.86 + 0.17
+        # state variables (vehicle poses, not sensor poses!)
         self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
                              (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
@@ -168,7 +176,7 @@ class SteamSolver():
                                                self.window_size, config['steam']['zero_vel_prior'])
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
-    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
+    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, frame_times):
         """
             keypoint_coords: B*(W-1)x400x2
             pseudo_coords: B*(W-1)x400x2
@@ -179,18 +187,22 @@ class SteamSolver():
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
         self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
-        if self.sliding_flag:
-            self.solver_cpp.slideTraj()
-        else:
-            self.solver_cpp.resetTraj()
+
         num_points = keypoint_coords.size(1)
         zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
 
         R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
         t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
+
         # loop through each batch
         for b in range(self.batch_size):
-            i = b * (self.window_size-1)    # first index of window
+            j = b * self.window_size    # first index of window
+            if self.sliding_flag:
+                self.solver_cpp.slideTraj(frame_times[j:j+self.window_size, 0, 0].tolist())
+            else:
+                self.solver_cpp.resetTraj(frame_times[j:j+self.window_size, 0, 0].tolist())
+
+            i = b * (self.window_size-1)    # first index of window (not including reference)
             points1 = []
             points2 = []
             weights = []
@@ -215,21 +227,23 @@ class SteamSolver():
                 else:
                     ids = np.arange(weights_temp.size(0)).squeeze()
                 # append
-                points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)]
-                points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)]
+                points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)@self.T_vs[:3, :3].T + self.T_vs[:3, 3:4].T]
+                points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)@self.T_vs[:3, :3].T + self.T_vs[:3, 3:4].T]
                 weights += [weights_temp[ids].detach().cpu().numpy()]
             # solver
             self.solver_cpp.setMeas(points2, points1, weights)
             self.solver_cpp.optimize()
-            # get pose output
+            # get pose output (vehicle poses)
             self.solver_cpp.getPoses(self.poses[b])
             self.solver_cpp.getVelocities(self.vels[b])
-            # sigmapoints output
+            # sigmapoints output (vehicle poses)
             if self.sigmapoints_flag:
                 self.solver_cpp.getSigmapoints2NP1(self.poses_sp[b])
-            # set output
-            R_tgt_src[b] = self.poses[b, :, :3, :3]
-            t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
+
+            # set output (sensor poses)
+            sensor_poses = np.expand_dims(get_inverse_tf(self.T_vs), 0)@self.poses[b]@np.expand_dims(self.T_vs, 0)
+            R_tgt_src[b] = sensor_poses[:, :3, :3]
+            t_src_tgt_in_tgt[b] = sensor_poses[:, :3, 3:4]
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
 
@@ -263,7 +277,8 @@ class SteamSolver():
 
             if self.T_aug:  # if list is not empty
                 Rot = self.T_aug[window_id].to(w.device)[:2, :2].unsqueeze(0)
-                A2x2 = Rot.transpose(1, 2) @ A2x2 @ Rot
+                R_vs = torch.from_numpy(self.T_vs[:2, :2]).to(w.device).unsqueeze(0) # should be identity, but in case it isn't...
+                A2x2 = R_vs @ Rot.transpose(1, 2) @ A2x2 @ Rot @ R_vs.transpose(1, 2)
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
             A[:, 0:2, 0:2] = A2x2
