@@ -46,7 +46,14 @@ if __name__ == '__main__':
     model.to(config['gpuid'])
     assert(args.pretrain is not None)
     checkpoint = torch.load(args.pretrain, map_location=torch.device(config['gpuid']))
-    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+    failed = False
+    try:
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+    except Exception as e:
+        print(e)
+        failed = True
+    if failed:
+        model.load_state_dict(checkpoint, strict=False)
     model.eval()
 
     T_gt_ = []
@@ -104,7 +111,7 @@ if __name__ == '__main__':
 
     t_err, r_err = getStats(err_)
     print('Average KITTI metrics over all test sequences:')
-    print('KITTI t_err: {} %'.format(t_err))
-    print('KITTI r_err: {} deg/m'.format(r_err))
+    print('KITTI t_err: {} %'.format(t_err * 100))
+    print('KITTI r_err: {} deg/m'.format(r_err * 180 / np.pi))
     saveKittiErrors(err_, root + "kitti_err.obj")
 
