@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=eval_10
-#SBATCH --time=36:00:00
+#SBATCH --job-name=eval_run10_85k_70
+#SBATCH --time=12:00:00
 #SBATCH --output=/h/keenan/slurm_logs/%j-%N-output.out
 #SBATCH --error=/h/keenan/slurm_logs/%j-%N-error.err
 #SBATCH --open-mode=append
-#SBATCH --partition=rtx6000
+#SBATCH --partition=p100
 #SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=32G
@@ -18,4 +18,6 @@
 module use /pkgs/environment-modules/
 #module load pytorch-36
 nvidia-smi
-python eval.py --pretrain /h/keenan/logs/2021-02-13/run10_aug026_cnn8_res1728_width800_window3/30000.pt --config /h/keenan/logs/2021-02-13/run10_aug026_cnn8_res1728_width800_window3/run10.json
+#python eval.py --pretrain /h/keenan/logs/2021-02-08/run4_aug10_cnn12_window3_res2592_nobundle/60000.pt --config /h/keenan/logs/2021-02-08/run4_aug10_cnn12_window3_res2592_nobundle/eval70.json
+
+python eval.py --pretrain /h/keenan/logs/2021-02-08/run10_aug026_cnn8_window3_res2160/85000.pt --config /h/keenan/logs/2021-02-08/run10_aug026_cnn8_window3_res2160/eval70.json
