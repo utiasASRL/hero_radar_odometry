@@ -11,9 +11,9 @@ from utils.utils import supervised_loss, pointmatch_loss, get_lr
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch
 
-torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
-torch.backends.cudnn.deterministic = True
+#torch.backends.cudnn.deterministic = True
 torch.manual_seed(0)
 np.random.seed(0)
 torch.set_num_threads(8)
@@ -91,7 +91,7 @@ if __name__ == '__main__':
             if (monitor.counter + 1) % config['save_rate'] == 0:
                 with torch.no_grad():
                     model.eval()
-                    mname = os.path.join(config['log_dir'], '{}.pt'.format(monitor.counter))
+                    mname = os.path.join(config['log_dir'], '{}.pt'.format(monitor.counter + 1))
                     print('saving model', mname)
                     torch.save({
                                 'model_state_dict': model.state_dict(),
