@@ -66,8 +66,6 @@ if __name__ == '__main__':
 
     for epoch in range(start_epoch, config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
-            config['augmentation']['rot_max'] = get_rot(batchi, epoch)
-            monitor.writer.add_scalar('train/rot_max', config['augmentation']['rot_max'], monitor.counter)
             if config['augmentation']['augment']:
                 batch = augmentBatch(batch, config)
             optimizer.zero_grad()
