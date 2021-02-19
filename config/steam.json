@@ -62,5 +62,7 @@
     "augmentation": {
         "augment": true,
         "rot_max": 0.26
-    }
+    },
+    "upsample_highvel": true,
+    "max_upsample": 10
 }
