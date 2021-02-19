@@ -108,6 +108,7 @@ class OxfordDataset(Dataset):
         self.frame_angvels = []
         self.seq_lens = []
         self.mean_int_mask_mult = config['mean_int_mask_mult']
+        self.upsamplerates = []
         for seq in self.sequences:
             seq_frames = get_frames(self.data_dir + seq + '/radar/')
             seq_frames = get_frames_with_gt(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
@@ -117,6 +118,39 @@ class OxfordDataset(Dataset):
             self.frames.extend(seq_frames)
             self.frame_speeds.extend(seq_frame_speeds)
             self.frame_angvels.extend(seq_frame_angs)
+        if config['upsample_highvel']:
+            self.get_data_upsample_rates()
+
+    def get_data_upsample_rates(self):
+        self.upsamplerates = self.frame_speeds.copy()
+        num_bins = 20
+        med = len(self.frame_speeds) / num_bins
+        vhist, vbins = np.histogram(self.frame_speeds, num_bins)
+        whist, wbins = np.histogram(self.frame_angvels, num_bins)
+        vupbins = med / (vhist + 1e-8)
+        wupbins = med / (whist + 1e-8)
+        for i, v in enumerate(self.frame_speeds):
+            w = self.frame_angvels[i]
+            vupsample = 0
+            wupsample = 0
+            for j in range(num_bins):
+                if vbins[j] <= v and v < vbins[j + 1]:
+                    vupsample = vupbins[j]
+                    break
+            for j in range(num_bins):
+                if wbins[j] <= w and w < wbins[j + 1]:
+                    wupsample = wupbins[j]
+                    break
+            upsample = max(vupsample, wupsample)
+            upsample = min(upsample, self.config['max_upsample'])
+            if upsample >= 2:
+                ups = int(np.floor(upsample - 1))
+                self.upsamplerates[i] = ups
+            elif 1 < upsample and upsample < 2:
+                repeat_flip = np.random.binomial(size=1, n=1, p=(upsample - 1))
+                self.upsamplerates[i] = repeat_flip
+            else:
+                self.upsamplerates[i] = 0
 
     def get_sequences_split(self, sequences, split):
         """Retrieves a list of sequence names depending on train/validation/test split."""
@@ -169,7 +203,8 @@ def get_dataloaders(config):
     train_dataset = OxfordDataset(config, 'train')
     valid_dataset = OxfordDataset(vconfig, 'validation')
     test_dataset = OxfordDataset(vconfig, 'test')
-    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens)
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens,
+                                             train_dataset.upsamplerates)
     valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens)
     test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens)
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
