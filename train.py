@@ -5,6 +5,7 @@ import torch
 import numpy as np
 
 from datasets.oxford import get_dataloaders
+from datasets.boreas import get_dataloaders_boreas
 from networks.svd_pose_model import SVDPoseModel
 from networks.steam_pose_model import SteamPoseModel
 from utils.utils import supervised_loss, pointmatch_loss, get_lr
@@ -29,7 +30,10 @@ if __name__ == '__main__':
     with open(args.config) as f:
         config = json.load(f)
 
-    train_loader, valid_loader, _ = get_dataloaders(config)
+    if config['dataset'] == 'oxford':
+        train_loader, valid_loader, _ = get_dataloaders(config)
+    elif config['dataset'] == 'boreas':
+        train_loader, valid_loader, _ = get_dataloaders(config)
 
     if config['model'] == 'SVDPoseModel':
         model = SVDPoseModel(config).to(config['gpuid'])

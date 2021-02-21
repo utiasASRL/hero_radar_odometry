@@ -61,7 +61,10 @@ if __name__ == '__main__':
         T_pred = []
         timestamps = []
         config['test_split'] = [seq_num]
-        _, _, test_loader = get_dataloaders(config)
+        if config['dataset'] == 'oxford':
+            _, _, test_loader = get_dataloaders(config)
+        elif config['dataset'] == 'boreas':
+            _, _, test_loader = get_dataloaders_boreas(config)
         seq_lens = test_loader.dataset.seq_lens
         print(seq_lens)
         seq_names = test_loader.dataset.sequences
