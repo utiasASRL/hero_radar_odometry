@@ -213,3 +213,14 @@ void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
         }  // end for a
     }  // end for i
 }
+
+void SteamSolver::getFirstPoseVar(np::ndarray& variance) {
+    // query covariance at once
+    std::vector<steam::StateKey> keys;
+    keys.push_back(states_.at(i).pose->getKey());
+    steam::BlockMatrix cov_blocks = solver_->queryCovarianceBlock(keys);
+    Eigen::Matrix<double, 6, 6> cov = cov_blocks.at(0, 0);
+
+    for (int i = 0; i < 6; ++i)
+        variance[i-1] = float(cov(i, i));
+}

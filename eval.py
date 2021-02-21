@@ -59,6 +59,9 @@ if __name__ == '__main__':
         time_used = []
         T_gt = []
         T_pred = []
+        variance = []
+        batch_vis = []
+        out_vis = []
         timestamps = []
         config['test_split'] = [seq_num]
         _, _, test_loader = get_dataloaders(config)
@@ -72,6 +75,9 @@ if __name__ == '__main__':
                 print('Eval Batch {} / {}: {:.2}s'.format(batchi, len(test_loader), np.mean(time_used[-config['print_rate']:])))
             with torch.no_grad():
                 out = model(batch)
+            if batchi % 1000 == 0:
+                batch_vis.append(batch)
+                out_vis.append(out)
             if batchi == len(test_loader) - 1:
                 # append entire window
                 for w in range(batch['T_21'].size(0)-1):
@@ -84,6 +90,7 @@ if __name__ == '__main__':
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
                 T_pred.append(get_T_ba(out, a=w, b=w+1))
                 timestamps.append(batch['times'][w].numpy().squeeze())
+                variance.append(model.solver.first_pose_var[0])
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)
@@ -94,7 +101,8 @@ if __name__ == '__main__':
         print('KITTI r_err: {} deg/m'.format(r_err))
         err_.extend(err)
         save_in_yeti_format(T_gt, T_pred, timestamps, seq_lens, seq_names, root)
-        pickle.dump([T_gt, T_pred, timestamps], open(root + 'odom' + seq_names[0] + '.obj', 'wb'))
+        pickle.dump([T_gt, T_pred, timestamps, variance], open(root + 'odom' + seq_names[0] + '.obj', 'wb'))
+        pickle.dump([batch_vis, out_vis], open(root + 'odom_vis' + seq_names[0] + '.obj', 'wb'))
         T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
         fname = root + seq_names[0] + '.pdf'
         plot_sequences(T_gt, T_pred, seq_lens, returnTensor=False, T_icra=T_icra, savePDF=True, fnames=[fname])

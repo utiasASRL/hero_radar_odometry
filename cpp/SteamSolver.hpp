@@ -33,6 +33,7 @@ public:
     void getPoses(np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
     void getSigmapoints2NP1(np::ndarray& sigma_T);
+    void getFirstPoseVar(np::ndarray& variance);
 
 private:
     // Solver
@@ -65,7 +66,8 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
-        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
+        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1
+        .def("getFirstPoseVar", &SteamSolver::getFirstPoseVar);
 }
 
 #endif  // STEAMSOLVER_HPP

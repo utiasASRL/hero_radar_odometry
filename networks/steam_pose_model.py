@@ -167,6 +167,8 @@ class SteamSolver():
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
                                                self.window_size, config['steam']['zero_vel_prior'])
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
+        self.get_variance = False
+        self.first_pose_var = np.zeros((self.batch_size, 6), dtype=np.float32)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
         """
@@ -227,6 +229,9 @@ class SteamSolver():
             # sigmapoints output
             if self.sigmapoints_flag:
                 self.solver_cpp.getSigmapoints2NP1(self.poses_sp[b])
+            # variance output
+            if self.get_variance:
+                self.solver_cpp.getFirstPoseVar(self.first_pose_var[b])
             # set output
             R_tgt_src[b] = self.poses[b, :, :3, :3]
             t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
