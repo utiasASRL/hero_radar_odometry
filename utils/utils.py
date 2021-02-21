@@ -48,7 +48,6 @@ def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
     loss_fn = torch.nn.L1Loss()
     R_loss = alpha * loss_fn(torch.matmul(R_pred.transpose(2, 1), R), identity)
-    # R_loss = alpha * loss_fn(R_pred @ R, identity)
     t_loss = 1.0 * loss_fn(t_pred, t)
     svd_loss = R_loss + t_loss
     return svd_loss, R_loss, t_loss
@@ -304,4 +303,4 @@ def get_T_ba(out, a, b):
     T_a0 = np.eye(4)
     T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
     T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
-    return T_b0 @ get_inverse_tf(T_a0)
+    return np.matmul(T_b0, get_inverse_tf(T_a0))

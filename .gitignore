@@ -4,3 +4,5 @@
 cpp/build/*
 results/*
 *.pdf
+scripts/*
+plot_odometry.py

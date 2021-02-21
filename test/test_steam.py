@@ -14,7 +14,7 @@ class TestSteam(unittest.TestCase):
         R_gt = torch.eye(3)
         R_gt[:2, :2] = torch.tensor([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
         t_gt = torch.tensor([[1], [2], [1]])
-        out = R_gt@src + t_gt
+        out = torch.bmm(R_gt, src) + t_gt
 
         # points must be list of N x 3
         p2_list = [out.T.detach().cpu().numpy()]
@@ -52,7 +52,7 @@ class TestSteam(unittest.TestCase):
         R_gt = torch.eye(2)
         R_gt[:2, :2] = torch.tensor([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
         t_gt = torch.tensor([[1], [2]])
-        out = R_gt@src + t_gt
+        out = torch.bmm(R_gt, src) + t_gt
         zeros_vec = np.zeros((N, 1), dtype=np.float32)
 
         # points must be list of N x 3

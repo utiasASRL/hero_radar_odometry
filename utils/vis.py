@@ -114,7 +114,7 @@ def draw_batch_steam(batch, out, config):
     tgt_p = out['tgt'][-1].squeeze().T
     R_tgt_src = out['R'][0, -1, :2, :2]
     t_st_in_t = out['t'][0, -1, :2, :]
-    error = tgt_p - (R_tgt_src @ src_p + t_st_in_t)
+    error = tgt_p - (torch.bmm(R_tgt_src, src_p) + t_st_in_t)
     # mah = torch.sqrt(torch.sum(error * error * torch.exp(out['match_weights'][-1]), dim=0).squeeze())
     error2_sqrt = torch.sqrt(torch.sum(error * error, dim=0).squeeze())
 
@@ -174,15 +174,15 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
                 y_icra.append(T_icra_temp[1, 3])
 
         plt.figure(figsize=(10, 10), tight_layout=True)
-        plt.grid(which='both', linestyle='--', alpha=0.5)
+        plt.grid(color='k', which='both', linestyle='--', alpha=0.75, dashes=(8.5, 8.5))
         plt.axes().set_aspect('equal')
         plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT')
-        plt.plot(x_pred, y_pred, 'r', linewidth=2.5, label='HERO')
         if len(x_icra) > 0 and len(y_icra) > 0:
-            plt.plot(x_icra, y_icra, 'g', linewidth=2.5, label='YETI')
+            plt.plot(x_icra, y_icra, 'r', linewidth=2.5, label='MC-RANSAC')
+        plt.plot(x_pred, y_pred, 'b', linewidth=2.5, label='HERO')
         plt.xlabel('x (m)', fontsize=16)
         plt.ylabel('y (m)', fontsize=16)
-        plt.legend(loc="upper left", fontsize='small')
+        plt.legend(loc="upper left", edgecolor='k', fancybox=False)
         if savePDF and fnames is not None:
             plt.savefig(fnames[seq_i], bbox_inches='tight', pad_inches=0.0)
         if returnTensor:

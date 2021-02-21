@@ -94,8 +94,8 @@ class SteamPoseModel(torch.nn.Module):
                 # get R_21 and t_12_in_2
                 R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
                 t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
-                error = points2 - (R_21 @ points1 + t_12_in_2)
-                mah2_error = error.transpose(1, 2)@weights_mat@error
+                error = points2 - (torch.bmm(R_21, points1) + t_12_in_2)
+                mah2_error = torch.bmm(torch.bmm(error.tranpose(1, 2), weights_mat), error)
 
                 # error threshold
                 errorT = self.mah_thres**2
@@ -106,25 +106,29 @@ class SteamPoseModel(torch.nn.Module):
 
                 if ids.squeeze().nelement() <= 1:
                     print('Warning: MAH threshold output has 1 or 0 elements.')
-                    error2 = error.transpose(1, 2)@error
+                    error2 = torch.bmm(error.transpose(1, 2), error)
                     _, ids = torch.topk(error2.squeeze(), self.topk_backup, largest=False)
 
                 # squared mah error
                 if self.expect_approx_opt == 0:
                     # only mean
-                    point_loss += torch.mean(error[ids].transpose(1, 2)@weights_mat[ids]@error[ids])
-                    unweighted_point_loss += torch.mean(error[ids].transpose(1, 2) @ ones[ids] @ error[ids])
+                    ploss = torch.bmm(torch.bmm(error[ids].transpose(1, 2), weights_mat[ids]), error[ids])
+                    point_loss += torch.mean(ploss)
+                    uloss = torch.bmm(torch.bmm(error[ids].transpose(1, 2), ones[ids]), error[ids])
+                    unweighted_point_loss += torch.mean(uloss)
                 elif self.expect_approx_opt == 1:
                     # sigmapoints
                     Rsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, :3]).to(self.gpuid).unsqueeze(1)  # s x 1 x 3 x 3
                     tsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, 3:4]).to(self.gpuid).unsqueeze(1) # s x 1 x 3 x 1
 
                     points2 = points2[ids].unsqueeze(0)  # 1 x n x 3 x 1
-                    points1_in_2 = Rsp@(points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
+                    points1_in_2 = torch.bmm(Rsp, points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
                     error = points2 - points1_in_2  # s x n x 3 x 1
-                    temp = torch.sum(error.transpose(2, 3)@weights_mat[ids].unsqueeze(0)@error, dim=0)/Rsp.size(0)
-                    unweighted_point_loss += torch.mean(error.transpose(2, 3) @ ones[ids].unsqueeze(0) @ error)
-                    point_loss += torch.mean(temp)
+                    uloss = torch.bmm(torch.bmm(error.transpose(2, 3), ones[ids].unsqueeze(0)), error)
+                    unweighted_point_loss += torch.mean(uloss)
+                    ploss = torch.bmm(torch.bmm(error.transpose(2, 3), weights_mat[ids].unsqueeze(0)), error)
+                    ploss = torch.sum(ploss, dim=0) / Rsp.size(0)
+                    point_loss += torch.mean(ploss)
                 else:
                     raise NotImplementedError('Steam loss method not implemented!')
 
@@ -259,11 +263,11 @@ class SteamSolver():
             D = torch.zeros(w.size(0), 4, device=w.device)
             D[:, (0, 3)] = torch.exp(w[:, 1:])
             D = D.reshape((-1, 2, 2))
-            A2x2 = L @ D @ L.transpose(1, 2)
+            A2x2 = torch.bmm(torch.bmm(L, D), L.transpose(1, 2))
 
             if self.T_aug:  # if list is not empty
                 Rot = self.T_aug[window_id].to(w.device)[:2, :2].unsqueeze(0)
-                A2x2 = Rot.transpose(1, 2) @ A2x2 @ Rot
+                A2x2 = torch.bmm(torch.bmm(Rot.transpose(1, 2), A2x2), Rot)
 
             A = torch.zeros(w.size(0), 3, 3, device=w.device)
             A[:, 0:2, 0:2] = A2x2
