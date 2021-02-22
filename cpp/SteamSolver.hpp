@@ -66,7 +66,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
-        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1
+        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1)
         .def("getFirstPoseVar", &SteamSolver::getFirstPoseVar);
 }
 

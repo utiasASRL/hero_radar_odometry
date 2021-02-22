@@ -38,6 +38,7 @@ if __name__ == '__main__':
         model = SteamPoseModel(config).to(config['gpuid'])
         model.solver.sliding_flag = True
         # self.model.solver.log_det_thres_flag = True
+        model.solver.get_variance = True
     assert(args.pretrain is not None)
     checkpoint = torch.load(args.pretrain, map_location=torch.device(config['gpuid']))
     failed = False
@@ -103,9 +104,9 @@ if __name__ == '__main__':
         save_in_yeti_format(T_gt, T_pred, timestamps, seq_lens, seq_names, root)
         pickle.dump([T_gt, T_pred, timestamps, variance], open(root + 'odom' + seq_names[0] + '.obj', 'wb'))
         pickle.dump([batch_vis, out_vis], open(root + 'odom_vis' + seq_names[0] + '.obj', 'wb'))
-        T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
+        # T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
         fname = root + seq_names[0] + '.pdf'
-        plot_sequences(T_gt, T_pred, seq_lens, returnTensor=False, T_icra=T_icra, savePDF=True, fnames=[fname])
+        plot_sequences(T_gt, T_pred, seq_lens, returnTensor=False, T_icra=None, savePDF=True, fnames=[fname])
 
     print('time_used: {}'.format(sum(time_used_) / len(time_used_)))
     results = computeMedianError(T_gt_, T_pred_)
