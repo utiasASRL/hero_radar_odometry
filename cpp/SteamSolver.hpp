@@ -33,6 +33,8 @@ public:
     void getPoses(np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
     void getSigmapoints2NP1(np::ndarray& sigma_T);
+    void train() {eval = false;}
+    void eval() {eval = true;}
 
 private:
     // Solver
@@ -50,6 +52,7 @@ private:
     unsigned int window_size_;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
     bool zero_vel_prior_flag_ = false;
+    bool eval = false;
 };
 
 // boost wrapper
@@ -65,6 +68,8 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
+        .def("train", &SteamSolver::train)
+        .def("eval", &SteamSolver::eval)
         .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
 }
 
