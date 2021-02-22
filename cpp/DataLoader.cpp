@@ -23,32 +23,36 @@ void DataLoader::load_radar(const std::string path, np::ndarray& timestamps, np:
     }
 }
 
-static double get_azimuth_index(const np::ndarray& azimuths, double azimuth) {
+static double get_azimuth_index(std::vector<float>& azimuths, double azimuth) {
     double mind = 1000;
     double closest = 0;
-    for (uint i = 0; i < num_azimuths; ++i) {
-        double d = fabs(azimuths[i][0] - azimuth);
+    for (uint i = 0; i < azimuths.size(); ++i) {
+        double d = fabs(azimuths[i] - azimuth);
         if (d < mind) {
             mind = d;
             closest = i;
         }
     }
-    if (azimuths[closest][0] < azimuth) {
+    if (azimuths[closest] < azimuth) {
         double delta = 0;
-        if (closest < M - 1)
-            delta = (azimuth - azimuths[closest][0]) / (azimuths[closest + 1][0] - azimuths[closest][0]);
+        if (closest < azimuths.size() - 1)
+            delta = (azimuth - azimuths[closest]) / (azimuths[closest + 1] - azimuths[closest]);
         closest += delta;
-    } else if (azimuths[closest][0] > azimuth){
+    } else if (azimuths[closest] > azimuth){
         double delta = 0;
         if (closest > 0)
-            delta = (azimuths[closest][0] - azimuth) / (azimuths[closest][0] - azimuths[closest - 1][0]);
+            delta = (azimuths[closest] - azimuth) / (azimuths[closest] - azimuths[closest - 1]);
         closest -= delta;
     }
     return closest;
 }
 
 // azimuths: N x 1, fft_data: N x R, cart: W x W need to be sized correctly by the python user.
-void DataLoader::polar_to_cartesian(const np::ndarray& azimuths, const np::ndarray& fft_data, np::ndarray& cart) {
+void DataLoader::polar_to_cartesian(const np::ndarray& azimuths_np, const np::ndarray& fft_data, np::ndarray& cart) {
+    std::vector<float> azimuths(num_azimuths, 0);
+    for (uint i = 0; i < num_azimuths; ++i) {
+        azimuths[i] = p::extract<float>(azimuths_np[i][0]);
+    }
     float cart_min_range = (cart_pixel_width / 2) * cart_resolution;
     if (cart_pixel_width % 2 == 0)
         cart_min_range = (cart_pixel_width / 2 - 0.5) * cart_resolution;
@@ -71,7 +75,7 @@ void DataLoader::polar_to_cartesian(const np::ndarray& azimuths, const np::ndarr
     cv::Mat range = cv::Mat::zeros(cart_pixel_width, cart_pixel_width, CV_32F);
     cv::Mat angle = cv::Mat::zeros(cart_pixel_width, cart_pixel_width, CV_32F);
 
-    double azimuth_step = azimuths[1][0] - azimuths[0][0];
+    double azimuth_step = azimuths[1] - azimuths[0];
 #pragma omp parallel for collapse(2)
     for (int i = 0; i < range.rows; ++i) {
         for (int j = 0; j < range.cols; ++j) {
@@ -87,7 +91,7 @@ void DataLoader::polar_to_cartesian(const np::ndarray& azimuths, const np::ndarr
             if (navtech_version == CIR204) {
                 angle.at<float>(i, j) = get_azimuth_index(azimuths, theta);
             } else {
-                angle.at<float>(i, j) = (theta - azimuths[0][0]) / azimuth_step;
+                angle.at<float>(i, j) = (theta - azimuths[0]) / azimuth_step;
             }
         }
     }
@@ -95,16 +99,16 @@ void DataLoader::polar_to_cartesian(const np::ndarray& azimuths, const np::ndarr
     cv::Mat polar = cv::Mat::zeros(num_azimuths, range_bins, CV_32F);
     for (uint i = 0; i < num_azimuths; ++i) {
         for (uint j = 0; j < range_bins; ++j) {
-            polar.at<float>(i, j) = fft_data[i][j];
+            polar.at<float>(i, j) = p::extract<float>(fft_data[i][j]);
         }
     }
 
     if (interpolate_crossover) {
         cv::Mat a0 = cv::Mat::zeros(1, range_bins, CV_32F);
         cv::Mat aN_1 = cv::Mat::zeros(1, range_bins, CV_32F);
-        for (int j = 0; j < range_bins; ++j) {
-            a0.at<float>(0, j) = fft_data[0][j];
-            aN_1.at<float>(0, j) = fft_data[fft_data.rows-1][j];
+        for (uint j = 0; j < range_bins; ++j) {
+            a0.at<float>(0, j) = polar.at<float>(0, j);
+            aN_1.at<float>(0, j) = polar.at<float>(num_azimuths-1, j);
         }
         cv::vconcat(aN_1, polar, polar);
         cv::vconcat(polar, a0, polar);

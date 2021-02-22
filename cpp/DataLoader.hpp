@@ -1,6 +1,11 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <boost/python.hpp>
+#include <boost/python/numpy.hpp>
+
+namespace p = boost::python;
+namespace np = boost::python::numpy;
 
 #define CTS350 0
 #define CIR204 1
