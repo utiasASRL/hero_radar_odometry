@@ -24,9 +24,12 @@ find_package(OpenMP REQUIRED)
 # steam
 find_package(Steam REQUIRED)
 
+# opencv
+find_package(OpenCV 3 REQUIRED)
+
 # boost python
 ENABLE_TESTING()
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${Steam_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${Steam_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 
 # single function call version
 PYTHON_ADD_MODULE(steampy steampy.cpp P2P3ErrorEval.cpp)
@@ -36,3 +39,6 @@ target_link_libraries(steampy PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${S
 PYTHON_ADD_MODULE(SteamSolver SteamSolver.cpp P2P3ErrorEval.cpp SE2VelPriorEval.cpp)
 target_link_libraries(SteamSolver PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
 
+# dataloader
+PYTHON_ADD_MODULE(DataLoader DataLoader.cpp)
+target_link_libraries(DataLoader PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES} ${OpenCV_LIBRARIES})
