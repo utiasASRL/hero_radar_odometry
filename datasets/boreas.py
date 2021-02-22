@@ -10,6 +10,9 @@ from datasets.radar import load_radar, radar_polar_to_cartesian
 from utils.utils import get_inverse_tf, get_transform
 from datasets.oxford import OxfordDataset, mean_intensity_mask
 
+CIR204 = 1    # Boreas
+T_prime = np.array([[1, 0, 0, 0],[0, -1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]])
+
 def roll(r):
     return np.array([[1, 0, 0], [0, np.cos(r), np.sin(r)], [0, -np.sin(r), np.cos(r)]], dtype=np.float64)
 
@@ -53,11 +56,9 @@ def get_transform_boreas(gt):
 
 class BoreasDataset(OxfordDataset):
     """Boreas Radar Dataset"""
-    dataset_prefix = 'boreas'
-
     def get_frames_with_gt(self, frames, gt_path):
-        # For the Boreas dataset, this operation is not needed but is preserved for backwards compatibility
-        return frames
+        # Drop the last frame
+        return frames[:-1]
 
     def get_groundtruth_odometry(self, radar_time, gt_path):
         """For a given time stamp (UNIX INT64), returns 4x4 transformation matrix from current time to next."""
@@ -65,20 +66,26 @@ class BoreasDataset(OxfordDataset):
             out = [float(x) for x in gps_line.split(',')]
             out[0] = int(gps_line.split(',')[0])
             return out
+        gtfound = False
+        min_delta = 0.1
+        T_2_1 = np.identity(4, dtype=np.float32)
         with open(gt_path, 'r') as f:
             f.readline()
             lines = f.readlines()
             for i in range(len(lines) - 1):
                 gt1 = parse(lines[i])
-                if gt1[0] == radar_time:
+                delta = abs(float(gt1[0] - radar_time) / 1.0e9)
+                if delta < min_delta:
                     gt2 = parse(lines[i + 1])
-                    T_enu_r1 = get_transform_boreas(gt1)
-                    T_enu_r2 = get_transform_boreas(gt2)
+                    T_enu_r1 = np.matmul(get_transform_boreas(gt1), T_prime)
+                    T_enu_r2 = np.matmul(get_transform_boreas(gt2), T_prime)
                     T_r2_r1 = np.matmul(get_inverse_tf(T_enu_r2), T_enu_r1)  # 4x4 SE(3)
                     heading, _, _ = rotToYawPitchRoll(T_r2_r1[0:3, 0:3])
                     T_2_1 = get_transform(T_r2_r1[0, 3], T_r2_r1[1, 3], heading)  # 4x4 SE(2)
-                    return T_2_1
-        assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
+                    min_delta = delta
+                    gtfound = True
+        assert(gtfound), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
+        return T_2_1
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
@@ -87,12 +94,12 @@ class BoreasDataset(OxfordDataset):
         frame = self.data_dir + seq + '/radar/' + self.frames[idx]
         _, azimuths, _, polar, _ = load_radar(frame, navtech_version=CIR204)
         data = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
-                                        self.config['cart_resolution'], self.config['cart_pixel_width'],
-                                        navtech_version=CIR204)  # 1 x H x W
+                                        self.config['cart_resolution'], self.config['cart_pixel_width'])
+                                        #navtech_version=CIR204)  # 1 x H x W
         polar_mask = mean_intensity_mask(polar, self.mean_int_mask_mult)
         mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
-                                        self.config['cart_resolution'], self.config['cart_pixel_width'],
-                                        navtech_version=CIR204).astype(np.float32)
+                                        self.config['cart_resolution'], self.config['cart_pixel_width']).astype(np.float32)
+                                        #navtech_version=CIR204).astype(np.float32)
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
         if idx + 1 < len(self.frames):

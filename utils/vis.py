@@ -114,7 +114,7 @@ def draw_batch_steam(batch, out, config):
     tgt_p = out['tgt'][-1].squeeze().T
     R_tgt_src = out['R'][0, -1, :2, :2]
     t_st_in_t = out['t'][0, -1, :2, :]
-    error = tgt_p - (torch.bmm(R_tgt_src, src_p) + t_st_in_t)
+    error = tgt_p - (R_tgt_src @ src_p + t_st_in_t)
     # mah = torch.sqrt(torch.sum(error * error * torch.exp(out['match_weights'][-1]), dim=0).squeeze())
     error2_sqrt = torch.sqrt(torch.sum(error * error, dim=0).squeeze())
 

@@ -32,10 +32,14 @@ def mean_intensity_mask(polar_data, multiplier=3.0):
 
 class OxfordDataset(Dataset):
     """Oxford Radar Robotcar Dataset."""
-    dataset_prefix = '2019'
     def __init__(self, config, split='train'):
         self.config = config
         self.data_dir = config['data_dir']
+        dataset_prefix = ''
+        if config['dataset'] == 'oxford':
+            dataset_prefix = '2019'
+        elif config['dataset'] == 'boreas':
+            dataset_prefix = 'boreas'
         sequences = get_sequences(self.data_dir, dataset_prefix)
         self.sequences = self.get_sequences_split(sequences, split)
         self.seq_idx_range = {}

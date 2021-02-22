@@ -50,16 +50,21 @@ def get_azimuth_index(azimuths, azimuth):
     """For a given azimuth (float), this function returns the corresponding interpolated azimuth index."""
     mind = 1000
     closest = 0
+    M = len(azimuths)
     for i, azimuth_orig in enumerate(azimuths):
         d = abs(azimuth_orig - azimuth)
         if d < mind:
             mind = d
             closest = i
     if azimuths[closest] < azimuth:
-        delta = (azimuth - azimuths[closest]) / float(azimuths[closest + 1] - azimuths[closest])
+        delta = 0
+        if closest < (M - 1):
+            delta = (azimuth - azimuths[closest]) / float(azimuths[closest + 1] - azimuths[closest])
         closest += delta
     elif azimuths[closest] > azimuth:
-        delta = (azimuths[closest] - azimuth) / float(azimuths[closest] - azimuths[closest - 1])
+        delta = 0
+        if closest > 0:
+            delta = (azimuths[closest] - azimuth) / float(azimuths[closest] - azimuths[closest - 1])
         closest -= delta
     return closest
 
