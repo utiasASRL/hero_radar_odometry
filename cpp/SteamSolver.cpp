@@ -68,7 +68,7 @@ void SteamSolver::optimize() {
         traj.add(state.time, temp, state.velocity);
         if (i == 0) {  // lock first pose and velocity
             state.pose->setLock(true);
-            if (eval) {
+            if (evalmode) {
                 state.velocity->setLock(true);
             }
         }

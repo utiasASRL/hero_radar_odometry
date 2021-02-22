@@ -146,9 +146,11 @@ class SteamMonitor(MonitorBase):
             with torch.no_grad():
                 self.model.eval()
                 self.model.solver.sliding_flag = True
+                self.model.solver.solver_cpp.eval()
                 # self.model.solver.log_det_thres_flag = True
                 valid_metric = self.validation()
                 self.model.solver.sliding_flag = False
+                self.model.solver.solver_cpp.train()
                 # self.model.solver.log_det_thres_flag = False
                 self.model.train()
 
