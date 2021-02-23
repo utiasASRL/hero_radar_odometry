@@ -61,8 +61,9 @@ void SteamSolver::setMeas(const p::object& p2_list,
     w_ = toStdVector<np::ndarray>(weight_list);
 }
 
-void SteamSolver::setMeasTimes(const p::object& times_list) {
-    mtimes_ = toStdVector<np::ndarray>(times_list);
+void SteamSolver::setMeasTimes(const p::object& mtimes_list, const p::object& rtimes_list) {
+    mtimes_ = toStdVector<np::ndarray>(mtimes_list);
+    rtimes_ = toStdVector<np::ndarray>(rtimes_list);
 }
 
 // Run optimization
@@ -109,7 +110,12 @@ void SteamSolver::optimize() {
 
             if (motion_compensate_flag_) {
                 double delta_mtime = double(p::extract<float>(mtimes_[i-1][j][0]));   // in microseconds
-                T_k0_eval_ptr = traj.getInterpPoseEval(states_[i].time + steam::Time(delta_mtime*1e-6));
+                double delta_rtime = double(p::extract<float>(rtimes_[i-1][j][0]));   // in microseconds
+                steam::se3::TransformEvaluator::ConstPtr T_m0 =
+                    traj.getInterpPoseEval(states_[i].time + steam::Time(delta_mtime*1e-6));
+                steam::se3::TransformEvaluator::ConstPtr T_r0 =
+                    traj.getInterpPoseEval(states_[0].time + steam::Time(delta_rtime*1e-6));
+                T_k0_eval_ptr = steam::se3::composeInverse(T_m0, T_r0);  // Tmr = Tm0 * inv(Tr0)
             }
             steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_k0_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
@@ -167,7 +173,7 @@ void SteamSolver::getPoses(np::ndarray& poses) {
     }
 }
 
-void SteamSolver::getInterpPoses(const int& fid, const np::ndarray& times, np::ndarray& poses) {
+void SteamSolver::getInterpPoses(const int& fid, const np::ndarray& mtimes, const np::ndarray& rtimes, np::ndarray& poses) {
     // setup trajectory (window is small, so this shouldn't be too inefficient)
     steam::se3::SteamTrajInterface traj(Qc_inv_, true);
     for (uint i = 0; i < states_.size(); ++i) {
@@ -179,11 +185,17 @@ void SteamSolver::getInterpPoses(const int& fid, const np::ndarray& times, np::n
     }  // end i
 
     // query for times
-    uint num_times = times.shape(0);
+    uint num_times = mtimes.shape(0);
     for (uint i = 0; i < num_times; ++i) {
-        double delta_mtime = double(p::extract<float>(times[i][0]));   // in microseconds
-        steam::se3::TransformEvaluator::ConstPtr T_k0_eval_ptr =
+        double delta_mtime = double(p::extract<float>(mtimes[i][0]));   // in microseconds
+        double delta_rtime = double(p::extract<float>(rtimes[i][0]));   // in microseconds
+
+        steam::se3::TransformEvaluator::ConstPtr T_m0 =
             traj.getInterpPoseEval(states_[fid].time + steam::Time(delta_mtime*1e-6));
+        steam::se3::TransformEvaluator::ConstPtr T_r0 =
+            traj.getInterpPoseEval(states_[0].time + steam::Time(delta_rtime*1e-6));
+        steam::se3::TransformEvaluator::ConstPtr T_k0_eval_ptr =
+            steam::se3::composeInverse(T_m0, T_r0);  // Tmr = Tm0 * inv(Tr0)
         Eigen::Matrix4d T_k0 = T_k0_eval_ptr->evaluate().matrix();
         for (uint r = 0; r < 3; ++r) {
             for (uint c = 0; c < 4; ++c) {
