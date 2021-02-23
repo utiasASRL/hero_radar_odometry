@@ -27,12 +27,12 @@ public:
     void slideTraj(const p::object& times_list);
     void setQcInv(const np::ndarray& Qc_inv_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
-    void setMeasTimes(const p::object& times_list);
+    void setMeasTimes(const p::object& mtimes_list, const p::object& rtimes_list);
     // solve
     void optimize();
     // output
     void getPoses(np::ndarray& poses);
-    void getInterpPoses(const int& fid, const np::ndarray& times, np::ndarray& poses);
+    void getInterpPoses(const int& fid, const np::ndarray& mtimes, const np::ndarray& rtimes, np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
     void getSigmapoints2NP1(np::ndarray& sigma_T);
 
@@ -48,6 +48,7 @@ private:
     std::vector<np::ndarray> p2_;  // frame points
     std::vector<np::ndarray> w_;   // weights
     std::vector<np::ndarray> mtimes_;   // measurement times
+    std::vector<np::ndarray> rtimes_;   // reference times
     // Constants
     double dt_;  // trajectory time step
     unsigned int window_size_;  // trajectory window size

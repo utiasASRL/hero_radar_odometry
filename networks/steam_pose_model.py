@@ -39,7 +39,7 @@ class SteamPoseModel(torch.nn.Module):
 
         detector_scores, weight_scores, desc = self.unet(data)
         keypoint_coords, keypoint_scores, keypoint_desc, keypoint_times = self.keypoint(detector_scores, weight_scores, desc, times_img)
-        pseudo_coords, match_weights, tgt_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
+        pseudo_coords, match_weights, tgt_ids, pseudo_times = self.softmax_matcher(keypoint_scores, keypoint_desc, desc, times_img)
         keypoint_coords = keypoint_coords[tgt_ids]
         keypoint_times = keypoint_times[tgt_ids]
 
@@ -60,12 +60,12 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_ints = self.mask_intensity_filter(mask[tgt_ids])
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
-                                                              keypoint_ints, batch['times'], keypoint_times)
+                                                              keypoint_ints, batch['times'], keypoint_times, pseudo_times)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
                 'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords,
-                'keypoint_times': keypoint_times}
+                'keypoint_times': keypoint_times, 'pseudo_times': pseudo_times}
 
     def mask_intensity_filter(self, data):
         int_patches = F.unfold(data, kernel_size=self.patch_size, stride=self.patch_size)
@@ -79,6 +79,7 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_ints = out['keypoint_ints']
         scores = out['scores']
         keypoint_times = out['keypoint_times']
+        pseudo_times = out['pseudo_times']
 
         point_loss = 0
         logdet_loss = 0
@@ -104,7 +105,8 @@ class SteamPoseModel(torch.nn.Module):
                 points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
                 weights_mat, weights_d = self.solver.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
                 ones = torch.ones(weights_mat.shape).to(self.gpuid)
-                mtimes = keypoint_times[w, :, ids].T.detach().cpu().numpy() # N x 1
+                mtimes = keypoint_times[w, :, ids].T.detach().cpu().numpy()     # N x 1
+                rtimes = pseudo_times[w, :, ids].T.detach().cpu().numpy()       # N x 1
 
                 # incorporate extrinsic T_vs
                 points1 = T_vs[:, :3, :3]@points1 + T_vs[:, :3, 3:4]
@@ -119,7 +121,7 @@ class SteamPoseModel(torch.nn.Module):
                 else:
                     # get interpolated poses N x 3 x 4 (ignore last row, we don't need it)
                     T_21 = np.zeros((mtimes.shape[0], 3, 4), dtype=np.float32)
-                    self.solver.solver_cpp.getInterpPoses(w-i+1, mtimes, T_21)
+                    self.solver.solver_cpp.getInterpPoses(w-i+1, mtimes, rtimes, T_21)
                     R_21 = torch.from_numpy(T_21[:, :3, :3]).to(self.gpuid)
                     t_12_in_2 = torch.from_numpy(T_21[:, :3, 3:4]).to(self.gpuid)
                     error = points2 - (R_21 @ points1 + t_12_in_2)
@@ -205,7 +207,7 @@ class SteamSolver():
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1) and not self.motion_comp_flag
 
 
-    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, frame_times, keypoint_times):
+    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, frame_times, keypoint_times, pseudo_times):
         """
             keypoint_coords: B*(W-1)x400x2
             pseudo_coords: B*(W-1)x400x2
@@ -236,6 +238,7 @@ class SteamSolver():
             points2 = []
             weights = []
             mtimes = []
+            rtimes = []
             # loop for each window frame
             for w in range(i, i + self.window_size - 1):
                 # filter by zero intensity patches
@@ -249,6 +252,7 @@ class SteamSolver():
                 weights_temp, weights_d = self.convert_to_weight_matrix(match_weights[w, :, ids].T, w)
                 # measurement times N x 1
                 mtimes_temp = keypoint_times[w, :, ids].T.detach().cpu().numpy()
+                rtimes_temp = pseudo_times[w, :, ids].T.detach().cpu().numpy()
 
                 # threshold on log determinant
                 if self.log_det_thres_flag:
@@ -264,10 +268,11 @@ class SteamSolver():
                 points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)@self.T_vs[:3, :3].T + self.T_vs[:3, 3:4].T]
                 weights += [weights_temp[ids].detach().cpu().numpy()]
                 mtimes += [mtimes_temp[ids]]
+                rtimes += [rtimes_temp[ids]]
             # solver
             self.solver_cpp.setMeas(points2, points1, weights)
             if self.motion_comp_flag:
-                self.solver_cpp.setMeasTimes(mtimes)
+                self.solver_cpp.setMeasTimes(mtimes, rtimes)
             self.solver_cpp.optimize()
             # get pose output (vehicle poses)
             self.solver_cpp.getPoses(self.poses[b])

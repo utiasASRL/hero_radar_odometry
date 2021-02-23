@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.utils import normalize_coords
 
 class SoftmaxRefMatcher(nn.Module):
     """
@@ -20,7 +21,7 @@ class SoftmaxRefMatcher(nn.Module):
         coords = torch.stack((u_coord, v_coord), dim=1)  # HW x 2
         self.src_coords_dense = coords.unsqueeze(0).to(self.gpuid)  # 1 x HW x 2
 
-    def forward(self, keypoint_scores, keypoint_desc, desc_dense):
+    def forward(self, keypoint_scores, keypoint_desc, desc_dense, times_img):
         """
             keypoint_scores: BWxSxN
             keypoint_desc: BWxCxN
@@ -31,7 +32,7 @@ class SoftmaxRefMatcher(nn.Module):
         src_desc_unrolled = F.normalize(src_desc_dense.view(self.B, encoder_dim, -1), dim=1)  # B x C x HW
         # build pseudo_coords
         pseudo_coords = torch.zeros((self.B * (self.window_size - 1), n_points, 2),
-                                    device=self.gpuid) # B*(window - 1) x N x 2
+                                    device=self.gpuid)  # B*(window - 1) x N x 2
         tgt_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64)    # B*(window - 1)
         # loop for each batch
         for i in range(self.B):
@@ -44,4 +45,10 @@ class SoftmaxRefMatcher(nn.Module):
             pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
                 soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (window - 1) x N x 2
             tgt_ids[pseudo_ids] = win_ids
-        return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids
+
+        # pseudo times
+        src_times_dense = times_img[::self.window_size].repeat_interleave(self.window_size-1, dim=0)
+        norm_pseudopoints2D = normalize_coords(pseudo_coords, self.width, self.width).unsqueeze(1)
+        pseudo_times = F.grid_sample(src_times_dense, norm_pseudopoints2D, mode='bilinear')
+        pseudo_times = pseudo_times.view(self.B * (self.window_size - 1), 1, pseudo_coords.size(1))  # BW x 1 x n_patch
+        return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids, pseudo_times
