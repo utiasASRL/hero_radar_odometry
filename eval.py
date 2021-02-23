@@ -91,7 +91,7 @@ if __name__ == '__main__':
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
                 T_pred.append(get_T_ba(out, a=w, b=w+1))
                 timestamps.append(batch['times'][w].numpy().squeeze())
-                variance.append(model.solver.first_pose_var[0])
+                variance.append(np.copy(model.solver.first_pose_var[0].squeeze()))
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)
