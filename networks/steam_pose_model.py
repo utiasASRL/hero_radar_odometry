@@ -57,7 +57,7 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_coords_xy[:, :, 1] *= -1.0
 
         # binary mask to remove keypoints from 'empty' regions of the input radar scan
-        keypoint_ints = self.mask_intensity_filter(mask[tgt_ids])
+        keypoint_ints = self.mask_intensity_filter(mask[tgt_ids])*self.keypoints_azimuth_filter(keypoint_coords_xy)
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
                                                               keypoint_ints, batch['times'], keypoint_times, pseudo_times)
@@ -71,6 +71,10 @@ class SteamPoseModel(torch.nn.Module):
         int_patches = F.unfold(data, kernel_size=self.patch_size, stride=self.patch_size)
         keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)  # BW x 1 x num_patches
         return keypoint_int >= self.patch_mean_thres
+
+    def keypoints_azimuth_filter(self, keypoints):
+        azimuth = torch.atan2(keypoints[:, :, 1], keypoints[:, :, 0]).unsqueeze(1)
+        return torch.abs(azimuth) > self.config['steam']['azimuth_thres']
 
     def loss(self, out, batch):
         src_coords = out['src']
