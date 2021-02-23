@@ -155,13 +155,15 @@ class OxfordDataset(Dataset):
         times = np.array([time1, time2]).reshape(1, 2)
 
         # radar times
-        times_img = radar_polar_to_cartesian(azimuths, np.tile(timestamps - time1, (1, polar.shape[1])).astype(np.float32),
+        timestamps = np.tile(timestamps - time1, (1, polar.shape[1])).astype(np.float32)
+        times_img = radar_polar_to_cartesian(azimuths, timestamps,
                                              self.config['radar_resolution'],
                                              self.config['cart_resolution'],
                                              self.config['cart_pixel_width']).astype(np.float32)
 
         T_21 = get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
-        return {'data': data, 'cart': cart, 'T_21': T_21, 'times': times, 'mask': mask, 'times_img': times_img}
+        return {'data': data, 'cart': cart, 'T_21': T_21, 'times': times, 'mask': mask, 'times_img': times_img,
+                'azimuths': azimuths, "azimuth_times": timestamps, "polar": polar, "polar_mask": polar_mask}
 
 def get_dataloaders(config):
     """Retrieves train, validation, and test data loaders."""
