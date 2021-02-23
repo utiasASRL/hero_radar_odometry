@@ -7,8 +7,10 @@
 
 class SteamSolver {
 public:
-    SteamSolver(const double& dt, const unsigned int& window_size, const bool& zero_vel_prior_flag) :
-        dt_(dt), window_size_(window_size), zero_vel_prior_flag_(zero_vel_prior_flag) {
+    SteamSolver(const double& dt, const unsigned int& window_size,
+                const bool& zero_vel_prior_flag, const bool& motion_compensate_flag) :
+            dt_(dt), window_size_(window_size), zero_vel_prior_flag_(zero_vel_prior_flag),
+            motion_compensate_flag_(motion_compensate_flag) {
         // Make Qc_inv
         Eigen::Array<double, 1, 6> Qc_diag;
         Qc_diag << 0.3678912639416186958207788393338,
@@ -25,10 +27,12 @@ public:
     void slideTraj(const p::object& times_list);
     void setQcInv(const np::ndarray& Qc_inv_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
+    void setMeasTimes(const p::object& times_list);
     // solve
     void optimize();
     // output
     void getPoses(np::ndarray& poses);
+    void getInterpPoses(const int& fid, const np::ndarray& times, np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
     void getSigmapoints2NP1(np::ndarray& sigma_T);
 
@@ -43,11 +47,13 @@ private:
     std::vector<np::ndarray> p1_;  // reference
     std::vector<np::ndarray> p2_;  // frame points
     std::vector<np::ndarray> w_;   // weights
+    std::vector<np::ndarray> mtimes_;   // measurement times
     // Constants
     double dt_;  // trajectory time step
     unsigned int window_size_;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
     bool zero_vel_prior_flag_ = false;
+    bool motion_compensate_flag_ = false;
 };
 
 // boost wrapper
@@ -55,13 +61,15 @@ BOOST_PYTHON_MODULE(SteamSolver) {
     Py_Initialize();
     np::initialize();
     // p::def("run_simple", run_simple);
-    p::class_<SteamSolver>("SteamSolver", p::init<const double&, const unsigned int&, const bool&>())
+    p::class_<SteamSolver>("SteamSolver", p::init<const double&, const unsigned int&, const bool&, const bool&>())
         .def("resetTraj", &SteamSolver::resetTraj)
         .def("slideTraj", &SteamSolver::slideTraj)
         .def("setQcInv", &SteamSolver::setQcInv)
         .def("setMeas", &SteamSolver::setMeas)
+        .def("setMeasTimes", &SteamSolver::setMeasTimes)
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
+        .def("getInterpPoses", &SteamSolver::getInterpPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
         .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
 }

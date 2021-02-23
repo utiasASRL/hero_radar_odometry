@@ -135,7 +135,7 @@ class OxfordDataset(Dataset):
             idx = idx.tolist()
         seq = self.get_seq_from_idx(idx)
         frame = self.data_dir + seq + '/radar/' + self.frames[idx]
-        _, azimuths, _, polar, _ = load_radar(frame)
+        timestamps, azimuths, _, polar, _ = load_radar(frame)
         cart = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         #data = (cart - cart.mean()) / (cart.std() + 1e-8)
@@ -144,6 +144,7 @@ class OxfordDataset(Dataset):
         mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
                                         self.config['cart_resolution'],
                                         self.config['cart_pixel_width']).astype(np.float32)
+
         #mask = (mask > 0.5).astype(np.float32)
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
@@ -152,8 +153,15 @@ class OxfordDataset(Dataset):
         else:
             time2 = 0
         times = np.array([time1, time2]).reshape(1, 2)
+
+        # radar times
+        times_img = radar_polar_to_cartesian(azimuths, np.tile(timestamps - time1, (1, polar.shape[1])).astype(np.float32),
+                                             self.config['radar_resolution'],
+                                             self.config['cart_resolution'],
+                                             self.config['cart_pixel_width']).astype(np.float32)
+
         T_21 = get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
-        return {'data': data, 'cart': cart, 'T_21': T_21, 'times': times, 'mask': mask}
+        return {'data': data, 'cart': cart, 'T_21': T_21, 'times': times, 'mask': mask, 'times_img': times_img}
 
 def get_dataloaders(config):
     """Retrieves train, validation, and test data loaders."""
