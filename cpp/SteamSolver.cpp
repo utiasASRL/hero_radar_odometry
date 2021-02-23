@@ -61,10 +61,14 @@ void SteamSolver::setMeas(const p::object& p2_list,
     w_ = toStdVector<np::ndarray>(weight_list);
 }
 
+void SteamSolver::setMeasTimes(const p::object& times_list) {
+    mtimes_ = toStdVector<np::ndarray>(times_list);
+}
+
 // Run optimization
 void SteamSolver::optimize() {
     // Motion prior
-    steam::se3::SteamTrajInterface traj(Qc_inv_);
+    steam::se3::SteamTrajInterface traj(Qc_inv_, true);
     for (uint i = 0; i < states_.size(); ++i) {
         TrajStateVar& state = states_.at(i);
         steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
@@ -83,7 +87,7 @@ void SteamSolver::optimize() {
     // loop through every frame
     for (uint i = 1; i < window_size_; ++i) {
 //        auto T_k0_eval_ptr = traj.getInterpPoseEval(steam::Time(i * dt_));
-        steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
+        steam::se3::TransformEvaluator::ConstPtr T_k0_eval_ptr =
             steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
         uint num_meas = p2_[i - 1].shape(0);
         for (uint j = 0; j < num_meas; ++j) {
@@ -103,6 +107,10 @@ void SteamSolver::optimize() {
             ref << double(p::extract<float>(p1_[i-1][j][0])), double(p::extract<float>(p1_[i-1][j][1])),
                  double(p::extract<float>(p1_[i-1][j][2])), 1.0;
 
+            if (motion_compensate_flag_) {
+                double delta_mtime = double(p::extract<float>(mtimes_[i-1][j][0]));   // in microseconds
+                T_k0_eval_ptr = traj.getInterpPoseEval(states_[i].time + steam::Time(delta_mtime*1e-6));
+            }
             steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_k0_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));
@@ -157,6 +165,32 @@ void SteamSolver::getPoses(np::ndarray& poses) {
             }
         }
     }
+}
+
+void SteamSolver::getInterpPoses(const int& fid, const np::ndarray& times, np::ndarray& poses) {
+    // setup trajectory (window is small, so this shouldn't be too inefficient)
+    steam::se3::SteamTrajInterface traj(Qc_inv_, true);
+    for (uint i = 0; i < states_.size(); ++i) {
+        TrajStateVar& state = states_.at(i);
+        steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
+        traj.add(state.time, temp, state.velocity);
+        if (i == 0)  // lock first pose
+            state.pose->setLock(true);
+    }  // end i
+
+    // query for times
+    uint num_times = times.shape(0);
+    for (uint i = 0; i < num_times; ++i) {
+        double delta_mtime = double(p::extract<float>(times[i][0]));   // in microseconds
+        steam::se3::TransformEvaluator::ConstPtr T_k0_eval_ptr =
+            traj.getInterpPoseEval(states_[fid].time + steam::Time(delta_mtime*1e-6));
+        Eigen::Matrix4d T_k0 = T_k0_eval_ptr->evaluate().matrix();
+        for (uint r = 0; r < 3; ++r) {
+            for (uint c = 0; c < 4; ++c) {
+                poses[i][r][c] = float(T_k0(r, c));
+            }   // end c
+        }   // end r
+    }  // end i
 }
 
 void SteamSolver::getVelocities(np::ndarray& vels) {

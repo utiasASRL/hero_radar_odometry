@@ -25,7 +25,7 @@ class Keypoint(torch.nn.Module):
         self.u_patches = F.unfold(u_coords.expand(BW, 1, self.width, self.width), kernel_size=self.patch_size,
                                   stride=self.patch_size).to(self.gpuid)
 
-    def forward(self, detector_scores, weight_scores, descriptors):
+    def forward(self, detector_scores, weight_scores, descriptors, times_img):
         """
             detector_scores: BWx1xHxW
             weight_scores: BWxSxHxW
@@ -47,17 +47,22 @@ class Keypoint(torch.nn.Module):
             keypoint_desc = keypoint_desc.view(BW, encoder_dim, num_patches)  # BW x C x num_patches
 
             keypoint_scores = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')
-            keypoint_scores = keypoint_scores.view(BW, weight_dim, num_patches)  # BW x 1 x n_patch
+            keypoint_scores = keypoint_scores.view(BW, weight_dim, num_patches)  # BW x S x n_patch
+
+            keypoint_times = F.grid_sample(times_img, norm_keypoints2D, mode='bilinear')
+            keypoint_times = keypoint_times.view(BW, 1, num_patches)  # BW x 1 x n_patch
         else:
             softmax_attention = softmax_attention.unsqueeze(1)
             keypoint_desc = F.unfold(descriptors, kernel_size=self.patch_size, stride=self.patch_size)
-
             keypoint_desc = keypoint_desc.view(BW, encoder_dim, self.patch_size**2, keypoint_desc.size(2))
             keypoint_desc = torch.sum(keypoint_desc * softmax_attention, dim=2)    # BW x C x num_patches
 
             keypoint_scores = F.unfold(weight_scores, kernel_size=self.patch_size, stride=self.patch_size)
-
             keypoint_scores = keypoint_scores.view(BW, weight_dim, self.patch_size**2, keypoint_scores.size(2))
             keypoint_scores = torch.sum(keypoint_scores * softmax_attention, dim=2)    # BW x S x num_patches
 
-        return keypoint_coords, keypoint_scores, keypoint_desc
+            keypoint_times = F.unfold(times_img, kernel_size=self.patch_size, stride=self.patch_size)
+            keypoint_times = keypoint_times.view(BW, 1, self.patch_size**2, keypoint_times.size(2))
+            keypoint_times = torch.sum(keypoint_times * softmax_attention, dim=2)    # BW x 1 x num_patches
+
+        return keypoint_coords, keypoint_scores, keypoint_desc, keypoint_times
