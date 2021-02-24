@@ -47,8 +47,9 @@ class SoftmaxRefMatcher(nn.Module):
             tgt_ids[pseudo_ids] = win_ids
 
         # pseudo times
+        _, _, height, width = desc_dense.size()
         src_times_dense = times_img[::self.window_size].repeat_interleave(self.window_size-1, dim=0)
-        norm_pseudopoints2D = normalize_coords(pseudo_coords, self.width, self.width).unsqueeze(1)
+        norm_pseudopoints2D = normalize_coords(pseudo_coords, height, width).unsqueeze(1)
         pseudo_times = F.grid_sample(src_times_dense, norm_pseudopoints2D, mode='bilinear')
         pseudo_times = pseudo_times.view(self.B * (self.window_size - 1), 1, pseudo_coords.size(1))  # BW x 1 x n_patch
         return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids, pseudo_times

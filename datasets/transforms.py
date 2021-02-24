@@ -12,7 +12,7 @@ def augmentBatch(batch, config):
     # data2 = batch['data'].numpy().copy()    # this seems to return a reference, not a copy
     mask = batch['mask'].numpy()
     times_img = batch['times_img'].numpy()
-    times_img2 = batch['times_img'].numpy().copy()
+    # times_img2 = batch['times_img'].numpy().copy()
     azimuths = batch['azimuths'].numpy()
     azimuth_times = batch['azimuth_times'].numpy()
     B, C, H, W = data.shape

@@ -156,6 +156,7 @@ class OxfordDataset(Dataset):
 
         # radar times
         timestamps = np.tile(timestamps - time1, (1, polar.shape[1])).astype(np.float32)
+        timestamps = np.flip(timestamps, 0).copy()
         times_img = radar_polar_to_cartesian(azimuths, timestamps,
                                              self.config['radar_resolution'],
                                              self.config['cart_resolution'],
