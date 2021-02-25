@@ -208,6 +208,7 @@ class SteamSolver():
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
                                                self.window_size, config['steam']['zero_vel_prior'],
                                                config['steam']['motion_compensate'])
+        self.reset_flag = True
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1) and not self.motion_comp_flag
 
 
@@ -232,10 +233,11 @@ class SteamSolver():
         # loop through each batch
         for b in range(self.batch_size):
             j = b * self.window_size    # first index of window
-            if self.sliding_flag:
+            if self.sliding_flag and not self.reset_flag:
                 self.solver_cpp.slideTraj(frame_times[j:j+self.window_size, 0, 0].tolist())
             else:
                 self.solver_cpp.resetTraj(frame_times[j:j+self.window_size, 0, 0].tolist())
+                self.reset_flag = False
 
             i = b * (self.window_size-1)    # first index of window (not including reference)
             points1 = []

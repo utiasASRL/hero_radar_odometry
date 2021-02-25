@@ -147,6 +147,7 @@ class SteamMonitor(MonitorBase):
                 self.model.eval()
                 self.model.solver.sliding_flag = True
                 # self.model.solver.log_det_thres_flag = True
+                self.model.solver.reset_flag = True
                 valid_metric = self.validation()
                 self.model.solver.sliding_flag = False
                 # self.model.solver.log_det_thres_flag = False

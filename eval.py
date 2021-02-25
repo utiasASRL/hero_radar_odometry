@@ -56,6 +56,7 @@ if __name__ == '__main__':
     time_used_ = []
 
     for seq_num in seq_nums:
+        model.solver.reset_flag = True
         time_used = []
         T_gt = []
         T_pred = []

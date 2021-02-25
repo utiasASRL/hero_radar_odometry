@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 def augmentBatch(batch, config):
     rot_max = config['augmentation']['rot_max']
     data = batch['data'].numpy()    # this seems to return a reference, not a copy
-    # data2 = batch['data'].numpy().copy()    # this seems to return a reference, not a copy
+    data2 = batch['data'].numpy().copy()    # this seems to return a reference, not a copy
     mask = batch['mask'].numpy()
     # mask2 = batch['mask'].numpy().copy()
     times_img = batch['times_img'].numpy()
@@ -66,9 +66,10 @@ def augmentBatch(batch, config):
         # plt.show()
 
         # T_aug += [torch.from_numpy(get_transform(0, 0, -rot))]
-        T_aug += [torch.from_numpy(get_transform(0, 0, azimuth_step*index_steps))]
+        T_aug += [torch.from_numpy(get_transform(0, 0, -np.sign(rot)*azimuth_step*index_steps))]
     batch['data'] = torch.from_numpy(data)
     batch['times_img'] = torch.from_numpy(times_img)
-    batch['mask'] = torch.from_numpy(mask > 0.5).type(batch['data'].dtype)    # make into a binary mask
+    # batch['mask'] = torch.from_numpy(mask > 0.5).type(batch['data'].dtype)    # make into a binary mask
+    batch['mask'] = torch.from_numpy(mask)    # make into a binary mask
     batch['T_aug'] = T_aug
     return batch
