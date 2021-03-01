@@ -6,3 +6,5 @@ results/*
 *.pdf
 scripts/*
 plot_odometry.py
+plot_buddies.py
+vis_radar.py
