@@ -134,7 +134,8 @@ def draw_batch_steam(batch, out, config):
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
            vutils.make_grid([p2p_img])
 
-def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, savePDF=False, fnames=None):
+def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, savePDF=False, fnames=None, mainlabel="HERO",
+                   icralabel="MC-RANSAC", icracolor='r', legend_pos="upper left", rot=0):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
     idx = 0
@@ -176,13 +177,17 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
         plt.figure(figsize=(10, 10), tight_layout=True)
         plt.grid(color='k', which='both', linestyle='--', alpha=0.75, dashes=(8.5, 8.5))
         plt.axes().set_aspect('equal')
-        plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT')
+
+        base = plt.gca().transData
+        M = matplotlib.transforms.Affine2D().rotate_deg(rot)
+
+        plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT', transform=M+base)
         if len(x_icra) > 0 and len(y_icra) > 0:
-            plt.plot(x_icra, y_icra, 'r', linewidth=2.5, label='MC-RANSAC')
-        plt.plot(x_pred, y_pred, 'b', linewidth=2.5, label='HERO')
+            plt.plot(x_icra, y_icra, icracolor, linewidth=2.5, label=icralabel, transform=M+base)
+        plt.plot(x_pred, y_pred, 'b', linewidth=2.5, label=mainlabel, transform=M+base)
         plt.xlabel('x (m)', fontsize=16)
         plt.ylabel('y (m)', fontsize=16)
-        plt.legend(loc="upper left", edgecolor='k', fancybox=False)
+        plt.legend(loc=legend_pos, edgecolor='k', fancybox=False)
         if savePDF and fnames is not None:
             plt.savefig(fnames[seq_i], bbox_inches='tight', pad_inches=0.0)
         if returnTensor:
