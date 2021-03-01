@@ -3,7 +3,11 @@ project(steampy)
 
 # Activate c++17
 execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fopenmp")
+find_package(OpenMP REQUIRED)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 ${OpenMP_CXX_FLAGS}")
+set(OMP_NUM_THREADS 8)
+
 set(DEPEND_LIBS "boost_system")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -Wno-unused-function")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
@@ -19,7 +23,8 @@ find_package(PythonInterp 3)
 find_package(PythonLibs 3 REQUIRED)
 
 # openmp
-find_package(OpenMP REQUIRED)
+#find_package(OpenMP REQUIRED)
+#set(OMP_NUM_THREADS 8)
 
 # steam
 find_package(Steam REQUIRED)

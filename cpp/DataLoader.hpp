@@ -39,8 +39,22 @@ private:
     bool interpolate_crossover = true;
 };
 
+class releaseGIL{
+public:
+    inline releaseGIL(){
+        save_state = PyEval_SaveThread();
+    }
+
+    inline ~releaseGIL(){
+        PyEval_RestoreThread(save_state);
+    }
+private:
+    PyThreadState *save_state;
+};
+
 // boost wrapper
 BOOST_PYTHON_MODULE(DataLoader) {
+    PyEval_InitThreads();
     Py_Initialize();
     np::initialize();
     p::class_<DataLoader>("DataLoader", p::init<const double, const double, const uint, const uint>())
