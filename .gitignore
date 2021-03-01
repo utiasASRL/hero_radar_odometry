@@ -11,3 +11,5 @@ config/boreas*.json
 config/oxford1.json
 config/pre2160.json
 config/pre2592.json
+plot_buddies.py
+vis_radar.py
