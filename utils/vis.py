@@ -21,7 +21,7 @@ def convert_plt_to_tensor():
 def draw_batch(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
     # Draw radar image
-    radar = batch['cart'][0].squeeze().numpy()
+    radar = batch['data'][0].squeeze().numpy()
     plt.subplots()
     plt.imshow(radar, cmap='gray')
     radar_img = convert_plt_to_tensor()
@@ -53,8 +53,8 @@ def draw_batch(batch, out, config):
 def draw_batch_steam(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
     # Draw radar image
-    radar = batch['cart'][0].squeeze().numpy()
-    radar_tgt = batch['cart'][-1].squeeze().numpy()
+    radar = batch['data'][0].squeeze().numpy()
+    radar_tgt = batch['data'][-1].squeeze().numpy()
     plt.imshow(np.concatenate((radar, radar_tgt), axis=1), cmap='gray')
     plt.title('radar src-tgt pair')
     radar_img = convert_plt_to_tensor()
@@ -174,15 +174,15 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
                 y_icra.append(T_icra_temp[1, 3])
 
         plt.figure(figsize=(10, 10), tight_layout=True)
-        plt.grid(which='both', linestyle='--', alpha=0.5)
+        plt.grid(color='k', which='both', linestyle='--', alpha=0.75, dashes=(8.5, 8.5))
         plt.axes().set_aspect('equal')
         plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT')
-        plt.plot(x_pred, y_pred, 'r', linewidth=2.5, label='HERO')
         if len(x_icra) > 0 and len(y_icra) > 0:
-            plt.plot(x_icra, y_icra, 'g', linewidth=2.5, label='YETI')
+            plt.plot(x_icra, y_icra, 'r', linewidth=2.5, label='MC-RANSAC')
+        plt.plot(x_pred, y_pred, 'b', linewidth=2.5, label='HERO')
         plt.xlabel('x (m)', fontsize=16)
         plt.ylabel('y (m)', fontsize=16)
-        plt.legend(loc="upper left", fontsize='small')
+        plt.legend(loc="upper left", edgecolor='k', fancybox=False)
         if savePDF and fnames is not None:
             plt.savefig(fnames[seq_i], bbox_inches='tight', pad_inches=0.0)
         if returnTensor:

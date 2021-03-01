@@ -66,8 +66,12 @@ void SteamSolver::optimize() {
         TrajStateVar& state = states_.at(i);
         steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
         traj.add(state.time, temp, state.velocity);
-        if (i == 0)  // lock first pose
+        if (i == 0) {  // lock first pose and velocity
             state.pose->setLock(true);
+            if (evalmode) {
+                state.velocity->setLock(true);
+            }
+        }
     }  // end i
 
     // Cost Terms

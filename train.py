@@ -5,6 +5,7 @@ import torch
 import numpy as np
 
 from datasets.oxford import get_dataloaders
+from datasets.boreas import get_dataloaders_boreas
 from networks.svd_pose_model import SVDPoseModel
 from networks.steam_pose_model import SteamPoseModel
 from utils.utils import supervised_loss, pointmatch_loss, get_lr
@@ -30,7 +31,10 @@ if __name__ == '__main__':
         config = json.load(f)
     config['gpuid'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(config['gpuid'])
-    train_loader, valid_loader, _ = get_dataloaders(config)
+    if config['dataset'] == 'oxford':
+        train_loader, valid_loader, _ = get_dataloaders(config)
+    elif config['dataset'] == 'boreas':
+        train_loader, valid_loader, _ = get_dataloaders_boreas(config)
 
     if config['model'] == 'SVDPoseModel':
         model = SVDPoseModel(config).to(config['gpuid'])
@@ -50,14 +54,22 @@ if __name__ == '__main__':
     elif config['model'] == 'SteamPoseModel':
         monitor = SteamMonitor(model, valid_loader, config)
     start_epoch = 0
+
     if ckpt_path is not None:
-        print('Loading from checkpoint: ' + ckpt_path)
-        checkpoint = torch.load(ckpt_path, map_location=torch.device(config['gpuid']))
-        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        start_epoch = checkpoint['epoch']
-        monitor.counter = checkpoint['counter']
+        try:
+            print('Loading from checkpoint: ' + ckpt_path)
+            checkpoint = torch.load(ckpt_path, map_location=torch.device(config['gpuid']))
+            model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint['epoch']
+            monitor.counter = checkpoint['counter']
+            print('success')
+        except Exception as e:
+            print(e)
+            print('Defaulting to legacy checkpoint style')
+            model.load_state_dict(checkpoint, strict=False)
+            print('success')
     #model = torch.nn.DataParallel(model)
     if not os.path.isfile(config['log_dir'] + args.config):
         os.system('cp ' + args.config + ' ' + config['log_dir'])
