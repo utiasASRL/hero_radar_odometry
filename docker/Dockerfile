@@ -27,7 +27,7 @@ RUN apt install git wget -y --no-install-recommends
 
 # cmake
 RUN apt-get install -y --no-install-recommends apt-utils
-RUN apt install -y libprotobuf-dev protobuf-compiler 
+RUN apt install -y libprotobuf-dev protobuf-compiler
 RUN apt install -y cmake
 
 # boost
@@ -69,5 +69,16 @@ RUN cd /workspace && \
  mkdir build && \
  cd build && \
  cmake .. && \
+ make && \
+ make install
+
+# opencv
+RUN cd /workspace && \
+ git clone https://github.com/opencv/opencv.git && \
+ cd opencv && \
+ git checkout 3.4 && \
+ mkdir build && \
+ cd build && \
+ cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local -D OPENCV_GENERATE_PKGCONFIG=ON .. && \
  make && \
  make install
