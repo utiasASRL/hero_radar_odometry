@@ -6,3 +6,8 @@ results/*
 *.pdf
 scripts/*
 plot_odometry.py
+stats.py
+config/boreas*.json
+config/oxford1.json
+config/pre2160.json
+config/pre2592.json
