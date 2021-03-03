@@ -38,8 +38,6 @@ if __name__ == '__main__':
     elif config['model'] == 'SteamPoseModel':
         model = SteamPoseModel(config).to(config['gpuid'])
         model.solver.sliding_flag = True
-        #model.solver.solver_cpp.eval()
-        # self.model.solver.log_det_thres_flag = True
     assert(args.pretrain is not None)
     checkpoint = torch.load(args.pretrain, map_location=torch.device(config['gpuid']))
     failed = False

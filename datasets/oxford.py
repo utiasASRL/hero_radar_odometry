@@ -45,7 +45,6 @@ class OxfordDataset(Dataset):
         self.seq_idx_range = {}
         self.frames = []
         self.seq_lens = []
-        self.mean_int_mask_mult = config['mean_int_mask_mult']
         for seq in self.sequences:
             seq_frames = get_frames(self.data_dir + seq + '/radar/')
             seq_frames = self.get_frames_with_gt(seq_frames, self.data_dir + seq + '/gt/radar_odometry.csv')
@@ -113,7 +112,7 @@ class OxfordDataset(Dataset):
         _, azimuths, _, polar, _ = load_radar(frame)
         data = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
-        polar_mask = mean_intensity_mask(polar, self.mean_int_mask_mult)
+        polar_mask = mean_intensity_mask(polar)
         mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
                                         self.config['cart_resolution'],
                                         self.config['cart_pixel_width']).astype(np.float32)

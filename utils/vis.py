@@ -62,14 +62,11 @@ def draw_batch_steam(batch, out, config):
     # Draw keypoint matches
     src = out['src_rc'][-1].squeeze().detach().cpu().numpy()
     tgt = out['tgt_rc'][-1].squeeze().detach().cpu().numpy()
-    # match_weights = np.exp(out['match_weights'][-1].squeeze().detach().cpu().numpy())
     keypoint_ints = out['keypoint_ints']
 
     ids = torch.nonzero(keypoint_ints[-1, 0] > 0, as_tuple=False).squeeze(1)
     ids_cpu = ids.cpu()
 
-    # nms = config['vis_keypoint_nms']    # inverse variance
-    # max_w = np.max(match_weights)
     plt.imshow(np.concatenate((radar, radar_tgt), axis=1), cmap='gray')
     delta = radar.shape[1]
     for i in range(src.shape[0]):
@@ -115,7 +112,6 @@ def draw_batch_steam(batch, out, config):
     R_tgt_src = out['R'][0, -1, :2, :2]
     t_st_in_t = out['t'][0, -1, :2, :]
     error = tgt_p - (R_tgt_src @ src_p + t_st_in_t)
-    # mah = torch.sqrt(torch.sum(error * error * torch.exp(out['match_weights'][-1]), dim=0).squeeze())
     error2_sqrt = torch.sqrt(torch.sum(error * error, dim=0).squeeze())
 
     plt.imshow(radar, cmap='gray')
@@ -124,12 +120,6 @@ def draw_batch_steam(batch, out, config):
     plt.colorbar()
     plt.title('P2P error')
     p2p_img = convert_plt_to_tensor()
-
-    # plt.imshow(radar, cmap='gray')
-    # plt.scatter(src[ids_cpu, 0], src[ids_cpu, 1], c=mah[ids_cpu].detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
-    # plt.colorbar()
-    # plt.title('MAH')
-    # mah_img = convert_plt_to_tensor()
 
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
            vutils.make_grid([p2p_img])

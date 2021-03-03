@@ -1,10 +1,10 @@
 #include "DataLoader.hpp"
 #include <math.h>
 #include <omp.h>
+#include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-#include <iostream>
 
 // timestamps: N x 1 , azimuths: N x 1, fft_data: N x R need to be sized correctly by the python user.
 void DataLoader::load_radar(const std::string path, np::ndarray& timestamps, np::ndarray& azimuths,

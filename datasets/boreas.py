@@ -116,12 +116,12 @@ class BoreasDataset(OxfordDataset):
         #polar = np.zeros((num_azimuths, range_bins), dtype=np.float32)
         #data = np.zeros((cart_pixel_width, cart_pixel_width), dtype=np.float32)
         #mask = np.zeros((cart_pixel_width, cart_pixel_width), dtype=np.float32)
-        
+
         #self.dataloader.load_radar(frame, timestamps, azimuths, polar)
         #self.dataloader.polar_to_cartesian(azimuths, polar, data)
         #data = np.expand_dims(data, axis=0)
 
-        #polar_mask = mean_intensity_mask(polar, self.mean_int_mask_mult)
+        #polar_mask = mean_intensity_mask(polar)
         #self.dataloader.polar_to_cartesian(azimuths, polar_mask, mask)
         #mask = np.expand_dims(mask, axis=0)
 

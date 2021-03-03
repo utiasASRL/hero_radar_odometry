@@ -4,12 +4,9 @@
     "data_dir": "/workspace/nas/ASRL/2021-Boreas/",
     "log_dir": "/workspace/Documents/logs/2021-02-21/boreas3_aug026_cnn8_window3_res2240_width640/",
     "gpuid": "cuda:1",
-    "min_range": 58,
     "radar_resolution": 0.0596,
     "cart_resolution": 0.2240,
     "cart_pixel_width": 640,
-    "input_channels": 1,
-    "mean_int_mask_mult": 3.0,
     "train_split": [0, 1, 2, 3, 4, 5, 10],
     "validation_split": [6],
     "test_split": [8, 9, 11],
@@ -17,13 +14,10 @@
         "unet": {
             "bilinear": true,
             "first_feature_dimension": 8,
-            "score_sigmoid": false,
-            "kaiming": false
+            "score_sigmoid": false
         },
         "keypoint_block": {
-            "patch_size": 32,
-            "softmax_temp": 1.0,
-            "grid_sample": true
+            "patch_size": 32
         },
         "matcher_block": {
             "softmax_temp": 0.01,
@@ -35,10 +29,7 @@
         "expect_approx": ["mean", "2NP1", "linearize"],
         "expect_approx_opt": 0,
         "patch_mean_thres": 0.05,
-        "min_abs_vel": -1.0,
         "mah_thres": 4,
-        "nms_thres": 0.75,
-        "zero_vel_prior": false,
         "weight_matrix": true,
         "topk_backup": 30,
         "log_det_thres_flag": false,
@@ -46,7 +37,6 @@
         "log_det_topk": 20
     },
     "lr": 0.00001,
-    "weight_decay": 0,
     "clip_norm": 10.0,
     "batch_size": 1,
     "window_size": 3,
@@ -59,9 +49,7 @@
     "save_rate": 5000,
     "val_rate": 5000,
     "vis_num": 6,
-    "vis_keypoint_nms": 0,
     "augmentation": {
-        "augment": true,
         "rot_max": 0.26
     }
 }

@@ -68,9 +68,6 @@ void SteamSolver::optimize() {
         traj.add(state.time, temp, state.velocity);
         if (i == 0) {  // lock first pose and velocity
             state.pose->setLock(true);
-            if (evalmode) {
-                state.velocity->setLock(true);
-            }
         }
     }  // end i
 
@@ -83,7 +80,6 @@ void SteamSolver::optimize() {
 
     // loop through every frame
     for (uint i = 1; i < window_size_; ++i) {
-//        auto T_k0_eval_ptr = traj.getInterpPoseEval(steam::Time(i * dt_));
         steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
             steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
         uint num_meas = p2_[i - 1].shape(0);
@@ -111,19 +107,6 @@ void SteamSolver::optimize() {
         }  // end j
     }  // end i
 
-    // SE(2) velocity priors
-    // TODO(david): make vel_prior_noise a parameter
-    if (zero_vel_prior_flag_) {
-        Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
-        steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
-        for (uint i = 0; i < states_.size(); ++i) {
-            steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
-            steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
-                new steam::WeightedLeastSqCostTerm<3, 6>(error, vel_prior_noise_model, sharedLossFuncL2));
-            costTerms->add(cost);
-        }  // end i
-    }
-
     // Initialize problem
     steam::OptimizationProblem problem;
     // Add state variables
@@ -135,12 +118,8 @@ void SteamSolver::optimize() {
     // Add cost terms
     problem.addCostTerm(costTerms);
     // Solver parameters
-    // TODO(david): Make this a parameter
-    // typedef steam::DoglegGaussNewtonSolver SolverType;
-    // typedef steam::LevMarqGaussNewtonSolver SolverType;
-    // typedef steam::VanillaGaussNewtonSolver SolverType;
     SolverType::Params params;
-    params.verbose = false;  // TODO(david): make this a parameter
+    params.verbose = false;
     // Make solver
     solver_ = SolverBasePtr(new SolverType(&problem, params));
     // Optimize
