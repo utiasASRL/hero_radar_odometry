@@ -1,5 +1,5 @@
 {
-    "model": "SteamPoseModel",
+    "model": "HERO",
     "dataset": "boreas",
     "data_dir": "/workspace/nas/ASRL/2021-Boreas/",
     "log_dir": "/workspace/Documents/logs/2021-02-21/boreas3_aug026_cnn8_window3_res2240_width640/",

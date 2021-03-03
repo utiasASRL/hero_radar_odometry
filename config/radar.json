@@ -1,5 +1,5 @@
 {
-    "model": "SVDPoseModel",
+    "model": "UnderTheRadar",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
     "log_dir": "/workspace/Documents/logs/2021-01-17-1/run24_l1_loss_kaiming_both_masks/",
     "gpuid": "cuda:1",

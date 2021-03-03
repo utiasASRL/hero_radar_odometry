@@ -4,7 +4,7 @@ from networks.keypoint import Keypoint
 from networks.softmax_matcher import SoftmaxMatcher
 from networks.svd import SVD
 
-class SVDPoseModel(torch.nn.Module):
+class UnderTheRadar(torch.nn.Module):
     """
         This model computes a 3x3 Rotation matrix and a 3x1 translation vector describing the transformation
         between two radar scans. This transformation can be used for odometry or metric localization.

@@ -1,5 +1,5 @@
 {
-    "model": "SVDPoseModel",
+    "model": "UnderTheRadar",
     "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
     "log_dir": "/workspace/Documents/logs/test/",
     "gpuid": "cpu",

@@ -7,8 +7,8 @@ import pickle
 
 from datasets.oxford import get_dataloaders
 from datasets.boreas import get_dataloaders_boreas
-from networks.svd_pose_model import SVDPoseModel
-from networks.steam_pose_model import SteamPoseModel
+from networks.under_the_radar import UnderTheRadar
+from networks.hero import HERO
 from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format, get_T_ba
 from utils.utils import load_icra21_results, getStats
 from utils.vis import plot_sequences
@@ -33,10 +33,10 @@ if __name__ == '__main__':
         config = json.load(f)
     root = get_folder_from_file_path(args.pretrain)
     seq_nums = config['test_split']
-    if config['model'] == 'SVDPoseModel':
-        model = SVDPoseModel(config).to(config['gpuid'])
-    elif config['model'] == 'SteamPoseModel':
-        model = SteamPoseModel(config).to(config['gpuid'])
+    if config['model'] == 'UnderTheRadar':
+        model = UnderTheRadar(config).to(config['gpuid'])
+    elif config['model'] == 'HERO':
+        model = HERO(config).to(config['gpuid'])
         model.solver.sliding_flag = True
     assert(args.pretrain is not None)
     checkpoint = torch.load(args.pretrain, map_location=torch.device(config['gpuid']))

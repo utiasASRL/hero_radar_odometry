@@ -8,7 +8,7 @@ from networks.softmax_ref_matcher import SoftmaxRefMatcher
 import cpp.build.SteamSolver as steamcpp
 from utils.utils import convert_to_radar_frame
 
-class SteamPoseModel(torch.nn.Module):
+class HERO(torch.nn.Module):
     """
         This model performs unsupervised radar odometry using a sliding window optimization with window
         size between 2 (regular frame-to-frame odometry) and 4. A python wrapper around the STEAM library is used

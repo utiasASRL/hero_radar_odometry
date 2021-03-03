@@ -6,8 +6,8 @@ import numpy as np
 
 from datasets.oxford import get_dataloaders
 from datasets.boreas import get_dataloaders_boreas
-from networks.svd_pose_model import SVDPoseModel
-from networks.steam_pose_model import SteamPoseModel
+from networks.under_the_radar import UnderTheRadar
+from networks.hero import HERO
 from utils.utils import supervised_loss, pget_lr
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch
@@ -34,10 +34,10 @@ if __name__ == '__main__':
     elif config['dataset'] == 'boreas':
         train_loader, valid_loader, _ = get_dataloaders_boreas(config)
 
-    if config['model'] == 'SVDPoseModel':
-        model = SVDPoseModel(config).to(config['gpuid'])
-    elif config['model'] == 'SteamPoseModel':
-        model = SteamPoseModel(config).to(config['gpuid'])
+    if config['model'] == 'UnderTheRadar':
+        model = UnderTheRadar(config).to(config['gpuid'])
+    elif config['model'] == 'HERO':
+        model = HERO(config).to(config['gpuid'])
 
     ckpt_path = None
     if os.path.isfile(config['log_dir'] + 'latest.pt'):
@@ -47,9 +47,9 @@ if __name__ == '__main__':
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)
-    if config['model'] == 'SVDPoseModel':
+    if config['model'] == 'UnderTheRadar':
         monitor = SVDMonitor(model, valid_loader, config)
-    elif config['model'] == 'SteamPoseModel':
+    elif config['model'] == 'HERO':
         monitor = SteamMonitor(model, valid_loader, config)
     start_epoch = 0
 
@@ -83,9 +83,9 @@ if __name__ == '__main__':
                 print(e)
                 print('WARNING: exception encountered... skipping this batch.')
                 continue
-            if config['model'] == 'SVDPoseModel':
+            if config['model'] == 'UnderTheRadar':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
-            elif config['model'] == 'SteamPoseModel':
+            elif config['model'] == 'HERO':
                 loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
             if loss == 0:
                 print("No movement predicted. Skipping mini-batch.")
