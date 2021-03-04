@@ -62,8 +62,8 @@ class BoreasDataset(OxfordDataset):
     def __init__(self, config, split='train'):
         super().__init__(config, split)
         self.navtech_version = CTS350
-        #self.dataloader = dataloadercpp.DataLoader(self.config['radar_resolution'], self.config['cart_resolution'],
-        #                                           self.config['cart_pixel_width'], self.navtech_version)
+        self.dataloader = dataloadercpp.DataLoader(self.config['radar_resolution'], self.config['cart_resolution'],
+                                                   self.config['cart_pixel_width'], self.navtech_version)
 
     def get_frames_with_gt(self, frames, gt_path):
         # Drop the last few frame
@@ -111,23 +111,27 @@ class BoreasDataset(OxfordDataset):
             range_bins = 3360
 
         # Numpy arrays need to be sized correctly before passing them to the dataloader.
-        #timestamps = np.zeros((num_azimuths, 1), dtype=np.int64)
-        #azimuths = np.zeros((num_azimuths, 1), dtype=np.float32)
-        #polar = np.zeros((num_azimuths, range_bins), dtype=np.float32)
-        #data = np.zeros((cart_pixel_width, cart_pixel_width), dtype=np.float32)
-        #mask = np.zeros((cart_pixel_width, cart_pixel_width), dtype=np.float32)
+        timestamps = np.zeros((num_azimuths, 1), dtype=np.int64)
+        azimuths = np.zeros((num_azimuths, 1), dtype=np.float32)
+        polar = np.zeros((num_azimuths, range_bins), dtype=np.float32)
+        data = np.zeros((cart_pixel_width, cart_pixel_width), dtype=np.float32)
+        mask = np.zeros((cart_pixel_width, cart_pixel_width), dtype=np.float32)
 
-        #self.dataloader.load_radar(frame, timestamps, azimuths, polar)
-        #self.dataloader.polar_to_cartesian(azimuths, polar, data)
-        #data = np.expand_dims(data, axis=0)
+        self.dataloader.load_radar(frame, timestamps, azimuths, polar)
+        self.dataloader.polar_to_cartesian(azimuths, polar, data)
+        data = np.expand_dims(data, axis=0)
 
-        #polar_mask = mean_intensity_mask(polar)
-        #self.dataloader.polar_to_cartesian(azimuths, polar_mask, mask)
-        #mask = np.expand_dims(mask, axis=0)
+        polar_mask = mean_intensity_mask(polar)
+        self.dataloader.polar_to_cartesian(azimuths, polar_mask, mask)
+        mask = np.expand_dims(mask, axis=0)
 
-        _, _, _, polar, _ = load_radar(frame, navtech_version=CIR204)
-        data = np.expand_dims(cv2.imread(cart_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
-        mask = np.expand_dims(cv2.imread(mask_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
+        ###########
+
+        #_, _, _, polar, _ = load_radar(frame, navtech_version=CIR204)
+        #data = np.expand_dims(cv2.imread(cart_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
+        #mask = np.expand_dims(cv2.imread(mask_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
+
+        ###########
 
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])

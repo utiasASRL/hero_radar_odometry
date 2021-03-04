@@ -8,7 +8,7 @@ from datasets.oxford import get_dataloaders
 from datasets.boreas import get_dataloaders_boreas
 from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
-from utils.utils import supervised_loss, pget_lr
+from utils.utils import supervised_loss, get_lr
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 
