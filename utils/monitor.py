@@ -5,7 +5,7 @@ import torch
 from tensorboardX import SummaryWriter
 #from torch.utils.tensorboard import SummaryWriter
 
-from utils.utils import supervised_loss, pointmatch_loss, computeMedianError, computeKittiMetrics, get_inverse_tf
+from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics, get_inverse_tf
 from utils.utils import get_T_ba
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
@@ -87,10 +87,7 @@ class SVDMonitor(MonitorBase):
                 out = self.model(batch)
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
-            if self.config['loss'] == 'supervised_loss':
-                loss, dict_loss = supervised_loss(out['R'], out['t'], batch, self.config)
-            elif self.config['loss'] == 'pointmatch_loss':
-                loss, dict_loss = pointmatch_loss(out, batch, self.config)
+            loss, dict_loss = supervised_loss(out['R'], out['t'], batch, self.config)
             valid_loss += loss.detach().cpu().item()
             if not aux_init:
                 for loss_name in dict_loss:
@@ -147,10 +144,8 @@ class SteamMonitor(MonitorBase):
             with torch.no_grad():
                 self.model.eval()
                 self.model.solver.sliding_flag = True
-                # self.model.solver.log_det_thres_flag = True
                 valid_metric = self.validation()
                 self.model.solver.sliding_flag = False
-                # self.model.solver.log_det_thres_flag = False
                 self.model.train()
 
         return valid_metric

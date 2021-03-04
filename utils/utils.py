@@ -13,42 +13,11 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
     dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
     return svd_loss, dict_loss
 
-def pointmatch_loss(out, batch, config, alpha=1.0, beta=5.0, errorT=100.0):
-    R_tgt_src_pred = out['R']
-    t_tgt_src_pred = out['t']
-    tgt = out['tgt']
-    src = out['src']
-    weights = out['match_weights']
-    dense_weights = out['dense_weights']
-    mask = batch['mask'].to(config['gpuid'])
-    # tgt, src: B x N x 2
-    assert(tgt.size() == src.size())
-    B, N, _ = tgt.size()
-    R = R_tgt_src_pred[:, :2, :2]  # B x 2 x 2
-    t = t_tgt_src_pred[:, :2].expand(B, 2, N)  # B x 2 x N
-    tgt_pred = (torch.bmm(R, src.transpose(2, 1)) + t).transpose(2, 1) # B x N x 2
-    l1loss = torch.nn.L1Loss()
-    point_loss = l1loss(tgt, tgt_pred)
-    dict_loss = {'point_loss': point_loss}
-    wsum = torch.sum(weights)
-    if wsum == 0:
-        weight_loss = 15
-        print('WARNING: matching weights have gone to zero!')
-    else:
-        weight_loss = -1 * torch.log(wsum / (B * N))
-    dict_loss['weight_loss'] = weight_loss
-    #bceloss = torch.nn.BCELoss()
-    #mask_loss = bceloss(dense_weights, mask)
-    #dict_loss['mask_loss'] = mask_loss
-    loss = point_loss + alpha * weight_loss #+ beta * mask_loss
-    return loss, dict_loss
-
 def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
     batch_size = R.size(0)
     identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
     loss_fn = torch.nn.L1Loss()
     R_loss = alpha * loss_fn(torch.matmul(R_pred.transpose(2, 1), R), identity)
-    # R_loss = alpha * loss_fn(R_pred @ R, identity)
     t_loss = 1.0 * loss_fn(t_pred, t)
     svd_loss = R_loss + t_loss
     return svd_loss, R_loss, t_loss
@@ -304,4 +273,4 @@ def get_T_ba(out, a, b):
     T_a0 = np.eye(4)
     T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
     T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
-    return T_b0 @ get_inverse_tf(T_a0)
+    return np.matmul(T_b0, get_inverse_tf(T_a0))

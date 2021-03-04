@@ -7,20 +7,16 @@ class UNet(torch.nn.Module):
     """ The UNet network, code from: https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py """
     def __init__(self, config):
         super().__init__()
-
-        # n_channels
-        n_channels = config['input_channels']
         bilinear = config['networks']['unet']['bilinear']
         first_feature_dimension = config['networks']['unet']['first_feature_dimension']
         self.score_sigmoid = config['networks']['unet']['score_sigmoid']
-
         # check for steam 2x2 weight matrix setting
         outc_score_dim = 1
         if 'weight_matrix' in config['steam']:
             outc_score_dim = 3 if config['steam']['weight_matrix'] is True else 1
-
         # down
-        self.inc = DoubleConv(n_channels, first_feature_dimension)
+        input_channels = 1
+        self.inc = DoubleConv(input_channels, first_feature_dimension)
         self.down1 = Down(first_feature_dimension, first_feature_dimension * 2)
         self.down2 = Down(first_feature_dimension * 2, first_feature_dimension * 4)
         self.down3 = Down(first_feature_dimension * 4, first_feature_dimension * 8)
@@ -38,17 +34,6 @@ class UNet(torch.nn.Module):
         self.up4_score = Up(first_feature_dimension * (2 + 1), first_feature_dimension * 1, bilinear)
         self.outc_score = OutConv(first_feature_dimension, outc_score_dim)
         self.sigmoid = torch.nn.Sigmoid()
-
-        if config['networks']['unet']['kaiming']:
-            self.initialize_weights()
-
-    def initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         _, _, height, width = x.size()

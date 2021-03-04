@@ -8,7 +8,7 @@ from networks.softmax_ref_matcher import SoftmaxRefMatcher
 import cpp.build.SteamSolver as steamcpp
 from utils.utils import convert_to_radar_frame
 
-class SteamPoseModel(torch.nn.Module):
+class HERO(torch.nn.Module):
     """
         This model performs unsupervised radar odometry using a sliding window optimization with window
         size between 2 (regular frame-to-frame odometry) and 4. A python wrapper around the STEAM library is used
@@ -45,8 +45,6 @@ class SteamPoseModel(torch.nn.Module):
             T_aug = torch.stack(batch['T_aug'], dim=0).to(self.gpuid)
             keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug[:, :2, :2].transpose(1, 2))
             self.solver.T_aug = batch['T_aug']
-        else:
-            self.solver.T_aug = []
 
         pseudo_coords_xy[:, :, 1] *= -1.0
         keypoint_coords_xy[:, :, 1] *= -1.0
@@ -95,7 +93,7 @@ class SteamPoseModel(torch.nn.Module):
                 R_21 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, :3]).to(self.gpuid).unsqueeze(0)
                 t_12_in_2 = torch.from_numpy(self.solver.poses[b, w-i+1][:3, 3:4]).to(self.gpuid).unsqueeze(0)
                 error = points2 - (R_21 @ points1 + t_12_in_2)
-                mah2_error = error.transpose(1, 2)@weights_mat@error
+                mah2_error = error.transpose(1, 2) @ weights_mat @ error
 
                 # error threshold
                 errorT = self.mah_thres**2
@@ -106,13 +104,14 @@ class SteamPoseModel(torch.nn.Module):
 
                 if ids.squeeze().nelement() <= 1:
                     print('Warning: MAH threshold output has 1 or 0 elements.')
-                    error2 = error.transpose(1, 2)@error
-                    _, ids = torch.topk(error2.squeeze(), self.topk_backup, largest=False)
+                    error2 = error.transpose(1, 2) @ error
+                    k = min(len(error2.squeeze()), self.topk_backup)
+                    _, ids = torch.topk(error2.squeeze(), k, largest=False)
 
                 # squared mah error
                 if self.expect_approx_opt == 0:
                     # only mean
-                    point_loss += torch.mean(error[ids].transpose(1, 2)@weights_mat[ids]@error[ids])
+                    point_loss += torch.mean(error[ids].transpose(1, 2) @ weights_mat[ids] @ error[ids])
                     unweighted_point_loss += torch.mean(error[ids].transpose(1, 2) @ ones[ids] @ error[ids])
                 elif self.expect_approx_opt == 1:
                     # sigmapoints
@@ -120,9 +119,9 @@ class SteamPoseModel(torch.nn.Module):
                     tsp = torch.from_numpy(self.solver.poses_sp[b, w-i, :, :3, 3:4]).to(self.gpuid).unsqueeze(1) # s x 1 x 3 x 1
 
                     points2 = points2[ids].unsqueeze(0)  # 1 x n x 3 x 1
-                    points1_in_2 = Rsp@(points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
+                    points1_in_2 = Rsp @ (points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1
                     error = points2 - points1_in_2  # s x n x 3 x 1
-                    temp = torch.sum(error.transpose(2, 3)@weights_mat[ids].unsqueeze(0)@error, dim=0)/Rsp.size(0)
+                    temp = torch.sum(error.transpose(2, 3) @ weights_mat[ids].unsqueeze(0) @ error, dim=0)/Rsp.size(0)
                     unweighted_point_loss += torch.mean(error.transpose(2, 3) @ ones[ids].unsqueeze(0) @ error)
                     point_loss += torch.mean(temp)
                 else:
@@ -164,8 +163,7 @@ class SteamSolver():
         self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
-        self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
-                                               self.window_size, config['steam']['zero_vel_prior'])
+        self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):

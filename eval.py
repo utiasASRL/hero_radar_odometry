@@ -6,8 +6,9 @@ import torch
 import pickle
 
 from datasets.oxford import get_dataloaders
-from networks.svd_pose_model import SVDPoseModel
-from networks.steam_pose_model import SteamPoseModel
+from datasets.boreas import get_dataloaders_boreas
+from networks.under_the_radar import UnderTheRadar
+from networks.hero import HERO
 from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format, get_T_ba
 from utils.utils import load_icra21_results, getStats
 from utils.vis import plot_sequences
@@ -29,7 +30,7 @@ def get_folder_from_file_path(path):
 if __name__ == '__main__':
     torch.set_num_threads(8)
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/eval.json', type=str, help='config file path')
+    parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
     args = parser.parse_args()
     with open(args.config) as f:
@@ -37,13 +38,11 @@ if __name__ == '__main__':
     config['gpuid'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     root = get_folder_from_file_path(args.pretrain)
     seq_nums = config['test_split']
-    if config['model'] == 'SVDPoseModel':
-        model = SVDPoseModel(config)
-    elif config['model'] == 'SteamPoseModel':
-        model = SteamPoseModel(config)
+    if config['model'] == 'UnderTheRadar':
+        model = UnderTheRadar(config).to(config['gpuid'])
+    elif config['model'] == 'HERO':
+        model = HERO(config).to(config['gpuid'])
         model.solver.sliding_flag = True
-        # self.model.solver.log_det_thres_flag = True
-    model.to(config['gpuid'])
     assert(args.pretrain is not None)
     checkpoint = torch.load(args.pretrain, map_location=torch.device(config['gpuid']))
     failed = False
@@ -67,7 +66,10 @@ if __name__ == '__main__':
         T_pred = []
         timestamps = []
         config['test_split'] = [seq_num]
-        _, _, test_loader = get_dataloaders(config)
+        if config['dataset'] == 'oxford':
+            _, _, test_loader = get_dataloaders(config)
+        elif config['dataset'] == 'boreas':
+            _, _, test_loader = get_dataloaders_boreas(config)
         seq_lens = test_loader.dataset.seq_lens
         print(seq_lens)
         seq_names = test_loader.dataset.sequences
@@ -77,7 +79,11 @@ if __name__ == '__main__':
             if (batchi + 1) % config['print_rate'] == 0:
                 print('Eval Batch {} / {}: {:.2}s'.format(batchi, len(test_loader), np.mean(time_used[-config['print_rate']:])))
             with torch.no_grad():
-                out = model(batch)
+                try:
+                    out = model(batch)
+                except RuntimeError as e:
+                    print(e)
+                    continue
             if batchi == len(test_loader) - 1:
                 # append entire window
                 for w in range(batch['T_21'].size(0)-1):
@@ -95,15 +101,18 @@ if __name__ == '__main__':
         T_pred_.extend(T_pred)
         time_used_.extend(time_used)
         t_err, r_err, err = computeKittiMetrics(T_gt, T_pred, seq_lens)
+        t_err, r_err, err = computeKittiMetrics(T_gt, T_pred, [len(T_gt)])
         print('SEQ: {} : {}'.format(seq_num, seq_names[0]))
         print('KITTI t_err: {} %'.format(t_err))
         print('KITTI r_err: {} deg/m'.format(r_err))
         err_.extend(err)
-        save_in_yeti_format(T_gt, T_pred, timestamps, seq_lens, seq_names, root)
+        save_in_yeti_format(T_gt, T_pred, timestamps, [len(T_gt)], seq_names, root)
         pickle.dump([T_gt, T_pred, timestamps], open(root + 'odom' + seq_names[0] + '.obj', 'wb'))
-        T_icra = load_icra21_results('/h/keenan/RadarLocNet/results/icra21/', seq_names, seq_lens)
+        T_icra = None
+        if config['dataset'] == 'oxford':
+            T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
         fname = root + seq_names[0] + '.pdf'
-        plot_sequences(T_gt, T_pred, seq_lens, returnTensor=False, T_icra=T_icra, savePDF=True, fnames=[fname])
+        plot_sequences(T_gt, T_pred, [len(T_gt)], returnTensor=False, T_icra=T_icra, savePDF=True, fnames=[fname])
 
     print('time_used: {}'.format(sum(time_used_) / len(time_used_)))
     results = computeMedianError(T_gt_, T_pred_)
@@ -114,4 +123,3 @@ if __name__ == '__main__':
     print('KITTI t_err: {} %'.format(t_err * 100))
     print('KITTI r_err: {} deg/m'.format(r_err * 180 / np.pi))
     saveKittiErrors(err_, root + "kitti_err.obj")
-

@@ -67,7 +67,7 @@ class TestAugmentation(unittest.TestCase):
             config = json.load(f)
         _, _, test_loader = get_dataloaders(config)
         pretrain = ''
-        model = SVDPoseModel(config)
+        model = UnderTheRadar(config)
         model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
         model.to(config['gpuid'])
         model.eval()

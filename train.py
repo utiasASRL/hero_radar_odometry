@@ -5,15 +5,15 @@ import torch
 import numpy as np
 
 from datasets.oxford import get_dataloaders
-from networks.svd_pose_model import SVDPoseModel
-from networks.steam_pose_model import SteamPoseModel
-from utils.utils import supervised_loss, pointmatch_loss, get_lr
+from datasets.boreas import get_dataloaders_boreas
+from networks.under_the_radar import UnderTheRadar
+from networks.hero import HERO
+from utils.utils import supervised_loss, get_lr
 from utils.monitor import SVDMonitor, SteamMonitor
-from datasets.transforms import augmentBatch
+from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
-#torch.backends.cudnn.deterministic = True
 torch.manual_seed(0)
 np.random.seed(0)
 torch.set_num_threads(8)
@@ -30,12 +30,16 @@ if __name__ == '__main__':
         config = json.load(f)
     config['gpuid'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(config['gpuid'])
-    train_loader, valid_loader, _ = get_dataloaders(config)
 
-    if config['model'] == 'SVDPoseModel':
-        model = SVDPoseModel(config).to(config['gpuid'])
-    elif config['model'] == 'SteamPoseModel':
-        model = SteamPoseModel(config).to(config['gpuid'])
+    if config['dataset'] == 'oxford':
+        train_loader, valid_loader, _ = get_dataloaders(config)
+    elif config['dataset'] == 'boreas':
+        train_loader, valid_loader, _ = get_dataloaders_boreas(config)
+
+    if config['model'] == 'UnderTheRadar':
+        model = UnderTheRadar(config).to(config['gpuid'])
+    elif config['model'] == 'HERO':
+        model = HERO(config).to(config['gpuid'])
 
     ckpt_path = None
     if os.path.isfile(config['log_dir'] + 'latest.pt'):
@@ -43,22 +47,29 @@ if __name__ == '__main__':
     elif args.pretrain is not None:
         ckpt_path = args.pretrain
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
+    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)
-    if config['model'] == 'SVDPoseModel':
+    if config['model'] == 'UnderTheRadar':
         monitor = SVDMonitor(model, valid_loader, config)
-    elif config['model'] == 'SteamPoseModel':
+    elif config['model'] == 'HERO':
         monitor = SteamMonitor(model, valid_loader, config)
     start_epoch = 0
+
     if ckpt_path is not None:
-        print('Loading from checkpoint: ' + ckpt_path)
-        checkpoint = torch.load(ckpt_path, map_location=torch.device(config['gpuid']))
-        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        start_epoch = checkpoint['epoch']
-        monitor.counter = checkpoint['counter']
-    #model = torch.nn.DataParallel(model)
+        try:
+            print('Loading from checkpoint: ' + ckpt_path)
+            checkpoint = torch.load(ckpt_path, map_location=torch.device(config['gpuid']))
+            model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint['epoch']
+            monitor.counter = checkpoint['counter']
+            print('success')
+        except Exception as e:
+            print(e)
+            print('Defaulting to legacy checkpoint style')
+            model.load_state_dict(checkpoint, strict=False)
+            print('success')
     if not os.path.isfile(config['log_dir'] + args.config):
         os.system('cp ' + args.config + ' ' + config['log_dir'])
 
@@ -66,8 +77,13 @@ if __name__ == '__main__':
 
     for epoch in range(start_epoch, config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
-            if config['augmentation']['augment']:
-                batch = augmentBatch(batch, config)
+            if config['augmentation']['rot_max'] != 0:
+                if config['dataset'] == 'boreas':
+                    batch = augmentBatch2(batch, config)
+                elif config['dataset'] == 'oxford' and config['model'] == 'HERO':
+                    batch = augmentBatch3(batch, config)
+                elif config['dataset'] == 'oxford' and config['model'] == 'UnderTheRadar':
+                    batch = augmentBatch(batch, config)
             optimizer.zero_grad()
             try:
                 out = model(batch)
@@ -75,12 +91,9 @@ if __name__ == '__main__':
                 print(e)
                 print('WARNING: exception encountered... skipping this batch.')
                 continue
-            if config['model'] == 'SVDPoseModel':
-                if config['loss'] == 'supervised_loss':
-                    loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
-                elif config['loss'] == 'pointmatch_loss':
-                    loss, dict_loss = pointmatch_loss(out, batch, config)
-            elif config['model'] == 'SteamPoseModel':
+            if config['model'] == 'UnderTheRadar':
+                loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
+            elif config['model'] == 'HERO':
                 loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
             if loss == 0:
                 print("No movement predicted. Skipping mini-batch.")
