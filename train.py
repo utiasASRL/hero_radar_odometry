@@ -10,7 +10,7 @@ from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
 from utils.utils import supervised_loss, pget_lr
 from utils.monitor import SVDMonitor, SteamMonitor
-from datasets.transforms import augmentBatch
+from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
@@ -75,7 +75,13 @@ if __name__ == '__main__':
 
     for epoch in range(start_epoch, config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
-            batch = augmentBatch(batch, config)
+            if config['augmentation']['rot_max'] != 0:
+                if config['dataset'] == 'boreas':
+                    batch = augmentBatch2(batch, config)
+                elif config['dataset'] == 'oxford' and config['model'] == 'HERO':
+                    batch = augmentBatch3(batch, config)
+                elif config['dataset'] == 'oxford' and config['model'] == 'UnderTheRadar':
+                    batch = augmentBatch(batch, config)
             optimizer.zero_grad()
             try:
                 out = model(batch)

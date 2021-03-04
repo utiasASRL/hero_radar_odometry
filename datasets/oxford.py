@@ -124,7 +124,9 @@ class OxfordDataset(Dataset):
             time2 = 0
         times = np.array([time1, time2]).reshape(1, 2)
         T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
-        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask}
+        polar = np.expand_dims(polar, axis=0)
+        azimuths = np.expand_dims(azimuths, axis=0)
+        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask, 'polar': polar, 'azimuths': azimuths}
 
 def get_dataloaders(config):
     """Retrieves train, validation, and test data loaders."""
