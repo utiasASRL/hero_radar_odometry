@@ -55,7 +55,6 @@ bool P2P3ErrorEval::isActive() const {
 //////////////////////////////////////////////////////////////////////////////////////////////
 Eigen::Vector3d P2P3ErrorEval::evaluate() const {
     // Return error (between measurement and point estimate projected in camera frame)
-    // return ref_a_ - (T_b_a_->evaluate().inverse() * read_b_);
     return D_ * (read_b_ - T_b_a_->evaluate() * ref_a_);
 }
 
@@ -73,18 +72,10 @@ Eigen::Vector3d P2P3ErrorEval::evaluate(const Eigen::Matrix3d& lhs, std::vector<
     // Get evaluation from tree
     // TODO(david): why just not using T_a_b_->evaluate() instead?
     const lgmath::se3::Transformation T_ba = blkAutoTransform.getValue();
-    // const lgmath::se3::Transformation T_ba = T_b_a_->evaluate();
-    // const Eigen::Vector4d read_a = T_ba.inverse() * read_b_;
     const Eigen::Vector4d ref_b = T_ba * ref_a_;
-
     // Get Jacobians
-
-    // Eigen::Matrix<double, 4, 6> newLhs = -lhs*lgmath::se3::point2fs(read_a.head<3>());
-    // Eigen::Matrix<double, 4, 6> newLhs = lhs*T_ba.adjoint()*lgmath::se3::point2fs(read_a.head<3>());
     Eigen::Matrix<double, 3, 6> newLhs = -1 * lhs * D_ * lgmath::se3::point2fs(ref_b.head<3>());
-
     T_b_a_->appendBlockAutomaticJacobians(newLhs, blkAutoTransform.getRoot(), jacs);
-
     // Return evaluation
     // return ref_a_ - read_a;
     return D_ * (read_b_ - ref_b);

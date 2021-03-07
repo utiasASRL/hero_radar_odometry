@@ -47,7 +47,7 @@ public:
 
     inline ~releaseGIL(){
         PyEval_RestoreThread(save_state);
-	save_state = NULL;
+        save_state = NULL;
     }
 private:
     PyThreadState *save_state;

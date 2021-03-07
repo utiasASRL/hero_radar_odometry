@@ -6,6 +6,7 @@ from datasets.radar import radar_polar_to_cartesian
 from datasets.oxford import mean_intensity_mask
 
 def augmentBatch(batch, config):
+    """Rotates the cartesian radar image by a random amount, adjusts the ground truth transform accordingly."""
     rot_max = config['augmentation']['rot_max']
     batch_size = config['batch_size']
     window_size = config['window_size']
@@ -30,6 +31,9 @@ def augmentBatch(batch, config):
     return batch
 
 def augmentBatch2(batch, config):
+    """Rotates the cartesian radar image by a random amount, does NOT adjust ground truth transform.
+        The keypoints must be unrotated later using the T_aug transform stored in the batch dict.
+    """
     rot_max = config['augmentation']['rot_max']
     data = batch['data'].numpy()    # this seems to return a reference, not a copy
     mask = batch['mask'].numpy()
@@ -51,6 +55,9 @@ def augmentBatch2(batch, config):
     return batch
 
 def augmentBatch3(batch, config):
+    """Shifts the polar radar image by a random amount, does NOT adjust ground truth transform.
+        The keypoints must be unrotated later using the T_aug transform stored in the batch dict.
+    """
     rot_max = config['augmentation']['rot_max']
     data = batch['data'].numpy()
     polar = batch['polar'].numpy()

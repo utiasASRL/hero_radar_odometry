@@ -8,7 +8,8 @@ from datasets.oxford import get_dataloaders
 from datasets.boreas import get_dataloaders_boreas
 from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
-from utils.utils import supervised_loss, get_lr
+from utils.utils import get_lr
+from utilts.losses import supervised_loss, unsupervised_loss
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 
@@ -92,7 +93,7 @@ if __name__ == '__main__':
             if config['model'] == 'UnderTheRadar':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
             elif config['model'] == 'HERO':
-                loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
+                loss, dict_loss = unsupervised_loss(out, batch, config, model.solver)
             if loss == 0:
                 print("No movement predicted. Skipping mini-batch.")
                 continue

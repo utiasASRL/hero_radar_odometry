@@ -22,14 +22,12 @@ void SteamSolver::resetTraj() {
 void SteamSolver::slideTraj() {
     // drop first frame
     states_.pop_front();
-
     // set first frame to identity
     lgmath::se3::Transformation T_i0 = states_[0].pose->getValue().inverse();
     for (uint k = 0; k < states_.size(); ++k){
         lgmath::se3::Transformation T_ki = states_[k].pose->getValue();
         states_[k].pose->setValue(T_ki*T_i0);
     }
-
     // add new frame to end
     lgmath::se3::Transformation T_km1_i = states_.back().pose->getValue();
     Eigen::Matrix<double, 6, 1> xi = dt_ * states_.back().velocity->getValue();
@@ -66,18 +64,16 @@ void SteamSolver::optimize() {
         TrajStateVar& state = states_.at(i);
         steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
         traj.add(state.time, temp, state.velocity);
-        if (i == 0) {  // lock first pose and velocity
+        if (i == 0) {  // lock first pose
             state.pose->setLock(true);
         }
-    }  // end i
-
+    }
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
     traj.appendPriorCostTerms(costTerms);
 
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
-
     // loop through every frame
     for (uint i = 1; i < window_size_; ++i) {
         steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
@@ -104,10 +100,9 @@ void SteamSolver::optimize() {
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));
             costTerms->add(cost);
-        }  // end j
-    }  // end i
+        }
+    }
 
-    // Initialize problem
     steam::OptimizationProblem problem;
     // Add state variables
     for (uint i = 0; i < states_.size(); ++i) {
@@ -115,22 +110,16 @@ void SteamSolver::optimize() {
         problem.addStateVariable(state.pose);
         problem.addStateVariable(state.velocity);
     }
-    // Add cost terms
     problem.addCostTerm(costTerms);
-    // Solver parameters
     SolverType::Params params;
     params.verbose = false;
-    // Make solver
     solver_ = SolverBasePtr(new SolverType(&problem, params));
-    // Optimize
     solver_->optimize();
 }
 
 void SteamSolver::getPoses(np::ndarray& poses) {
     for (uint i = 0; i < states_.size(); ++i) {
-        // get position
         Eigen::Matrix<double, 4, 4> Tvi = states_[i].pose->getValue().matrix();
-        // set output
         for (uint r = 0; r < 3; ++r) {
             for (uint c = 0; c < 4; ++c) {
                 poses[i][r][c] = float(Tvi(r, c));
@@ -141,9 +130,7 @@ void SteamSolver::getPoses(np::ndarray& poses) {
 
 void SteamSolver::getVelocities(np::ndarray& vels) {
     for (uint i = 0; i < states_.size(); ++i) {
-        // get position
         Eigen::Matrix<double, 6, 1> vel = states_[i].velocity->getValue();
-        // set output
         for (uint r = 0; r < 6; ++r) {
             vels[i][r] = float(vel(r));
         }
@@ -160,39 +147,33 @@ void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
         keys.push_back(state.pose->getKey());
     }
     steam::BlockMatrix cov_blocks = solver_->queryCovarianceBlock(keys);
-
     // useful constants
     int n = 6;  // pose is 6D
     double alpha = sqrt(double(n));
-
     // loop through every frame (skipping first since it's locked)
     for (unsigned int i = 1; i < window_size_; i++) {
         // mean pose
         const TrajStateVar& state = states_.at(i);
         Eigen::Matrix4d T_i0_eigen = state.pose->getValue().matrix();
-
         // get cov and LLT decomposition
         Eigen::Matrix<double, 6, 6> cov = cov_blocks.at(i - 1, i - 1);
         Eigen::LLT<Eigen::MatrixXd> lltcov(cov);
         Eigen::MatrixXd L = lltcov.matrixL();
-
         // sigmapoints
         for (int a = 0; a < n; ++a) {
             // delta for pose
             Eigen::Matrix4d T_sp = lgmath::se3::vec2tran(L.col(a).head<6>()*alpha);
             Eigen::Matrix4d T_sp_inv = lgmath::se3::vec2tran(-L.col(a).head<6>()*alpha);
-
             // positive/negative sigmapoints
             T_sp = T_sp*T_i0_eigen;
             T_sp_inv = T_sp_inv*T_i0_eigen;
-
             // set output
             for (int r = 0; r < 4; ++r) {
                 for (int c = 0; c < 4; ++c) {
                     sigma_T[i-1][a][r][c] = float(T_sp(r, c));
                     sigma_T[i-1][a+n][r][c] = float(T_sp_inv(r, c));
-                }  // end c
-            }  // end r
-        }  // end for a
-    }  // end for i
+                }
+            }
+        }
+    }
 }

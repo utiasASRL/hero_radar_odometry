@@ -26,6 +26,7 @@ def yaw(y):
     return np.array([[np.cos(y), np.sin(y), 0], [-np.sin(y), np.cos(y), 0], [0, 0, 1]], dtype=np.float64)
 
 def yawPitchRollToRot(y, p, r):
+    """Converts yaw-pitch-roll angles into a 3x3 rotation matrix: SO(3)"""
     Y = yaw(y)
     P = pitch(p)
     R = roll(r)
@@ -33,6 +34,7 @@ def yawPitchRollToRot(y, p, r):
     return np.matmul(R, C)
 
 def rotToYawPitchRoll(C, eps = 1e-15):
+    """Converts a 3x3 rotation matrix SO(3) to yaw-pitch-roll angles."""
     i = 2
     j = 1
     k = 0
@@ -48,6 +50,7 @@ def rotToYawPitchRoll(C, eps = 1e-15):
     return y, p, r
 
 def get_transform_boreas(gt):
+    """Retrieve 4x4 homogeneous transform for a given parsed line of the ground truth csv for the pose of the sensor"""
     # gt: list of floats or doubles
     T = np.identity(4, dtype=np.float64)
     C_enu_sensor = yawPitchRollToRot(gt[10], gt[9], gt[8])
