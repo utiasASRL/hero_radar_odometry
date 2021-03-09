@@ -30,9 +30,9 @@ def unsupervised_loss(out, batch, config, solver):
     batch_size = config['batch_size']
     window_size = config['window_size']
     gpuid = config['gpuid']
-    mah_thres = config['mah_thres']
-    expect_approx_opt = config['expect_approx_opt']
-    topk_backup = config['topk_backup']
+    mah_thres = config['steam']['mah_thres']
+    expect_approx_opt = config['steam']['expect_approx_opt']
+    topk_backup = config['steam']['topk_backup']
     T_aug = []
     if 'T_aug' in batch:
         T_aug = batch['T_aug']

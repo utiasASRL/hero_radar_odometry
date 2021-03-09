@@ -9,7 +9,7 @@ from datasets.boreas import get_dataloaders_boreas
 from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
 from utils.utils import get_lr
-from utilts.losses import supervised_loss, unsupervised_loss
+from utils.losses import supervised_loss, unsupervised_loss
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 
@@ -88,7 +88,7 @@ if __name__ == '__main__':
                 if config['dataset'] == 'boreas':
                     batch = augmentBatch2(batch, config)
                 elif config['dataset'] == 'oxford' and config['model'] == 'HERO':
-                    batch = augmentBatch3(batch, config)
+                    batch = augmentBatch2(batch, config)
                 elif config['dataset'] == 'oxford' and config['model'] == 'UnderTheRadar':
                     batch = augmentBatch(batch, config)
             optimizer.zero_grad()
