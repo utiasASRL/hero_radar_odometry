@@ -2,6 +2,7 @@ from itertools import accumulate
 from torch.utils.data import Sampler, SubsetRandomSampler
 
 class RandomWindowBatchSampler(Sampler):
+    """Custom sampler, windows must be consecutive frames but batches may have more than one random window."""
     def __init__(self, batch_size, window_size, seq_lens, drop_last=True):
         valid_frames = []
         seq_len_cumsum = list(accumulate([0] + seq_lens))
@@ -29,6 +30,7 @@ class RandomWindowBatchSampler(Sampler):
         return (len(self.sampler) + total_size - 1) // self.batch_size
 
 class SequentialWindowBatchSampler(Sampler):
+    """Creates a sliding window for each sequential frame as if it were running online, for evaluation."""
     def __init__(self, batch_size, window_size, seq_lens, drop_last=True):
         self.valid_frames = []
         seq_len_cumsum = list(accumulate([0] + seq_lens))

@@ -8,12 +8,14 @@ from datasets.oxford import get_dataloaders
 from datasets.boreas import get_dataloaders_boreas
 from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
-from utils.utils import supervised_loss, get_lr
+from utils.utils import get_lr
+from utilts.losses import supervised_loss, unsupervised_loss
 from utils.monitor import SVDMonitor, SteamMonitor
 from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
+torch.backends.cudnn.deterministic = True
 torch.manual_seed(0)
 np.random.seed(0)
 torch.set_num_threads(8)
@@ -47,7 +49,14 @@ if __name__ == '__main__':
     elif args.pretrain is not None:
         ckpt_path = args.pretrain
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
+    if config['optimizer'] == 'adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
+    elif config['optimizer'] == 'adamw':
+        optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
+    elif config['optimizer'] == 'sgd':
+        optimizer = torch.optim.SGD(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'],
+                                    momentum=config['momentum'])
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)
     if config['model'] == 'UnderTheRadar':
         monitor = SVDMonitor(model, valid_loader, config)
@@ -94,7 +103,7 @@ if __name__ == '__main__':
             if config['model'] == 'UnderTheRadar':
                 loss, dict_loss = supervised_loss(out['R'], out['t'], batch, config)
             elif config['model'] == 'HERO':
-                loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
+                loss, dict_loss = unsupervised_loss(out, batch, config, model.solver)
             if loss == 0:
                 print("No movement predicted. Skipping mini-batch.")
                 continue

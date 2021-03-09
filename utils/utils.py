@@ -2,26 +2,6 @@ import pickle
 import numpy as np
 import torch
 
-def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
-    T_21 = batch['T_21'].to(config['gpuid'])
-    # Get ground truth transforms
-    kp_inds, _ = get_indices(config['batch_size'], config['window_size'])
-    T_tgt_src = T_21[kp_inds]
-    R_tgt_src = T_tgt_src[:, :3, :3]
-    t_tgt_src = T_tgt_src[:, :3, 3].unsqueeze(-1)
-    svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred, config['gpuid'])
-    dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
-    return svd_loss, dict_loss
-
-def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
-    batch_size = R.size(0)
-    identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
-    loss_fn = torch.nn.L1Loss()
-    R_loss = alpha * loss_fn(torch.matmul(R_pred.transpose(2, 1), R), identity)
-    t_loss = 1.0 * loss_fn(t_pred, t)
-    svd_loss = R_loss + t_loss
-    return svd_loss, R_loss, t_loss
-
 def get_inverse_tf(T):
     """Returns the inverse of a given 4x4 homogeneous transform."""
     T2 = np.identity(4, dtype=np.float32)
@@ -274,3 +254,55 @@ def get_T_ba(out, a, b):
     T_a0[:3, :3] = out['R'][0, a].detach().cpu().numpy()
     T_a0[:3, 3:4] = out['t'][0, a].detach().cpu().numpy()
     return np.matmul(T_b0, get_inverse_tf(T_a0))
+
+def convert_to_weight_matrix(w, window_id, T_aug=[]):
+    """
+        w: n_points x S
+        This function converts the S-dimensional weights estimated for each keypoint into
+        a 2x2 weight (inverse covariance) matrix for each keypoint.
+        If S = 1, Wout = diag(exp(w), exp(w), 1e4)
+        If S = 3, use LDL^T to obtain 2x2 covariance, place on top-LH corner. 1e4 bottom-RH corner.
+    """
+    z_weight = 9.2103  # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
+    if w.size(1) == 1:
+        # scalar weight
+        A = torch.zeros(w.size(0), 9, device=w.device)
+        A[:, (0, 4)] = torch.exp(w)
+        A[:, 8] = torch.exp(torch.tensor(z_weight))
+        A = A.reshape((-1, 3, 3))
+        d = torch.zeros(w.size(0), 3, device=w.device)
+        d[:, 0:2] += w
+        d[:, 2] += z_weight
+    elif w.size(1) == 3:
+        # 2x2 matrix
+        L = torch.zeros(w.size(0), 4, device=w.device)
+        L[:, (0, 3)] = 1
+        L[:, 2] = w[:, 0]
+        L = L.reshape((-1, 2, 2))
+        D = torch.zeros(w.size(0), 4, device=w.device)
+        D[:, (0, 3)] = torch.exp(w[:, 1:])
+        D = D.reshape((-1, 2, 2))
+        A2x2 = L @ D @ L.transpose(1, 2)
+
+        if T_aug:  # if list is not empty
+            Rot = T_aug[window_id].to(w.device)[:2, :2].unsqueeze(0)
+            A2x2 = Rot.transpose(1, 2) @ A2x2 @ Rot
+
+        A = torch.zeros(w.size(0), 3, 3, device=w.device)
+        A[:, 0:2, 0:2] = A2x2
+        A[:, 2, 2] = torch.exp(torch.tensor(z_weight))
+        d = torch.ones(w.size(0), 3, device=w.device)*z_weight
+        d[:, 0:2] = w[:, 1:]
+    else:
+        assert False, "Weight scores should be dim 1 or 3"
+
+    return A, d
+
+def mask_intensity_filter(data, patch_size, patch_mean_thres=0.05):
+    """Given a cartesian mask of likely target pixels (data), this function computes the percentage of
+        likely target pixels in a given square match of the input. The output is a list of booleans indicate whether
+        each patch either has more (True) or less (False) % likely target pixels than the patch_mean_thres.
+    """
+    int_patches = F.unfold(data, kernel_size=patch_size, stride=patch_size)
+    keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)  # BW x 1 x num_patches
+    return keypoint_int >= patch_mean_thres

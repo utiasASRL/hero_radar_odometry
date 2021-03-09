@@ -5,7 +5,8 @@ import torch
 from tensorboardX import SummaryWriter
 #from torch.utils.tensorboard import SummaryWriter
 
-from utils.utils import supervised_loss, computeMedianError, computeKittiMetrics, get_inverse_tf
+from utils.utils import computeMedianError, computeKittiMetrics, get_inverse_tf
+from utilts.losses import supervised_loss, unsupervised_loss
 from utils.utils import get_T_ba
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
@@ -177,7 +178,7 @@ class SteamMonitor(MonitorBase):
                 continue
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
-            loss, dict_loss = self.model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
+            loss, dict_loss = unsupervised_loss(out, batch, config, self.model.solver)
             if loss != 0:
                 valid_loss += loss.detach().cpu().item()
                 if not aux_init:

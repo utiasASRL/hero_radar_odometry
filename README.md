@@ -72,3 +72,13 @@ cmake .. && make
 `lr` : learning rate \
 `window_size` : size of the sliding window esimator in frames (2 = normal frame-to-frame) \
 `augmentation[rot_max]` : Random rotation augmentation sampled from uniform[-rot_max, rot_max]
+
+# TODO Items
+
+- [ ] Test cleaned up code for regression
+- [ ] Add doc strings and delete unused code
+- [ ] Add example usage to README
+- [ ] Test UnderTheRadar implementation
+- [ ] Test "test" modules
+- [ ] Add script for downloading HERO results
+- [ ] Train with batchsize > 2

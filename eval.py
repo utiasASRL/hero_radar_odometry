@@ -13,8 +13,9 @@ from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors
 from utils.utils import load_icra21_results, getStats
 from utils.vis import plot_sequences
 
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
+torch.backends.cudnn.deterministic = True
 
 print(torch.__version__)
 print(torch.version.cuda)

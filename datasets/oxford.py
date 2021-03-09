@@ -23,6 +23,7 @@ def get_frames(path, extension='.png'):
     return frames
 
 def mean_intensity_mask(polar_data, multiplier=3.0):
+    """Tresholds on multiplier*np.mean(azimuth_data) to create a polar mask of likely target points."""
     num_azimuths, range_bins = polar_data.shape
     mask = np.zeros((num_azimuths, range_bins))
     for i in range(num_azimuths):
