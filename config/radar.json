@@ -24,6 +24,9 @@
         }
     },
     "lr": 0.0001,
+    "weight_decay": 0,
+    "optimizer": "adam",
+    "momentum": 0,
     "clip_norm": 1.0,
     "batch_size": 1,
     "window_size": 2,

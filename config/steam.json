@@ -36,6 +36,9 @@
         "log_det_topk": 20
     },
     "lr": 0.00001,
+    "weight_decay": 0,
+    "optimizer": "adam",
+    "momentum": 0,
     "clip_norm": 10.0,
     "batch_size": 1,
     "window_size": 3,
