@@ -6,7 +6,7 @@ from tensorboardX import SummaryWriter
 #from torch.utils.tensorboard import SummaryWriter
 
 from utils.utils import computeMedianError, computeKittiMetrics, get_inverse_tf
-from utilts.losses import supervised_loss, unsupervised_loss
+from utils.losses import supervised_loss, unsupervised_loss
 from utils.utils import get_T_ba
 from utils.vis import draw_batch, plot_sequences, draw_batch_steam
 
