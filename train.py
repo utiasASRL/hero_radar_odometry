@@ -88,7 +88,7 @@ if __name__ == '__main__':
                 if config['dataset'] == 'boreas':
                     batch = augmentBatch2(batch, config)
                 elif config['dataset'] == 'oxford' and config['model'] == 'HERO':
-                    batch = augmentBatch2(batch, config)
+                    batch = augmentBatch3(batch, config)
                 elif config['dataset'] == 'oxford' and config['model'] == 'UnderTheRadar':
                     batch = augmentBatch(batch, config)
             optimizer.zero_grad()
