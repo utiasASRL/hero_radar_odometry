@@ -31,7 +31,7 @@ class SteamSolver():
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
-    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
+    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src):
         """
             keypoint_coords: B*(W-1)x400x2
             pseudo_coords: B*(W-1)x400x2
@@ -56,6 +56,8 @@ class SteamSolver():
             i = b * (self.window_size-1)    # first index of window
             points1 = []
             points2 = []
+            times1 = []
+            times2 = []
             weights = []
             # loop for each window frame
             for w in range(i, i + self.window_size - 1):
@@ -82,8 +84,11 @@ class SteamSolver():
                 points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)]
                 points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)]
                 weights += [weights_temp[ids].detach().cpu().numpy()]
+                times1 += [time_src[w].cpu().numpy().squeeze()]
+                times2 += [time_tgt[w].cpu().numpy().squeeze()]
             # solver
-            self.solver_cpp.setMeas(points2, points1, weights)
+            timestamps1, timestamps2 = getApproxTimeStamps(points1, points2, times1, times2)
+            self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1)
             self.solver_cpp.optimize()
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
@@ -96,3 +101,45 @@ class SteamSolver():
             t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
+
+    def getApproxTimeStamps(points1, points2, times1, times2):
+        azimuth_step = (2 * np.pi) / 400
+        # Helper to ensure angle is within [0, 2 * PI)
+        def wrapto2pi(phi):
+            if phi < 0:
+                return phi + 2 * np.pi
+            elif phi >= 2 * np.pi:
+                return phi - 2 * np.pi
+            else:
+                return phi
+        timestamps1 = []
+        timestamps2 = []
+        for i in range(len(points1)):
+            p1 = points1[i]
+            p2 = points2[i]
+            for j in range(2):
+                if j == 0:
+                    p = points1[i]
+                    times = times1[i]
+                else:
+                    p = points2[i]
+                    times = times2[i]
+                point_times = []
+                for k in range(p.shape[0]):
+                    x = p[k, 0]
+                    y = p[k, 1]
+                    phi = np.arctan2(y, x)
+                    phi = wrapto2pi(phi)
+                    time_idx = phi / azimuth_step
+                    t1 = times[int(np.floor(time_idx)), 0]
+                    t2 = times[int(np.ceil(time_idx)), 0]
+                    # interpolate to get slightly more precise timestamp
+                    ratio = time_idx % 1
+                    t = int(t1 + ratio * (t2 - t1))
+                    point_times.append(t)
+                point_times = np.array(point_times)
+                if j == 0:
+                    timestamps1.append(point_times)
+                else:
+                    timestamps2.append(point_times)
+        return timestamps1, timestamps2

@@ -49,11 +49,13 @@ void SteamSolver::setQcInv(const np::ndarray& Qc_diag) {
 }
 
 // Set measurements
-void SteamSolver::setMeas(const p::object& p2_list,
-    const p::object& p1_list, const p::object& weight_list) {
+void SteamSolver::setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
+    const p::object& t2_list, const p::object& t1_list) {
     p2_ = toStdVector<np::ndarray>(p2_list);
     p1_ = toStdVector<np::ndarray>(p1_list);
     w_ = toStdVector<np::ndarray>(weight_list);
+    t2_ = toStdVector<np::ndarray>(t2_list);
+    t1_ = toStdVector<np::ndarray>(t1_list);
 }
 
 // Run optimization
@@ -79,7 +81,22 @@ void SteamSolver::optimize() {
         steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
             steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
         uint num_meas = p2_[i - 1].shape(0);
-        for (uint j = 0; j < num_meas; ++j) {
+
+        std::vector<int> inliers;
+        if (use_ransac) {
+            MCRansac mcransac(p1_[i-1], p2_[i-1], t1_[i-1], t2_[i-1]);
+            mcransac.computeModel();
+            Eigen::VectorXd motion_vec;
+            mcransac.getMotion(motion_vec);
+            mcransac.getInliers(motion_vec, inliers);
+        } else {
+            for (uint j = 0; j < p1_[i-1].shape(0); ++j) {
+                inliers.push_back(j);
+            }
+        }
+        // Only run STEAM on inliers from MCRANSAC (if use_ransac == true)
+        for (uint k = 0; k < inliers.size(); ++k) {
+            j = inliers[k];
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
             for (uint r = 0; r < 3; ++r) {
                 for (uint c = 0; c < 3; ++c) {

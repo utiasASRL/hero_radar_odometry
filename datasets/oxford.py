@@ -110,7 +110,7 @@ class OxfordDataset(Dataset):
             idx = idx.tolist()
         seq = self.get_seq_from_idx(idx)
         frame = self.data_dir + seq + '/radar/' + self.frames[idx]
-        _, azimuths, _, polar, _ = load_radar(frame)
+        timestamps, azimuths, _, polar, _ = load_radar(frame)
         data = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
                                         self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
         polar_mask = mean_intensity_mask(polar)
@@ -127,7 +127,9 @@ class OxfordDataset(Dataset):
         T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
         polar = np.expand_dims(polar, axis=0)
         azimuths = np.expand_dims(azimuths, axis=0)
-        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask, 'polar': polar, 'azimuths': azimuths}
+        timestamps = np.expand_dims(timestamps, axis=0)
+        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask, 'polar': polar, 'azimuths': azimuths,
+                'timestamps': timestamps}
 
 def get_dataloaders(config):
     """Retrieves train, validation, and test data loaders."""

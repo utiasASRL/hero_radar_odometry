@@ -2,6 +2,7 @@
 #include <vector>
 #include <deque>
 #include "SteamPyHelper.hpp"
+#include "mcransac.hpp"
 
 class SteamSolver {
 public:
@@ -23,13 +24,15 @@ public:
     void resetTraj();
     void slideTraj();
     void setQcInv(const np::ndarray& Qc_inv_diag);
-    void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list);
+    void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
+        const p::object& t2_list, const p::object& t1_list);
     // solve
     void optimize();
     // output
     void getPoses(np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
     void getSigmapoints2NP1(np::ndarray& sigma_T);
+    void useRansac(const bool& use_ransac_) {use_ransac = use_ransac_;}
 
 private:
     // Solver
@@ -42,10 +45,14 @@ private:
     std::vector<np::ndarray> p1_;  // reference
     std::vector<np::ndarray> p2_;  // frame points
     std::vector<np::ndarray> w_;   // weights
+    std::vector<np::ndarray> t1_;  // reference timestamps
+    std::vector<np::ndarray> t2_;  // frame points timestamps
     // Constants
     double dt_;  // trajectory time step
     unsigned int window_size_;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
+    // RANSAC
+    bool use_ransac = false;
 };
 
 // boost wrapper
@@ -60,5 +67,6 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
+        .def("useRansac", &SteamSolver::useRansac)
         .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
 }
