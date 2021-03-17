@@ -1,5 +1,5 @@
 #include <complex>
-#include <mcransac.hpp>
+#include "mcransac.hpp"
 
 void enforce_orthogonality(Eigen::MatrixXd &R) {
     if (R.cols() == 3) {
@@ -49,7 +49,8 @@ void get_rigid_transform(Eigen::MatrixXd p1, Eigen::MatrixXd p2, Eigen::MatrixXd
     for (int i = 0; i < p1.cols(); ++i) {
         H += q1.block(0, i, dim, 1) * q2.block(0, i, dim, 1).transpose();
     }
-    auto svd = H.bdcSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
+    //auto svd = H.bdcSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(H, Eigen::ComputeFullU | Eigen::ComputeFullV);
     Eigen::MatrixXd U = svd.matrixU();
     Eigen::MatrixXd V = svd.matrixV();
     Eigen::MatrixXd R_hat = V * U.transpose();
@@ -262,7 +263,8 @@ void MCRansac::get_motion_parameters(std::vector<int> subset, Eigen::VectorXd &w
             A += G.transpose() * G;
             b += G.transpose() * ebar;
         }
-        Eigen::VectorXd delta_w = A.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
+        // Eigen::VectorXd delta_w = A.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
+	Eigen::VectorXd delta_w = A.ldlt().solve(b);
         // Line search for best update
         double minError = 10000000;
         double bestAlpha = 1.0;

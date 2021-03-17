@@ -6,7 +6,12 @@
 #include <vector>
 #include <string>
 #include <chrono>
-#include "SteamPyHelper.hpp"
+#include <boost/python.hpp>
+#include <boost/python/numpy.hpp>
+#include <steam/steam.hpp>
+
+namespace p = boost::python;
+namespace np = boost::python::numpy;
 
 /*!
    \brief Enforce orthogonality conditions on the given rotation matrix such that det(R) == 1 and R.tranpose() * R = I
@@ -78,15 +83,15 @@ class Ransac {
 public:
     // p1, p2 need to be either (x, y) x N or (x, y, z) x N (must be in homogeneous coordinates)
     Ransac(const np::ndarray& p1_, const np::ndarray& p2_) {
-        int dim = p1_.shape(1);
-        int N = p1_.shape(0);
+        uint dim = p1_.shape(1);
+        uint N = p1_.shape(0);
         assert(N == p2_.shape(0) && dim == p2_.shape(1) && dim >= 2);
         if (dim > 3)
             dim = 3;
         for (uint i = 0; i < dim; ++i) {
             for (uint j = 0; j < N; ++j) {
-                p1(i, j) = p1_[j][i];
-                p2(i, j) = p2_[j][i];
+                p1(i, j) = double(p::extract<float>(p1_[j][i]));
+                p2(i, j) = double(p::extract<float>(p2_[j][i]));
             }
         }
         T_best = Eigen::MatrixXd::Identity(dim + 1, dim + 1);
@@ -128,31 +133,30 @@ private:
 class MCRansac {
 public:
     MCRansac(const np::ndarray& p1_, const np::ndarray& p2_, const np::ndarray& t1_, const np::ndarray& t2_) {
-        assert(p1.shape(1) >= 2);
         assert(p1_.shape(0) == p2_.shape(0) && p1_.shape(1) == p2_.shape(1) && p1_.shape(0) >= p1_.shape(1));
-        int N = p1_.shape(0);
-        int dim = p1_.shape(1);
+        uint N = p1_.shape(0);
+        uint dim = p1_.shape(1);
         if (dim > 3)
             dim = 3;
         p1bar = Eigen::MatrixXd::Zero(4, N);
         p2bar = Eigen::MatrixXd::Zero(4, N);
-        p1bar.block(3, 0, 1, p1.cols()) = Eigen::MatrixXd::Ones(1, p1.cols());
-        p2bar.block(3, 0, 1, p2.cols()) = Eigen::MatrixXd::Ones(1, p2.cols());
+        p1bar.block(3, 0, 1, N) = Eigen::MatrixXd::Ones(1, N);
+        p2bar.block(3, 0, 1, N) = Eigen::MatrixXd::Ones(1, N);
         for (uint i = 0; i < dim; ++i) {
             for (uint j = 0; j < N; ++j) {
-                p1bar(i, j) = p1_[j][i];
-                p2bar(i, j) = p2_[j][i];
+                p1bar(i, j) = double(p::extract<float>(p1_[j][i]));
+                p2bar(i, j) = double(p::extract<float>(p2_[j][i]));
             }
         }
         std::vector<int64_t> t1(N, 0);
         std::vector<int64_t> t2(N, 0);
         for (uint i = 0; i < N; ++i) {
-            t1[i] = t1_[i];
-            t2[i] = t2_[i];
+            t1[i] = uint64_t(p::extract<uint64_t>(t1_[i]));
+            t2[i] = uint64_t(p::extract<uint64_t>(t2_[i]));
         }
         R_pol << pow(0.25, 2), 0, 0, 0, 0, pow(0.0157, 2), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1;
-        delta_ts = std::vector<double>(p1.cols(), 0.0);
-        for (uint i = 0; i < p1bar.cols(); ++i) {
+        delta_ts = std::vector<double>(N, 0.0);
+        for (uint i = 0; i < N; ++i) {
             int64_t delta_t = t2[i] - t1[i];
             delta_ts[i] = double(delta_t) / 1000000.0;
             if (delta_ts[i] > max_delta_t) {

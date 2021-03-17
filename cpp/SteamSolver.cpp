@@ -1,6 +1,7 @@
 #include "SteamSolver.hpp"
 #include "P2P3ErrorEval.hpp"
 #include "SE2VelPriorEval.hpp"
+#include "mcransac.hpp"
 
 // Reset trajectory to identity poses and zero velocities
 void SteamSolver::resetTraj() {
@@ -80,7 +81,7 @@ void SteamSolver::optimize() {
     for (uint i = 1; i < window_size_; ++i) {
         steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
             steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
-        uint num_meas = p2_[i - 1].shape(0);
+        // uint num_meas = p2_[i - 1].shape(0);
 
         std::vector<int> inliers;
         if (use_ransac) {
@@ -96,7 +97,7 @@ void SteamSolver::optimize() {
         }
         // Only run STEAM on inliers from MCRANSAC (if use_ransac == true)
         for (uint k = 0; k < inliers.size(); ++k) {
-            j = inliers[k];
+            uint j = inliers[k];
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
             for (uint r = 0; r < 3; ++r) {
                 for (uint c = 0; c < 3; ++c) {
