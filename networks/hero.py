@@ -53,7 +53,7 @@ class HERO(torch.nn.Module):
         time_tgt = torch.index_select(timestamps, 0, tgt_ids)
         time_src = torch.index_select(timestamps, 0, src_ids)
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
-                                                              keypoint_ints, timt_tgt, time_src)
+                                                              keypoint_ints, time_tgt, time_src)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,

@@ -151,8 +151,8 @@ public:
         std::vector<int64_t> t1(N, 0);
         std::vector<int64_t> t2(N, 0);
         for (uint i = 0; i < N; ++i) {
-            t1[i] = uint64_t(p::extract<uint64_t>(t1_[i]));
-            t2[i] = uint64_t(p::extract<uint64_t>(t2_[i]));
+            t1[i] = int64_t(p::extract<int64_t>(t1_[i]));
+            t2[i] = int64_t(p::extract<int64_t>(t2_[i]));
         }
         R_pol << pow(0.25, 2), 0, 0, 0, 0, pow(0.0157, 2), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1;
         delta_ts = std::vector<double>(N, 0.0);

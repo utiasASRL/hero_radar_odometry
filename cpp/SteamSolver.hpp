@@ -31,7 +31,7 @@ public:
     void getPoses(np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
     void getSigmapoints2NP1(np::ndarray& sigma_T);
-    void useRansac(const bool& use_ransac_) {use_ransac = use_ransac_;}
+    void useRansac() {use_ransac = true;}
 
 private:
     // Solver

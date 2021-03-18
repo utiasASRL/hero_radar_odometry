@@ -33,7 +33,8 @@
         "topk_backup": 30,
         "log_det_thres_flag": false,
         "log_det_thres_val": 4.0,
-        "log_det_topk": 20
+        "log_det_topk": 20,
+	"use_ransac": true
     },
     "lr": 0.00001,
     "weight_decay": 0,
@@ -41,7 +42,7 @@
     "momentum": 0,
     "clip_norm": 10.0,
     "batch_size": 1,
-    "window_size": 3,
+    "window_size": 4,
     "num_workers": 4,
     "max_iterations": 300000,
     "max_epochs": 3,

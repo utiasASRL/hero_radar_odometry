@@ -29,6 +29,8 @@ class SteamSolver():
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
+        if config['steam']['use_ransac']:
+            self.solver_cpp.useRansac()
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src):
@@ -87,7 +89,7 @@ class SteamSolver():
                 times1 += [time_src[w].cpu().numpy().squeeze()]
                 times2 += [time_tgt[w].cpu().numpy().squeeze()]
             # solver
-            timestamps1, timestamps2 = getApproxTimeStamps(points1, points2, times1, times2)
+            timestamps1, timestamps2 = self.getApproxTimeStamps(points1, points2, times1, times2)
             self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1)
             self.solver_cpp.optimize()
             # get pose output
@@ -102,7 +104,7 @@ class SteamSolver():
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
 
-    def getApproxTimeStamps(points1, points2, times1, times2):
+    def getApproxTimeStamps(self, points1, points2, times1, times2):
         azimuth_step = (2 * np.pi) / 400
         # Helper to ensure angle is within [0, 2 * PI)
         def wrapto2pi(phi):
@@ -131,8 +133,9 @@ class SteamSolver():
                     phi = np.arctan2(y, x)
                     phi = wrapto2pi(phi)
                     time_idx = phi / azimuth_step
-                    t1 = times[int(np.floor(time_idx)), 0]
-                    t2 = times[int(np.ceil(time_idx)), 0]
+                    t1 = times[int(np.floor(time_idx))]
+                    idx2 = int(np.ceil(time_idx))
+                    t2 = times[idx2 if idx2 < 400 else 399]
                     # interpolate to get slightly more precise timestamp
                     ratio = time_idx % 1
                     t = int(t1 + ratio * (t2 - t1))
