@@ -1,0 +1,6 @@
+#!/bin/bash
+for run in {89..102}
+  do
+    sbatch --job-name=run$run train_job $run
+done
+exit 0

@@ -178,7 +178,7 @@ class SteamMonitor(MonitorBase):
                 continue
             if batchi in self.vis_batches:
                 self.vis(batchi, batch, out)
-            loss, dict_loss = unsupervised_loss(out, batch, config, self.model.solver)
+            loss, dict_loss = unsupervised_loss(out, batch, self.config, self.model.solver)
             if loss != 0:
                 valid_loss += loss.detach().cpu().item()
                 if not aux_init:

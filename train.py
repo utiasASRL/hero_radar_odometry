@@ -16,8 +16,8 @@ from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.deterministic = True
-torch.manual_seed(0)
-np.random.seed(0)
+#torch.manual_seed(0)
+#np.random.seed(0)
 torch.set_num_threads(8)
 torch.multiprocessing.set_sharing_strategy('file_system')
 print(torch.__version__)
@@ -30,6 +30,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     with open(args.config) as f:
         config = json.load(f)
+    torch.manual_seed(config['seed'])
+    np.random.seed(config['seed'])
     config['gpuid'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(config['gpuid'])
 
@@ -90,7 +92,7 @@ if __name__ == '__main__':
                 if config['dataset'] == 'boreas':
                     batch = augmentBatch2(batch, config)
                 elif config['dataset'] == 'oxford' and config['model'] == 'HERO':
-                    batch = augmentBatch2(batch, config)
+                    batch = augmentBatch3(batch, config)
                 elif config['dataset'] == 'oxford' and config['model'] == 'UnderTheRadar':
                     batch = augmentBatch(batch, config)
             optimizer.zero_grad()
