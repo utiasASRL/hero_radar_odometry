@@ -32,10 +32,11 @@ class SoftmaxRefMatcher(nn.Module):
         # build pseudo_coords
         pseudo_coords = torch.zeros((self.B * (self.window_size - 1), n_points, 2),
                                     device=self.gpuid) # B*(window - 1) x N x 2
-        tgt_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64)    # B*(window - 1)
+        tgt_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
+        src_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
         # loop for each batch
         for i in range(self.B):
-            win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size)
+            win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size).to(self.gpuid)
             tgt_desc = keypoint_desc[win_ids]  # (window - 1) x C x N
             tgt_desc = F.normalize(tgt_desc, dim=1)
             match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc_unrolled[i:i+1])  # (window - 1) x N x HW
@@ -44,4 +45,6 @@ class SoftmaxRefMatcher(nn.Module):
             pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
                 soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (window - 1) x N x 2
             tgt_ids[pseudo_ids] = win_ids
-        return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids
+            src_ids[pseudo_ids] = i * self.window_size
+
+        return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids, src_ids

@@ -1,6 +1,4 @@
-#ifndef STEAMPYHELPER_HPP
-#define STEAMPYHELPER_HPP
-
+#pragma once
 #include <vector>
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
@@ -33,5 +31,3 @@ Eigen::MatrixXd numpyToEigen2D(const np::ndarray& np_in) {
     }
     return eig_out;
 }
-
-#endif  // STEAMPYHELPER_HPP
