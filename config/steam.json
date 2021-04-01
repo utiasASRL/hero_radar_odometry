@@ -34,7 +34,7 @@
         "log_det_thres_flag": false,
         "log_det_thres_val": 4.0,
         "log_det_topk": 20,
-	"use_ransac": true
+        "use_ransac": true
     },
     "lr": 0.00001,
     "weight_decay": 0,
@@ -54,5 +54,6 @@
     "vis_num": 6,
     "augmentation": {
         "rot_max": 0.26
-    }
+    },
+    "flip_y": true
 }
