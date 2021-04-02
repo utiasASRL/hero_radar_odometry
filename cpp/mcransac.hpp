@@ -88,6 +88,8 @@ public:
         assert(N == p2_.shape(0) && dim == p2_.shape(1) && dim >= 2);
         if (dim > 3)
             dim = 3;
+	p1 = Eigen::MatrixXd::Zero(dim, N);
+	p2 = Eigen::MatrixXd::Zero(dim, N);
         for (uint i = 0; i < dim; ++i) {
             for (uint j = 0; j < N; ++j) {
                 p1(i, j) = double(p::extract<float>(p1_[j][i]));
