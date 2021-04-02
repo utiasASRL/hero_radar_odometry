@@ -111,12 +111,15 @@ class OxfordDataset(Dataset):
         seq = self.get_seq_from_idx(idx)
         frame = self.data_dir + seq + '/radar/' + self.frames[idx]
         timestamps, azimuths, _, polar, _ = load_radar(frame)
-        data = radar_polar_to_cartesian(azimuths, polar, self.config['radar_resolution'],
-                                        self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
-        polar_mask = mean_intensity_mask(polar)
+        polar_mask = mean_intensity_mask(polar, multiplier=self.config['mean_mult_thres'])
         mask = radar_polar_to_cartesian(azimuths, polar_mask, self.config['radar_resolution'],
                                         self.config['cart_resolution'],
                                         self.config['cart_pixel_width']).astype(np.float32)
+        polar2 = polar.copy()
+        polar2[polar2 < self.config['static_thres']] = 0
+        data = radar_polar_to_cartesian(azimuths, polar2, self.config['radar_resolution'],
+                                        self.config['cart_resolution'], self.config['cart_pixel_width'])  # 1 x H x W
+
         # Get ground truth transform between this frame and the next
         time1 = int(self.frames[idx].split('.')[0])
         if idx + 1 < len(self.frames):

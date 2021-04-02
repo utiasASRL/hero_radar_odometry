@@ -55,5 +55,7 @@
     "vis_num": 6,
     "augmentation": {
         "rot_max": 0.26
-    }
+    },
+    "mean_mult_thres": 3.0,
+    "static_thres": 0.0
 }
