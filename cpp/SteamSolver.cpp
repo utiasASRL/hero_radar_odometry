@@ -85,10 +85,10 @@ void SteamSolver::optimize() {
         // uint num_meas = p2_[i - 1].shape(0);
 
         std::vector<int> inliers;
+        Eigen::VectorXd motion_vec = Eigen::VectorXd::Zero(6);
         if (use_ransac) {
             MCRansac mcransac(p1_[i-1], p2_[i-1], t1_[i-1], t2_[i-1]);
             mcransac.computeModel();
-            Eigen::VectorXd motion_vec;
             mcransac.getMotion(motion_vec);
             mcransac.getInliers(motion_vec, inliers);
             Eigen::MatrixXd T;
@@ -125,10 +125,18 @@ void SteamSolver::optimize() {
             Eigen::Vector4d read;
             read << double(p::extract<float>(p2_[i-1][j][0])), double(p::extract<float>(p2_[i-1][j][1])),
                   double(p::extract<float>(p2_[i-1][j][2])), 1.0;
+            int64_t delta = t2_[i-1][j] - t2_[i-1][0];
+            double delta_t = double(delta) / 1.0e6;
+            Eigen::Matrix4d T_undistort = se3ToSE3(motion_vec * delta_t);
+            read = T_undistort * read;
 
             Eigen::Vector4d ref;
             ref << double(p::extract<float>(p1_[i-1][j][0])), double(p::extract<float>(p1_[i-1][j][1])),
                  double(p::extract<float>(p1_[i-1][j][2])), 1.0;
+            delta = t1_[i-1][j] - t1_[i-1][0];
+            delta_t = double(delta) / 1.0e6;
+            T_undistort = se3ToSE3(motion_vec * delta_t);
+            ref = T_undistort * ref;
 
             steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_k0_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
