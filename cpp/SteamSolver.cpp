@@ -64,13 +64,19 @@ void SteamSolver::setMeas(const p::object& p2_list, const p::object& p1_list, co
 void SteamSolver::optimize() {
     // Motion prior
     steam::se3::SteamTrajInterface traj(Qc_inv_);
+    int64_t t0 = int64_t(p::extract<int64_t>(t1_[0][0]));
     for (uint i = 0; i < states_.size(); ++i) {
         TrajStateVar& state = states_.at(i);
         steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
-        traj.add(state.time, temp, state.velocity);
+        double delta_t = 0;
+        if (i > 0) {
+            double delta_t = double(int64_t(p::extract<int64_t>(t2_[i - 1][0])) - t0) / 1.0e6;
+        }
+        traj.add(delta_t, temp, state.velocity);
         if (i == 0) {  // lock first pose
             state.pose->setLock(true);
         }
+        std::cout << delta_t << std::endl;
     }
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
@@ -80,9 +86,8 @@ void SteamSolver::optimize() {
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
     // loop through every frame
     for (uint i = 1; i < window_size_; ++i) {
-        steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
-            steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
-        // uint num_meas = p2_[i - 1].shape(0);
+        // steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
+        //     steam::se3::TransformStateEvaluator::MakeShared(states_[i].pose);
 
         std::vector<int> inliers;
         Eigen::VectorXd motion_vec = Eigen::VectorXd::Zero(6);
@@ -104,14 +109,16 @@ void SteamSolver::optimize() {
             for (uint ii = 0; ii < 6; ++ii) {
                 wmd(ii, 0) = motion_vec(ii);
             }
-            states_[i].pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_lg));
-            states_[i].velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(wmd));
+            // states_[i].pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_lg));
+            // states_[i].velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(wmd));
         } else {
             for (uint j = 0; j < p1_[i-1].shape(0); ++j) {
                 inliers.push_back(j);
             }
         }
         // Only run STEAM on inliers from MCRANSAC (if use_ransac == true)
+        // int64_t t0_read = int64_t(p::extract<int64_t>(t2_[i-1][0]));
+        // int64_t t0_ref = int64_t(p::extract<int64_t>(t1_[i-1][0]);
         for (uint k = 0; k < inliers.size(); ++k) {
             uint j = inliers[k];
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
@@ -124,28 +131,33 @@ void SteamSolver::optimize() {
             // get measurement
             Eigen::Vector4d read;
             read << double(p::extract<float>(p2_[i-1][j][0])), double(p::extract<float>(p2_[i-1][j][1])),
-                  double(p::extract<float>(p2_[i-1][j][2])), 1.0;
-            int64_t delta = t2_[i-1][j] - t2_[i-1][0];
-            double delta_t = double(delta) / 1.0e6;
-            Eigen::Matrix4d T_undistort = se3ToSE3(motion_vec * delta_t);
-            read = T_undistort * read;
+                double(p::extract<float>(p2_[i-1][j][2])), 1.0;
+            double tb = double(int64_t(p::extract<int64_t>(t2_[i-1][j])) - t0) / 1.0e6;
+            // double tb = double(int64_t(p::extract<int64_t>(t2_[i-1][j])) - t0_read) / 1.0e6;
+            // Eigen::Matrix4d T_undistort = se3ToSE3(motion_vec * tb);
+            // read = T_undistort * read;
 
             Eigen::Vector4d ref;
             ref << double(p::extract<float>(p1_[i-1][j][0])), double(p::extract<float>(p1_[i-1][j][1])),
-                 double(p::extract<float>(p1_[i-1][j][2])), 1.0;
-            delta = t1_[i-1][j] - t1_[i-1][0];
-            delta_t = double(delta) / 1.0e6;
-            T_undistort = se3ToSE3(motion_vec * delta_t);
-            ref = T_undistort * ref;
+                double(p::extract<float>(p1_[i-1][j][2])), 1.0;
+            double ta = double(int64_t(p::extract<int64_t>(t1_[i-1][j])) - t0) / 1.0e6;
+            // double ta = double(int64_t(p::extract<int64_t>(t1_[i-1][j])) - t0_ref) / 1.0e6;
+            // T_undistort = se3ToSE3(motion_vec * ta);
+            // ref = T_undistort * ref;
 
-            steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_k0_eval_ptr));
+            steam::se3::TransformEvaluator::Ptr Ta0 = traj.getInterpPoseEval(ta);
+            steam::se3::TransformEvaluator::Ptr Tb0 = traj.getInterpPoseEval(tb);
+            steam::se3::TransformEvaluator::Ptr T_ba_eval_ptr =
+                steam::se3::composeInverse(Tb0, Ta0);  // Tba = Tb0 * inv(Ta0)
+
+            steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_ba_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));
             costTerms->add(cost);
         }
     }
-    if (use_ransac)
-        return;
+    // if (use_ransac)
+        // return;
     steam::OptimizationProblem problem;
     // Add state variables
     for (uint i = 0; i < states_.size(); ++i) {
