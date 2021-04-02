@@ -52,26 +52,24 @@ void SteamSolver::setQcInv(const np::ndarray& Qc_diag) {
 
 // Set measurements
 void SteamSolver::setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
-    const p::object& t2_list, const p::object& t1_list) {
+    const p::object& t2_list, const p::object& t1_list, const p::object& t_refs) {
     p2_ = toStdVector<np::ndarray>(p2_list);
     p1_ = toStdVector<np::ndarray>(p1_list);
     w_ = toStdVector<np::ndarray>(weight_list);
     t2_ = toStdVector<np::ndarray>(t2_list);
     t1_ = toStdVector<np::ndarray>(t1_list);
+    t_refs_ = toStdVector<int64_t>(t_refs);
 }
 
 // Run optimization
 void SteamSolver::optimize() {
     // Motion prior
     steam::se3::SteamTrajInterface traj(Qc_inv_);
-    int64_t t0 = int64_t(p::extract<int64_t>(t1_[0][0]));
+    int64_t t0 = t_refs_[0];
     for (uint i = 0; i < states_.size(); ++i) {
         TrajStateVar& state = states_.at(i);
         steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
-        double delta_t = 0;
-        if (i > 0) {
-            double delta_t = double(int64_t(p::extract<int64_t>(t2_[i - 1][0])) - t0) / 1.0e6;
-        }
+        double delta_t = double(t_refs_[i] - t_refs_[0]) / 1.0e6;
         traj.add(delta_t, temp, state.velocity);
         if (i == 0) {  // lock first pose
             state.pose->setLock(true);
@@ -117,8 +115,8 @@ void SteamSolver::optimize() {
             }
         }
         // Only run STEAM on inliers from MCRANSAC (if use_ransac == true)
-        // int64_t t0_read = int64_t(p::extract<int64_t>(t2_[i-1][0]));
-        // int64_t t0_ref = int64_t(p::extract<int64_t>(t1_[i-1][0]);
+        // int64_t t0_read = t_refs_[i];
+        // int64_t t0_ref = t_refs_[0];
         for (uint k = 0; k < inliers.size(); ++k) {
             uint j = inliers[k];
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();

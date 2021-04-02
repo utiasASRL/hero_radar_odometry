@@ -64,6 +64,7 @@ class SteamSolver():
             times1 = []
             times2 = []
             weights = []
+            t_refs = []
             # loop for each window frame
             for w in range(i, i + self.window_size - 1):
                 # filter by zero intensity patches
@@ -90,9 +91,15 @@ class SteamSolver():
                 weights += [weights_temp[ids].detach().cpu().numpy()]
                 times1 += [time_src[w].cpu().numpy().squeeze()]
                 times2 += [time_tgt[w].cpu().numpy().squeeze()]
+                if w == i:
+                    tsrc = time_src[w].cpu().numpy().squeeze()
+                    t_refs.append(tsrc[0])
+                else:
+                    ttgt = time_tgt[w].cpu().numpy().squeeze()
+                    t_refs.append(ttgt[0])
             # solver
             timestamps1, timestamps2 = self.getApproxTimeStamps(points1, points2, times1, times2)
-            self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1)
+            self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1, t_refs)
             self.solver_cpp.optimize()
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
