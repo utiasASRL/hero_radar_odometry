@@ -30,6 +30,8 @@ class SteamSolver():
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
+        qc_diag = np.array(config['qc_diag']).reshape(6, 1)
+        self.solver_cpp.setQcInv(qc_diag)
         if config['steam']['use_ransac']:
             self.solver_cpp.useRansac()
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)

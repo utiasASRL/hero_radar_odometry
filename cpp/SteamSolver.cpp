@@ -91,20 +91,20 @@ void SteamSolver::optimize() {
             Eigen::VectorXd motion_vec;
             mcransac.getMotion(motion_vec);
             mcransac.getInliers(motion_vec, inliers);
-	    Eigen::MatrixXd T;
-	    mcransac.getTransform(0.25, T);
-	    Eigen::Matrix<double, 6, 1> wmd;
-	    Eigen::Matrix<double, 4, 4> Tmd;
-	    for (uint ii = 0; ii < 4; ++ii) {
-		    for (uint jj = 0; jj < 4; ++jj) {
-			    Tmd(ii, jj) = T(ii, jj);
-		    }
-	    }
-	    lgmath::se3::Transformation T_lg(Tmd);
-	    for (uint ii = 0; ii < 6; ++ii) {
-		    wmd(ii, 0) = motion_vec(ii);
-	    }
-	    states_[i].pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_lg));
+            Eigen::MatrixXd T;
+            mcransac.getTransform(0.25, T);
+            Eigen::Matrix<double, 6, 1> wmd;
+            Eigen::Matrix<double, 4, 4> Tmd;
+            for (uint ii = 0; ii < 4; ++ii) {
+                for (uint jj = 0; jj < 4; ++jj) {
+                    Tmd(ii, jj) = T(ii, jj);
+                }
+            }
+            lgmath::se3::Transformation T_lg(Tmd);
+            for (uint ii = 0; ii < 6; ++ii) {
+                wmd(ii, 0) = motion_vec(ii);
+            }
+            states_[i].pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_lg));
             states_[i].velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(wmd));
         } else {
             for (uint j = 0; j < p1_[i-1].shape(0); ++j) {
