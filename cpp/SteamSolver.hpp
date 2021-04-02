@@ -24,7 +24,7 @@ public:
     void slideTraj();
     void setQcInv(const np::ndarray& Qc_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
-        const p::object& t2_list, const p::object& t1_list);
+        const p::object& t2_list, const p::object& t1_list, const p::object& t_refs);
     // solve
     void optimize();
     // output
@@ -46,6 +46,7 @@ private:
     std::vector<np::ndarray> w_;   // weights
     std::vector<np::ndarray> t1_;  // reference timestamps
     std::vector<np::ndarray> t2_;  // frame points timestamps
+    std::vector<int64_t> t_refs_;  // time for each frame
     // Constants
     double dt_;  // trajectory time step
     unsigned int window_size_;  // trajectory window size
