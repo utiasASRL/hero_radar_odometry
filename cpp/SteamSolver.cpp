@@ -89,23 +89,23 @@ void SteamSolver::optimize() {
 
         std::vector<int> inliers;
         if (use_ransac) {
-	    srand(t0 / 1e6);  // fix random seed for repeatability
-	    Eigen::VectorXd motion_vec = Eigen::VectorXd::Zero(6);
-	    if (ransac_version == 1) {
-            	MCRansac mcransac(p1_[i-1], p2_[i-1], t1_[i-1], t2_[i-1]);
-           	mcransac.computeModel();
-            	mcransac.getMotion(motion_vec);
-            	mcransac.getInliers(motion_vec, inliers);
-            	Eigen::MatrixXd T;
-            	mcransac.getTransform(0.25, T);
+            srand(t0 / 1e6);  // fix random seed for repeatability
+            Eigen::VectorXd motion_vec = Eigen::VectorXd::Zero(6);
+            if (ransac_version == 1) {
+                MCRansac mcransac(p1_[i-1], p2_[i-1], t1_[i-1], t2_[i-1]);
+                mcransac.computeModel();
+                mcransac.getMotion(motion_vec);
+                mcransac.getInliers(motion_vec, inliers);
+                Eigen::MatrixXd T;
+                mcransac.getTransform(0.25, T);
             } else {
-            	Ransac ransac(p1_[i-1], p2_[i-1]);
-	    	ransac.computeModel();
-	    	Eigen::MatrixXd T;
-	    	ransac.getTransform(T);
-	    	ransac.getInliers(T, inliers);
-	    }
-	    /*Eigen::Matrix<double, 4, 4> Tmd;
+                Ransac ransac(p1_[i-1], p2_[i-1]);
+                ransac.computeModel();
+                Eigen::MatrixXd T;
+                ransac.getTransform(T);
+                ransac.getInliers(T, inliers);
+            }
+    	    /*Eigen::Matrix<double, 4, 4> Tmd;
             for (uint ii = 0; ii < 4; ++ii) {
                 for (uint jj = 0; jj < 4; ++jj) {
                     Tmd(ii, jj) = T(ii, jj);
@@ -113,7 +113,7 @@ void SteamSolver::optimize() {
             }
             lgmath::se3::Transformation T_lg(Tmd);
             states_[i].pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_lg));
-	    Eigen::Matrix<double, 6, 1> wmd;
+            Eigen::Matrix<double, 6, 1> wmd;
             for (uint ii = 0; ii < 6; ++ii) {
                 wmd(ii, 0) = motion_vec(ii);
             }
@@ -142,16 +142,16 @@ void SteamSolver::optimize() {
             ref << double(p::extract<float>(p1_[i-1][j][0])), double(p::extract<float>(p1_[i-1][j][1])),
                 double(p::extract<float>(p1_[i-1][j][2])), 1.0;
 
-	    steam::se3::TransformEvaluator::Ptr T_eval_ptr;
-	    if (ct_steam) {
-		double ta = double(int64_t(p::extract<int64_t>(t1_[i-1][j])) - t0) / 1.0e6;
-		double tb = double(int64_t(p::extract<int64_t>(t2_[i-1][j])) - t0) / 1.0e6;
-            	steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(ta));
-            	steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(tb));
-            	T_eval_ptr = steam::se3::composeInverse(Tb0, Ta0);  // Tba = Tb0 * inv(Ta0)
-	    } else {
-		T_eval_ptr = T_k0_eval_ptr;
-	    }
+            steam::se3::TransformEvaluator::Ptr T_eval_ptr;
+            if (ct_steam) {
+                double ta = double(int64_t(p::extract<int64_t>(t1_[i-1][j])) - t0) / 1.0e6;
+                double tb = double(int64_t(p::extract<int64_t>(t2_[i-1][j])) - t0) / 1.0e6;
+                steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(ta));
+                steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(tb));
+                T_eval_ptr = steam::se3::composeInverse(Tb0, Ta0);  // Tba = Tb0 * inv(Ta0)
+            } else {
+                T_eval_ptr = T_k0_eval_ptr;
+            }
             steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));

@@ -72,7 +72,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
         .def("useRansac", &SteamSolver::useRansac)
-	.def("setRansacVersion", &SteamSolver::setRansacVersion)
+        .def("setRansacVersion", &SteamSolver::setRansacVersion)
         .def("useCTSteam", &SteamSolver::useCTSteam)
         .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
 }
