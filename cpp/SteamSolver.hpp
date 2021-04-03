@@ -24,7 +24,7 @@ public:
     void slideTraj();
     void setQcInv(const np::ndarray& Qc_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
-        const p::object& t2_list, const p::object& t1_list);
+        const p::object& t2_list, const p::object& t1_list, const p::object& t_refs);
     // solve
     void optimize();
     // output
@@ -32,6 +32,8 @@ public:
     void getVelocities(np::ndarray& vels);
     void getSigmapoints2NP1(np::ndarray& sigma_T);
     void useRansac() {use_ransac = true;}
+    void setRansacVersion(const unsigned int& version) {ransac_version = uint(version);}
+    void useCTSteam() {ct_steam = true;}
 
 private:
     // Solver
@@ -46,12 +48,15 @@ private:
     std::vector<np::ndarray> w_;   // weights
     std::vector<np::ndarray> t1_;  // reference timestamps
     std::vector<np::ndarray> t2_;  // frame points timestamps
+    std::vector<int64_t> t_refs_;  // time for each frame
     // Constants
-    double dt_;  // trajectory time step
-    unsigned int window_size_;  // trajectory window size
+    double dt_ = 0.25;  // trajectory time step
+    unsigned int window_size_ = 2;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
     // RANSAC
     bool use_ransac = false;
+    unsigned int ransac_version = 0;
+    bool ct_steam = false;
 };
 
 // boost wrapper
@@ -67,5 +72,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
         .def("useRansac", &SteamSolver::useRansac)
+        .def("setRansacVersion", &SteamSolver::setRansacVersion)
+        .def("useCTSteam", &SteamSolver::useCTSteam)
         .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
 }
