@@ -44,7 +44,6 @@ if __name__ == '__main__':
     elif config['model'] == 'HERO':
         model = HERO(config).to(config['gpuid'])
         model.solver.sliding_flag = True
-        model.solver.solver_cpp.useRansac()
     assert(args.pretrain is not None)
     checkpoint = torch.load(args.pretrain, map_location=torch.device(config['gpuid']))
     failed = False

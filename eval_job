@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=eval_run10
+#SBATCH --job-name=249_7
 #SBATCH --time=12:00:00
 #SBATCH --output=/h/keenan/slurm_logs/%j-%N-output.out
 #SBATCH --error=/h/keenan/slurm_logs/%j-%N-error.err
@@ -7,7 +7,7 @@
 #SBATCH --partition=rtx6000
 #SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --gres=gpu:1
 #SBATCH --nodes=1
 #SBATCH --qos=normal		# high, deadline
@@ -20,4 +20,4 @@ module use /pkgs/environment-modules/
 nvidia-smi
 #python eval.py --pretrain /h/keenan/logs/2021-02-08/run16_aug026_cnn8_window3_res2160_width640/59999.pt --config /h/keenan/logs/2021-02-08/run16_aug026_cnn8_window3_res2160_width640/eval77.json
 
-python eval.py --pretrain /h/keenan/logs/2021-02-08/run10_aug026_cnn8_window3_res2160/85000.pt --config /h/keenan/logs/2021-02-08/run10_aug026_cnn8_window3_res2160/evalfull.json
+python eval.py --pretrain /h/keenan/logs/2021-04-02/run249_aug026_cnn8_res25_window4/25000.pt --config /h/keenan/logs/2021-04-02/run249_aug026_cnn8_res25_window4/eval249_7.json

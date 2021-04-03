@@ -20,6 +20,7 @@ class SteamSolver():
         self.log_det_thres_flag = config['steam']['log_det_thres_flag']
         self.log_det_thres_val = config['steam']['log_det_thres_val']
         self.log_det_topk = config['steam']['log_det_topk']
+        self.flip_y = config["flip_y"]
         self.T_aug = []
         # state variables
         self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
@@ -29,6 +30,8 @@ class SteamSolver():
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
+        qc_diag = np.array(config['qc_diag']).reshape(6, 1)
+        self.solver_cpp.setQcInv(qc_diag)
         if config['steam']['use_ransac']:
             self.solver_cpp.useRansac()
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
@@ -65,11 +68,10 @@ class SteamSolver():
             for w in range(i, i + self.window_size - 1):
                 # filter by zero intensity patches
                 ids = torch.nonzero(keypoint_ints[w, 0] > 0, as_tuple=False).squeeze(1)
-                ids_cpu = ids.cpu()
                 # points must be list of N x 3
                 points1_temp = pseudo_coords[w, ids].detach().cpu().numpy()
                 points2_temp = keypoint_coords[w, ids].detach().cpu().numpy()
-                zeros_vec_temp = zeros_vec[ids_cpu]
+                zeros_vec_temp = zeros_vec[ids.cpu()]
                 # weights must be list of N x 3 x 3
                 weights_temp, weights_d = convert_to_weight_matrix(match_weights[w, :, ids].T, w, self.T_aug)
                 # threshold on log determinant
@@ -117,8 +119,6 @@ class SteamSolver():
         timestamps1 = []
         timestamps2 = []
         for i in range(len(points1)):
-            p1 = points1[i]
-            p2 = points2[i]
             for j in range(2):
                 if j == 0:
                     p = points1[i]
@@ -130,6 +130,8 @@ class SteamSolver():
                 for k in range(p.shape[0]):
                     x = p[k, 0]
                     y = p[k, 1]
+                    if self.flip_y:
+                        y *= -1
                     phi = np.arctan2(y, x)
                     phi = wrapto2pi(phi)
                     time_idx = phi / azimuth_step

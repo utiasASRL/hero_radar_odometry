@@ -22,7 +22,7 @@ public:
     // initialization
     void resetTraj();
     void slideTraj();
-    void setQcInv(const np::ndarray& Qc_inv_diag);
+    void setQcInv(const np::ndarray& Qc_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
         const p::object& t2_list, const p::object& t1_list);
     // solve
