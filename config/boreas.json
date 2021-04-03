@@ -34,7 +34,9 @@
         "log_det_thres_flag": false,
         "log_det_thres_val": 4.0,
         "log_det_topk": 20,
-        "use_ransac": true
+        "use_ransac": false,
+        "ransac_version": 0,
+        "use_ctsteam": false
     },
     "lr": 0.00001,
     "weight_decay": 0,
