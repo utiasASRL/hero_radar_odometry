@@ -1,6 +1,7 @@
 #include "SteamSolver.hpp"
 #include "P2P3ErrorEval.hpp"
 #include "SE2VelPriorEval.hpp"
+#include <steam/trajectory/SteamTrajPriorFactor.hpp>
 
 // Reset trajectory to identity poses and zero velocities
 void SteamSolver::resetTraj() {
@@ -216,4 +217,46 @@ void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
             }  // end r
         }  // end for a
     }  // end for i
+}
+
+void SteamSolver::getMotionErrorOuterProd(const int& mode, np::ndarray& outer_prod) {
+    if (outer_prod.shape(0) != 12 || outer_prod.shape(1) != window_size_ - 1)
+        throw std::runtime_error("[getMotionErrorOuterProd] Numpy ref array incorrect shape.");
+
+    // Motion prior
+    steam::se3::SteamTrajInterface traj(Qc_inv_);
+    for (uint i = 0; i < states_.size(); ++i) {
+        TrajStateVar& state = states_.at(i);
+        steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
+        traj.add(state.time, temp, state.velocity);
+    }  // end i
+
+    steam::ParallelizedCostTermCollection::Ptr cost_terms(new steam::ParallelizedCostTermCollection());
+    traj.appendPriorCostTerms(cost_terms);
+
+    if (mode == 0) {
+        // mean approximation
+        for (unsigned int k = 1; k < states_.size(); ++k) {
+            steam::se3::TransformStateEvaluator::Ptr pose1 =
+                steam::se3::TransformStateEvaluator::MakeShared(states_[k-1].pose);
+            steam::se3::TransformStateEvaluator::Ptr pose2 =
+                steam::se3::TransformStateEvaluator::MakeShared(states_[k].pose);
+
+            steam::se3::SteamTrajVar::Ptr knot1(new steam::se3::SteamTrajVar(states_[k-1].time,
+                pose1, states_[k-1].velocity));
+            steam::se3::SteamTrajVar::Ptr knot2(new steam::se3::SteamTrajVar(states_[k].time,
+                pose2, states_[k].velocity));
+
+            steam::se3::SteamTrajPriorFactor::Ptr error_eval(
+                  new steam::se3::SteamTrajPriorFactor(knot1, knot2));
+
+            Eigen::Matrix<double, 12, 1> error = error_eval->evaluate();
+            for (int r = 0; r < 12; ++r)
+                outer_prod[r][k-1] = float(error(r));
+        }
+    }
+    else {
+        // TODO
+        throw std::runtime_error("[getMotionErrorOuterProd] Requested mode not implemented.");
+    }
 }

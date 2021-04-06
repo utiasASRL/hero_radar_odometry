@@ -28,6 +28,9 @@ class SteamPoseModel(torch.nn.Module):
         self.patch_mean_thres = config['steam']['patch_mean_thres']
         self.expect_approx_opt = config['steam']['expect_approx_opt']
         self.topk_backup = config['steam']['topk_backup']
+        self.prior_learn_const = config['steam']['prior_learn_const']
+
+        self.q = nn.Parameter(torch.log(torch.tensor([0.37, 0.043, 0.13, 0.0073, 0.0076, 0.002], requires_grad=True)))
 
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
@@ -55,7 +58,7 @@ class SteamPoseModel(torch.nn.Module):
         keypoint_ints = self.mask_intensity_filter(mask[tgt_ids])
 
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
-                                                              keypoint_ints)
+                                                              keypoint_ints, self.q)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
@@ -70,6 +73,7 @@ class SteamPoseModel(torch.nn.Module):
         point_loss = 0
         logdet_loss = 0
         unweighted_point_loss = 0
+        prior_loss = 0
 
         # loop through each batch
         bcount = 0
@@ -132,13 +136,51 @@ class SteamPoseModel(torch.nn.Module):
                 # log det (ignore 3rd dim since it's a constant)
                 logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1))
 
+                # motion prior
+                Qk_inv = self.construct_Qk_inv()
+                outer_prod = np.zeros((12, self.solver.window_size - 1), dtype=np.float32)
+                self.solver.solver_cpp.getMotionErrorOuterProd(0, outer_prod)
+                outer_prod = torch.from_numpy(outer_prod).to(self.gpuid)
+
+                prior_loss += torch.trace(torch.matmul(Qk_inv, outer_prod)) + 2*(self.q[0] + self.q[1] + self.q[5])
+
         # average over batches
         if bcount > 0:
             point_loss /= (bcount * (self.solver.window_size - 1))
             logdet_loss /= (bcount * (self.solver.window_size - 1))
-        total_loss = point_loss + logdet_loss
-        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'unweighted_point_loss': unweighted_point_loss}
+            prior_loss /= (bcount * (self.solver.window_size - 1))
+        total_loss = point_loss + logdet_loss + self.prior_learn_const*prior_loss
+        dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss,
+                     'unweighted_point_loss': unweighted_point_loss, 'prior_loss': prior_loss}
         return total_loss, dict_loss
+
+    def construct_Qk_inv(self):
+        qc_diag = torch.exp(self.q.detach())
+        qc_diag[0] = torch.exp(self.q[0])
+        qc_diag[1] = torch.exp(self.q[1])
+        qc_diag[5] = torch.exp(self.q[5])
+        Qc_inv = torch.diag(1.0/qc_diag)
+        return kronecker_product(self.solver.Qdt_inv.to(Qc_inv.device), Qc_inv)
+
+def kronecker_product(t1, t2):
+    """
+    Computes the Kronecker product between two tensors.
+    See https://en.wikipedia.org/wiki/Kronecker_product
+    """
+    t1_height, t1_width = t1.size()
+    t2_height, t2_width = t2.size()
+    out_height = t1_height * t2_height
+    out_width = t1_width * t2_width
+
+    tiled_t2 = t2.repeat(t1_height, t1_width)
+    expanded_t1 = (
+        t1.unsqueeze(2)
+          .unsqueeze(3)
+          .repeat(1, t2_height, t2_width, 1)
+          .view(out_height, out_width)
+    )
+
+    return expanded_t1 * tiled_t2
 
 class SteamSolver():
     """
@@ -155,6 +197,11 @@ class SteamSolver():
         self.log_det_thres_val = config['steam']['log_det_thres_val']
         self.log_det_topk = config['steam']['log_det_topk']
         self.T_aug = []
+        self.time_step = config['steam']['time_step']
+        dti1 = 1.0/self.time_step
+        dti2 = dti1*dti1
+        dti3 = dti1*dti2
+        self.Qdt_inv = torch.tensor([[12.0*dti3, -6.0*dti2], [-6.0*dti2, 4.0*dti1]], dtype=torch.float32)
         # z weight value
         # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
         self.z_weight = 9.2103
@@ -165,11 +212,11 @@ class SteamSolver():
         self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
-        self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'],
+        self.solver_cpp = steamcpp.SteamSolver(self.time_step,
                                                self.window_size, config['steam']['zero_vel_prior'])
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
-    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints):
+    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, q):
         """
             keypoint_coords: B*(W-1)x400x2
             pseudo_coords: B*(W-1)x400x2
@@ -220,6 +267,7 @@ class SteamSolver():
                 points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)]
                 weights += [weights_temp[ids].detach().cpu().numpy()]
             # solver
+            self.solver_cpp.setQcInv(torch.exp(q.unsqueeze(1)).detach().cpu().numpy())
             self.solver_cpp.setMeas(points2, points1, weights)
             self.solver_cpp.optimize()
             # get pose output

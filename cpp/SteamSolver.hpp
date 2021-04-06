@@ -35,6 +35,7 @@ public:
     void getSigmapoints2NP1(np::ndarray& sigma_T);
     void train() {evalmode = false;}
     void eval() {evalmode = true;}
+    void getMotionErrorOuterProd(const int& mode, np::ndarray& outer_prod);
 
 private:
     // Solver
@@ -70,7 +71,8 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("getVelocities", &SteamSolver::getVelocities)
         .def("train", &SteamSolver::train)
         .def("eval", &SteamSolver::eval)
-        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
+        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1)
+        .def("getMotionErrorOuterProd", &SteamSolver::getMotionErrorOuterProd);
 }
 
 #endif  // STEAMSOLVER_HPP
