@@ -26,7 +26,7 @@ def get_lines(vertices):
         x2 = vertices[i+1, 0]
         y2 = vertices[i+1, 1]
         phi = wrapto2pi(np.arctan2(y2 - y1, x2 - x1))
-        if (0 <= phi and phi < 0.25 * PI) or (0.75 * PI <= phi and phi < 1.25 * PI) or
+        if (0 <= phi and phi < 0.25 * PI) or (0.75 * PI <= phi and phi < 1.25 * PI) or \
             (1.75 * PI <= phi and phi < 2 * PI):
             m = (y2 - y1) / (x2 - x1 + eps)
             b = y1 - m * x1
@@ -49,12 +49,14 @@ class TestDistortion(unittest.TestCase):
         v = 20.0
         omega = 90.0 * np.pi / 180.0
         print(v, omega)
-        square = np.array([[25, -25, -25, 25, 25],[25, 25, -25, -25, 25]]).transpose()
+        square = np.array([[25, -25, -25, 25, 25], [25, 25, -25, -25, 25]]).transpose()
+        plt.figure(figsize=(10, 10), tight_layout=True)
+        plt.axes().set_aspect('equal')
         plt.plot(square[:, 0], square[:, 1], "k")
 
         lines = get_lines(square)
 
-        x1 = []; y1 = []; x2 = []; y2 = []; a1 = []; a2 = [];
+        x1 = []; y1 = []; x2 = []; y2 = []; a1 = []; a2 = []; t1 = []; t2 = [];
 
         delta_t = 0.25 / 400.0
         time = 0.0
@@ -89,7 +91,7 @@ class TestDistortion(unittest.TestCase):
                     a2.append(theta_rad)
                     t2.append(time * 1e6)
 
-                if (0 <= theta and theta < 0.25 * PI) or (0.75 * PI <= theta and theta < 1.25 * PI) or
+                if (0 <= theta and theta < 0.25 * PI) or (0.75 * PI <= theta and theta < 1.25 * PI) or \
                     (1.75 * PI <= theta and theta < 2 * PI):
                     m = np.tan(theta)
                     b = y_pos - m * x_pos
@@ -120,10 +122,11 @@ class TestDistortion(unittest.TestCase):
                         y_int = (b2 - b) / (m - m2 + eps)
                         x_int = m * y_int + b
 
-                    if (0 <= theta and theta < PI and (y_int - y_pos) < 0) or
+                    if (0 <= theta and theta < PI and (y_int - y_pos) < 0) or \
                         (PI <= theta and theta < 2 * PI and (y_int - y_pos) > 0):
                         continue
-                    if  (((0 <= theta and theta < 0.5 * PI) or (1.5 * PI <= theta and theta < 2 * PI)) and (x_int - x_pos) < 0) or
+                    if  (((0 <= theta and theta < 0.5 * PI) or (1.5 * PI <= theta and theta < 2 * PI)) and
+                        (x_int - x_pos) < 0) or \
                         (0.5 * PI <= theta and theta < 1.5 * PI and (x_int - x_pos) > 0):
                         continue
                     x_range = [lines[3, j], lines[5, j]]
@@ -143,23 +146,27 @@ class TestDistortion(unittest.TestCase):
                 if scan == 0:
                     desc1[i, 0] = x_true
                     desc1[i, 1] = y_true
-                    x1.append(r * cos(theta_rad))
-                    y1.append(r * sin(theta_rad))
+                    x1.append(r * np.cos(theta_rad))
+                    y1.append(r * np.sin(theta_rad))
                 else:
                     desc2[i, 0] = x_true
                     desc2[i, 1] = y_true
-                    x2.append(r * cos(theta_rad))
-                    y2.append(r * sin(theta_rad))
+                    x2.append(r * np.cos(theta_rad))
+                    y2.append(r * np.sin(theta_rad))
 
                 time += delta_t
 
-        plt.scatter(x1, y1, 25.0, "c", "r")
+        plt.scatter(x1, y1, 25.0, "r")
         plt.scatter(x_pos_vec, y_pos_vec, 25.0)
-        plt.scatter(x2, y2, 25.0, "c", "b")
+        plt.scatter(x2, y2, 25.0, "b")
+        plt.savefig('output.pdf', bbox_inches='tight', pad_inches=0.0)
 
         # Perform NN matching using the descriptors from each cloud
         kdt = KDTree(desc2, leaf_size=1, metric='euclidean')
         nnresults = kdt.query(desc1, k=1, return_distance=False)
+        print(desc1[:10])
+        print(desc2[:10])
+        print(nnresults[:10])
 
         matches = []
         N = desc1.shape[0]
