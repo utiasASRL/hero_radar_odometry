@@ -61,6 +61,13 @@ void SteamSolver::setMeas(const p::object& p2_list, const p::object& p1_list, co
     t_refs_ = toStdVector<int64_t>(t_refs);
 }
 
+// Set extrinsic transform Tsv
+void SteamSolver::setExtrinsicTsv(const np::ndarray& T_sv) {
+    Eigen::Matrix4d T_sv_eig = numpyToEigen2D(T_sv);
+    lgmath::se3::Transformation T_sv_lg(T_sv_eig);
+    T_sv_ = steam::se3::FixedTransformEvaluator::MakeShared(T_sv_lg);
+}
+
 // Run optimization
 void SteamSolver::optimize() {
     // Motion prior
@@ -148,9 +155,11 @@ void SteamSolver::optimize() {
                 double tb = double(int64_t(p::extract<int64_t>(t2_[i-1][j])) - t0) / 1.0e6;
                 steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(ta));
                 steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(tb));
-                T_eval_ptr = steam::se3::composeInverse(Tb0, Ta0);  // Tba = Tb0 * inv(Ta0)
+                T_eval_ptr = steam::se3::composeInverse(
+                    steam::se3::compose(T_sv_, Tb0),
+                    steam::se3::compose(T_sv_, Ta0));  // Tba = Tb0 * inv(Ta0)
             } else {
-                T_eval_ptr = T_k0_eval_ptr;
+                T_eval_ptr = steam::se3::compose(T_sv_, T_k0_eval_ptr);
             }
             steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
@@ -176,10 +185,10 @@ void SteamSolver::optimize() {
 
 void SteamSolver::getPoses(np::ndarray& poses) {
     for (uint i = 0; i < states_.size(); ++i) {
-        Eigen::Matrix<double, 4, 4> Tvi = states_[i].pose->getValue().matrix();
+        Eigen::Matrix<double, 4, 4> Tsi = T_sv_->evaluate().matrix()*states_[i].pose->getValue().matrix();
         for (uint r = 0; r < 3; ++r) {
             for (uint c = 0; c < 4; ++c) {
-                poses[i][r][c] = float(Tvi(r, c));
+                poses[i][r][c] = float(Tsi(r, c));
             }
         }
     }
@@ -194,7 +203,7 @@ void SteamSolver::getVelocities(np::ndarray& vels) {
     }
 }
 
-void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
+void SteamSolver::getSigmapoints2N(np::ndarray& sigma_T) {
     // query covariance at once
     std::vector<steam::StateKey> keys;
     keys.reserve(window_size_ - 1);
@@ -222,8 +231,8 @@ void SteamSolver::getSigmapoints2NP1(np::ndarray& sigma_T) {
             Eigen::Matrix4d T_sp = lgmath::se3::vec2tran(L.col(a).head<6>()*alpha);
             Eigen::Matrix4d T_sp_inv = lgmath::se3::vec2tran(-L.col(a).head<6>()*alpha);
             // positive/negative sigmapoints
-            T_sp = T_sp*T_i0_eigen;
-            T_sp_inv = T_sp_inv*T_i0_eigen;
+            T_sp = T_sv_->evaluate().matrix()*T_sp*T_i0_eigen;
+            T_sp_inv = T_sv_->evaluate().matrix()*T_sp_inv*T_i0_eigen;
             // set output
             for (int r = 0; r < 4; ++r) {
                 for (int c = 0; c < 4; ++c) {

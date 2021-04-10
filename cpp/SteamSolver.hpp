@@ -16,6 +16,10 @@ public:
                    0.0021394075786459413462958778495704;
         Qc_inv_.setZero();
         Qc_inv_.diagonal() = 1.0/Qc_diag;
+
+        // Initialize extrinsic transform to identity
+        T_sv_ = steam::se3::FixedTransformEvaluator::MakeShared(lgmath::se3::Transformation());
+
         // Initialize trajectory
         resetTraj();
     }
@@ -25,12 +29,13 @@ public:
     void setQcInv(const np::ndarray& Qc_diag);
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
         const p::object& t2_list, const p::object& t1_list, const p::object& t_refs);
+    void setExtrinsicTsv(const np::ndarray& T_sv);
     // solve
     void optimize();
     // output
     void getPoses(np::ndarray& poses);
     void getVelocities(np::ndarray& vels);
-    void getSigmapoints2NP1(np::ndarray& sigma_T);
+    void getSigmapoints2N(np::ndarray& sigma_T);
     void useRansac() {use_ransac = true;}
     void setRansacVersion(const unsigned int& version) {ransac_version = uint(version);}
     void useCTSteam() {ct_steam = true;}
@@ -53,6 +58,7 @@ private:
     double dt_ = 0.25;  // trajectory time step
     unsigned int window_size_ = 2;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
+    steam::se3::TransformEvaluator::Ptr T_sv_;
     // RANSAC
     bool use_ransac = false;
     unsigned int ransac_version = 0;
@@ -68,11 +74,12 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("slideTraj", &SteamSolver::slideTraj)
         .def("setQcInv", &SteamSolver::setQcInv)
         .def("setMeas", &SteamSolver::setMeas)
+        .def("setExtrinsicTsv", &SteamSolver::setExtrinsicTsv)
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
         .def("useRansac", &SteamSolver::useRansac)
         .def("setRansacVersion", &SteamSolver::setRansacVersion)
         .def("useCTSteam", &SteamSolver::useCTSteam)
-        .def("getSigmapoints2NP1", &SteamSolver::getSigmapoints2NP1);
+        .def("getSigmapoints2N", &SteamSolver::getSigmapoints2N);
 }
