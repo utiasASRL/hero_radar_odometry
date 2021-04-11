@@ -159,7 +159,8 @@ void SteamSolver::optimize() {
                     steam::se3::compose(T_sv_, Tb0),
                     steam::se3::compose(T_sv_, Ta0));  // Tba = Tb0 * inv(Ta0)
             } else {
-                T_eval_ptr = steam::se3::compose(T_sv_, T_k0_eval_ptr);
+                T_eval_ptr = steam::se3::composeInverse(
+                    steam::se3::compose(T_sv_, T_k0_eval_ptr), T_sv_);
             }
             steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
@@ -185,7 +186,8 @@ void SteamSolver::optimize() {
 
 void SteamSolver::getPoses(np::ndarray& poses) {
     for (uint i = 0; i < states_.size(); ++i) {
-        Eigen::Matrix<double, 4, 4> Tsi = T_sv_->evaluate().matrix()*states_[i].pose->getValue().matrix();
+        Eigen::Matrix<double, 4, 4> Tsi =
+            T_sv_->evaluate().matrix()*states_[i].pose->getValue().matrix()*T_sv_->evaluate().inverse().matrix();
         for (uint r = 0; r < 3; ++r) {
             for (uint c = 0; c < 4; ++c) {
                 poses[i][r][c] = float(Tsi(r, c));
@@ -231,8 +233,8 @@ void SteamSolver::getSigmapoints2N(np::ndarray& sigma_T) {
             Eigen::Matrix4d T_sp = lgmath::se3::vec2tran(L.col(a).head<6>()*alpha);
             Eigen::Matrix4d T_sp_inv = lgmath::se3::vec2tran(-L.col(a).head<6>()*alpha);
             // positive/negative sigmapoints
-            T_sp = T_sv_->evaluate().matrix()*T_sp*T_i0_eigen;
-            T_sp_inv = T_sv_->evaluate().matrix()*T_sp_inv*T_i0_eigen;
+            T_sp = T_sv_->evaluate().matrix()*T_sp*T_i0_eigen*T_sv_->evaluate().inverse().matrix();
+            T_sp_inv = T_sv_->evaluate().matrix()*T_sp_inv*T_i0_eigen*T_sv_->evaluate().inverse().matrix();
             // set output
             for (int r = 0; r < 4; ++r) {
                 for (int c = 0; c < 4; ++c) {
