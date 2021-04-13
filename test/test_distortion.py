@@ -5,6 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 from sklearn.neighbors import KDTree
 from networks.steam_solver import SteamSolver
+from utils.utils import get_inverse_tf, translationError, rotationError
 
 PI = np.pi
 
@@ -28,11 +29,11 @@ def get_lines(vertices):
         phi = wrapto2pi(np.arctan2(y2 - y1, x2 - x1))
         if (0 <= phi and phi < 0.25 * PI) or (0.75 * PI <= phi and phi < 1.25 * PI) or \
             (1.75 * PI <= phi and phi < 2 * PI):
-            m = (y2 - y1) / (x2 - x1 + eps)
+            m = (y2 - y1) / (x2 - x1)
             b = y1 - m * x1
             flag = False
         else:
-            m = (x2 - x1) / (y2 - y1 + eps)
+            m = (x2 - x1) / (y2 - y1)
             b = x1 - m * y1
             flag = True
         lines[0, i] = flag
@@ -43,6 +44,9 @@ def get_lines(vertices):
         lines[5, i] = x2
         lines[6, i] = y2
     return lines
+
+def yaw(y):
+    return np.array([[np.cos(y), np.sin(y), 0], [-np.sin(y), np.cos(y), 0], [0, 0, 1]], dtype=np.float64)
 
 class TestDistortion(unittest.TestCase):
     def test0(self):
@@ -109,14 +113,14 @@ class TestDistortion(unittest.TestCase):
                     m2 = lines[1, j]
                     b2 = lines[2, j]
                     lflag = lines[0, j]
-                    if flag is False and lflag is False:
-                        x_int = (b2 - b) / (m - m2 + eps)
+                    if flag is False and lflag == 0:
+                        x_int = (b2 - b) / (m - m2)
                         y_int = m * x_int + b
-                    elif flag is False and lflag is True:
-                        y_int = (m * b2 + b) / (1 - m * m2 + eps)
+                    elif flag is False and lflag == 1:
+                        y_int = (m * b2 + b) / (1 - m * m2)
                         x_int = m2 * y_int + b2
-                    elif flag is True and lflag is False:
-                        y_int = (m2 * b + b2) / (1 - m * m2 + eps)
+                    elif flag is True and lflag == 0:
+                        y_int = (m2 * b + b2) / (1 - m * m2)
                         x_int = m * y_int + b
                     else:
                         y_int = (b2 - b) / (m - m2 + eps)
@@ -133,8 +137,8 @@ class TestDistortion(unittest.TestCase):
                     y_range = [lines[4, j], lines[6, j]]
                     x_range.sort()
                     y_range.sort()
-                    if x_int < x_range[0] or x_int > x_range[1] or y_int < y_range[0] or y_int > y_range[1]:
-                        continue
+                    #if x_int < x_range[0] or x_int > x_range[1] or y_int < y_range[0] or y_int > y_range[1]:
+                    #    continue
 
                     d = (x_pos - x_int)**2 + (y_pos - y_int)**2
                     if d < dmin:
@@ -157,16 +161,13 @@ class TestDistortion(unittest.TestCase):
                 time += delta_t
 
         plt.scatter(x1, y1, 25.0, "r")
-        plt.scatter(x_pos_vec, y_pos_vec, 25.0)
+        plt.scatter(x_pos_vec, y_pos_vec, 25.0, 'k')
         plt.scatter(x2, y2, 25.0, "b")
         plt.savefig('output.pdf', bbox_inches='tight', pad_inches=0.0)
 
         # Perform NN matching using the descriptors from each cloud
         kdt = KDTree(desc2, leaf_size=1, metric='euclidean')
         nnresults = kdt.query(desc1, k=1, return_distance=False)
-        print(desc1[:10])
-        print(desc2[:10])
-        print(nnresults[:10])
 
         matches = []
         N = desc1.shape[0]
@@ -178,32 +179,73 @@ class TestDistortion(unittest.TestCase):
 
         p1 = np.zeros((N, 3))
         p2 = np.zeros((N, 3))
-        # t1prime = np.zeros((N, 1))
+        t1prime = np.zeros((N, 1))
+        t2prime = np.zeros((N, 1))
         j = 0
         for i in range(N):
             if matches[i] == -1:
                 continue
             p1[j, 0] = x1[i]
             p1[j, 1] = y1[i]
-            p2[j, 0] = x2[matches[i]]
-            p2[j, 1] = y2[matches[i]]
-            # t1prime[j, 0] = t1[i]
-            # t2prime[j, 0] = t2[matches[i]]
+            p2[j, 0] = x2[int(matches[i])]
+            p2[j, 1] = y2[int(matches[i])]
+            t1prime[j, 0] = t1[i]
+            t2prime[j, 0] = t2[int(matches[i])]
             j += 1
-        p1 = np.expand_dims(p1.resize((j, 3)), axis=0)
-        p2 = np.expand_dims(p2.resize((j, 3)), axis=0)
+        p1.resize((j, 3))
+        p2.resize((j, 3))
+        p1 = np.expand_dims(p1, axis=0)
+        p2 = np.expand_dims(p2, axis=0)
+        p1 = torch.from_numpy(p1)
+        p2 = torch.from_numpy(p2)
         # t1prime = np.expand_dims(t1prime.resize((j, 1)), axis=0)
         # t2prime = np.expand_dims(t2prime.resize((j, 1)), axis=0)
 
-        keypoint_ints = np.ones((1, 1, p1.shape[1]))
-        match_weights = np.ones((1, 1, p1.shape[1]))
+        keypoint_ints = torch.ones(1, 1, p1.shape[1])
+        match_weights = torch.ones(1, 1, p1.shape[1])
+        t1 = np.array(t1, dtype=np.int64).reshape((1, 400, 1))
+        t2 = np.array(t2, dtype=np.int64).reshape((1, 400, 1))
+        t1 = torch.from_numpy(t1)
+        t2 = torch.from_numpy(t2)
 
         with open('config/steam.json') as f:
             config = json.load(f)
+        config['window_size'] = 2
+        config['gpuid'] = 'cpu'
+        config['flip_y'] = False
+        config['qc_diag'] = [1.0, 1.0, 1.0, 1.0, 1.0, 1]
+        config['steam']['use_ransac'] = False
+        config['steam']['ransac_version'] = 0
+        config['steam']['use_ctsteam'] = True
+
         solver = SteamSolver(config)
-        R_tgt_src_pred, t_tgt_src_pred = solver.optimize(p1, p2, match_weights, keypoint_ints, t1, t2)
-        print(R_tgt_src_pred)
-        print(t_tgt_src_pred)
+        R_tgt_src_pred, t_tgt_src_pred = solver.optimize(p2, p1, match_weights, keypoint_ints, t2, t1)
+        T_pred = np.identity(4)
+        T_pred[0:3, 0:3] = R_tgt_src_pred[0, 1].cpu().numpy()
+        T_pred[0:3, 3:] = t_tgt_src_pred[0, 1].cpu().numpy()
+        print('T_pred:\n{}'.format(T_pred))
+
+        T_01 = np.identity(4)
+        theta_pos = omega * 0.25
+        if omega == 0:
+            x_pos = v * time
+            y_pos = 0
+        else:
+            x_pos = (v / omega) * np.sin(theta_pos)
+            y_pos = (v / omega) * (1 - np.cos(theta_pos))
+        T_01[0:3, 0:3] = yaw(-theta_pos)
+        T_01[0, 3] = x_pos
+        T_01[1, 3] = y_pos
+        T_10 = get_inverse_tf(T_01)
+        print('T_true:\n{}'.format(T_10))
+
+        Terr = T_01 @ T_pred
+        
+        t_err = translationError(Terr)
+        r_err = rotationError(Terr) * 180 / np.pi
+
+        print('t_err: {} m r_err: {} deg'.format(t_err, r_err))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -70,7 +70,8 @@ void SteamSolver::optimize() {
     for (uint i = 0; i < states_.size(); ++i) {
         TrajStateVar& state = states_.at(i);
         steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
-        double delta_t = double(t_refs_[i] - t_refs_[0]) / 1.0e6;
+	int64_t delta = t_refs_[i] - t_refs_[0];
+        double delta_t = double(delta) / 1.0e6;
         traj.add(steam::Time(delta_t), temp, state.velocity);
         if (i == 0) {  // lock first pose
             state.pose->setLock(true);
@@ -91,18 +92,17 @@ void SteamSolver::optimize() {
         if (use_ransac) {
             srand(t0 / 1e6);  // fix random seed for repeatability
             Eigen::VectorXd motion_vec = Eigen::VectorXd::Zero(6);
+	    Eigen::MatrixXd T;
             if (ransac_version == 1) {
                 MCRansac mcransac(p1_[i-1], p2_[i-1], t1_[i-1], t2_[i-1]);
                 mcransac.computeModel();
                 mcransac.getMotion(motion_vec);
                 mcransac.getInliers(motion_vec, inliers);
-                Eigen::MatrixXd T;
                 mcransac.getTransform(0.25, T);
             } else {
                 Ransac ransac(p1_[i-1], p2_[i-1]);
                 ransac.computeModel();
-                Eigen::MatrixXd T;
-                ransac.getTransform(T);
+		ransac.getTransform(T);
                 ransac.getInliers(T, inliers);
             }
     	    /*Eigen::Matrix<double, 4, 4> Tmd;
@@ -144,8 +144,10 @@ void SteamSolver::optimize() {
 
             steam::se3::TransformEvaluator::Ptr T_eval_ptr;
             if (ct_steam) {
-                double ta = double(int64_t(p::extract<int64_t>(t1_[i-1][j])) - t0) / 1.0e6;
-                double tb = double(int64_t(p::extract<int64_t>(t2_[i-1][j])) - t0) / 1.0e6;
+		int64_t ta_ = int64_t(p::extract<int64_t>(t1_[i-1][j])) - t0;
+		int64_t tb_ = int64_t(p::extract<int64_t>(t2_[i-1][j])) - t0;
+                double ta = double(ta_) / 1.0e6;
+                double tb = double(tb_) / 1.0e6;
                 steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(ta));
                 steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(tb));
                 T_eval_ptr = steam::se3::composeInverse(Tb0, Ta0);  // Tba = Tb0 * inv(Ta0)
@@ -158,8 +160,8 @@ void SteamSolver::optimize() {
             costTerms->add(cost);
         }
     }
-    // if (use_ransac)
-        // return;
+    //if (use_ransac)
+    //    return;
     steam::OptimizationProblem problem;
     // Add state variables
     for (uint i = 0; i < states_.size(); ++i) {
