@@ -56,6 +56,7 @@ if __name__ == '__main__':
     T_pred_ = []
     err_ = []
     time_used_ = []
+    prior_loss = []
 
     for seq_num in seq_nums:
         time_used = []
@@ -81,6 +82,9 @@ if __name__ == '__main__':
                 except RuntimeError as e:
                     print(e)
                     continue
+
+            loss, dict_loss = model.loss(out['src'], out['tgt'], out['match_weights'], out['keypoint_ints'], out['scores'], batch)
+            prior_loss += [dict_loss['prior_loss']]
             if batchi == len(test_loader) - 1:
                 # append entire window
                 for w in range(batch['T_21'].size(0)-1):
@@ -94,6 +98,7 @@ if __name__ == '__main__':
                 T_pred.append(get_T_ba(out, a=w, b=w+1))
                 timestamps.append(batch['times'][w].numpy().squeeze())
             time_used.append(time() - ts)
+        pickle.dump([T_gt, T_pred, timestamps, prior_loss], open(root + 'prior_loss' + seq_names[0] + '.obj', 'wb'))
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)
         time_used_.extend(time_used)
@@ -105,8 +110,8 @@ if __name__ == '__main__':
         save_in_yeti_format(T_gt, T_pred, timestamps, [len(T_gt)], seq_names, root)
         pickle.dump([T_gt, T_pred, timestamps], open(root + 'odom' + seq_names[0] + '.obj', 'wb'))
         T_icra = None
-        if config['dataset'] == 'oxford':
-            T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
+        # if config['dataset'] == 'oxford':
+        #     T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
         fname = root + seq_names[0] + '.pdf'
         plot_sequences(T_gt, T_pred, [len(T_gt)], returnTensor=False, T_icra=T_icra, savePDF=True, fnames=[fname])
 
