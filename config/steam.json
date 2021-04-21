@@ -1,9 +1,10 @@
 {
     "model": "HERO",
     "dataset": "oxford",
-    "data_dir": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
+    "data_dir1": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
+    "data_dir": "/workspace/nas/ASRL/2021-krb/oxford-radar-robotcar-dataset/",
     "log_dir": "/workspace/Documents/logs/2021-02-21/run1_aug026_cnn8_window3_res2592_width640/",
-    "gpuid": "cuda:0",
+    "gpuid": "cpu",
     "radar_resolution": 0.0432,
     "cart_resolution": 0.25,
     "cart_pixel_width": 640,
