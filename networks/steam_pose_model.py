@@ -212,8 +212,12 @@ class SteamSolver():
         self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
-        self.solver_cpp = steamcpp.SteamSolver(self.time_step,
-                                               self.window_size, config['steam']['zero_vel_prior'])
+        if 'wnoa_prior' in config['steam']:
+            wnoa_prior_flag = config['steam']['wnoa_prior']
+        else:
+            wnoa_prior_flag = True
+        self.solver_cpp = steamcpp.SteamSolver(self.time_step, self.window_size,
+                                               wnoa_prior_flag, config['steam']['zero_vel_prior'])
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, q):

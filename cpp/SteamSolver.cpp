@@ -77,7 +77,8 @@ void SteamSolver::optimize() {
 
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
-    traj.appendPriorCostTerms(costTerms);
+    if (wnoa_prior_flag_)
+        traj.appendPriorCostTerms(costTerms);
 
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
@@ -114,7 +115,7 @@ void SteamSolver::optimize() {
 
     // SE(2) velocity priors
     // TODO(david): make vel_prior_noise a parameter
-    if (zero_vel_prior_flag_) {
+    if (zero_vel_prior_flag_ && wnoa_prior_flag_) {
         Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
         steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
         for (uint i = 0; i < states_.size(); ++i) {
@@ -131,7 +132,8 @@ void SteamSolver::optimize() {
     for (uint i = 0; i < states_.size(); ++i) {
         const TrajStateVar& state = states_.at(i);
         problem.addStateVariable(state.pose);
-        problem.addStateVariable(state.velocity);
+        if (wnoa_prior_flag_)
+            problem.addStateVariable(state.velocity);
     }
     // Add cost terms
     problem.addCostTerm(costTerms);

@@ -7,8 +7,10 @@
 
 class SteamSolver {
 public:
-    SteamSolver(const double& dt, const unsigned int& window_size, const bool& zero_vel_prior_flag) :
-        dt_(dt), window_size_(window_size), zero_vel_prior_flag_(zero_vel_prior_flag) {
+    SteamSolver(const double& dt, const unsigned int& window_size,
+                const bool& zero_vel_prior_flag, const bool& wnoa_prior_flag) :
+        dt_(dt), window_size_(window_size), zero_vel_prior_flag_(zero_vel_prior_flag),
+        wnoa_prior_flag_(wnoa_prior_flag) {
         // Make Qc_inv
         Eigen::Array<double, 1, 6> Qc_diag;
         Qc_diag << 0.3678912639416186958207788393338,
@@ -53,6 +55,7 @@ private:
     unsigned int window_size_;  // trajectory window size
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
     bool zero_vel_prior_flag_ = false;
+    bool wnoa_prior_flag_ = true;
     bool evalmode = false;
 };
 
@@ -61,7 +64,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
     Py_Initialize();
     np::initialize();
     // p::def("run_simple", run_simple);
-    p::class_<SteamSolver>("SteamSolver", p::init<const double&, const unsigned int&, const bool&>())
+    p::class_<SteamSolver>("SteamSolver", p::init<const double&, const unsigned int&, const bool&, const bool&>())
         .def("resetTraj", &SteamSolver::resetTraj)
         .def("slideTraj", &SteamSolver::slideTraj)
         .def("setQcInv", &SteamSolver::setQcInv)
