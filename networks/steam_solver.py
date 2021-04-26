@@ -38,6 +38,10 @@ class SteamSolver():
         if config['steam']['use_ctsteam']:
             self.solver_cpp.useCTSteam()
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
+        T_sv = np.eye(4, dtype=np.float32)
+        for i in range(3):  # set translation component of T_sv = [C_sv r_vs_in_s]
+            T_sv[i, 3] = config['steam']['ex_translation_vs_in_s'][i]
+        self.solver_cpp.setExtrinsicTsv(T_sv)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src):
         """
@@ -108,7 +112,7 @@ class SteamSolver():
             self.solver_cpp.getVelocities(self.vels[b])
             # sigmapoints output
             if self.sigmapoints_flag:
-                self.solver_cpp.getSigmapoints2NP1(self.poses_sp[b])
+                self.solver_cpp.getSigmapoints2N(self.poses_sp[b])
             # set output
             R_tgt_src[b] = self.poses[b, :, :3, :3]
             t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
