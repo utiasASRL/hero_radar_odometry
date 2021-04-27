@@ -12,7 +12,6 @@ void run_steam(const p::object& p2_list, const p::object& p1_list, const p::obje
     double delT = dt;
 
     // Smoothing factor diagonal
-    // TODO(david): Make this parameter an input
     Eigen::Array<double, 1, 6> Qc_diag;
     Qc_diag << 0.3678912639416186958207788393338,
                0.043068034591947058908889545136844,

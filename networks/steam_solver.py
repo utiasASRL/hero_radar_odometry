@@ -41,6 +41,11 @@ class SteamSolver():
         T_sv = np.eye(4, dtype=np.float32)
         for i in range(3):  # set translation component of T_sv = [C_sv r_vs_in_s]
             T_sv[i, 3] = config['steam']['ex_translation_vs_in_s'][i]
+        k = 0
+        for i in range(3):
+            for j in range(3):
+                T_sv[i, j] = config['steam']['ex_rotation_sv'][k]
+                k += 1
         self.solver_cpp.setExtrinsicTsv(T_sv)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src):
