@@ -53,7 +53,8 @@ if __name__ == '__main__':
 
     T_gt_ = []
     T_pred_ = []
-    err_ = []
+    t_errs = []
+    r_errs = []
     time_used_ = []
 
     for seq_num in seq_nums:
@@ -100,7 +101,8 @@ if __name__ == '__main__':
         print('SEQ: {} : {}'.format(seq_num, seq_names[0]))
         print('KITTI t_err: {} %'.format(t_err))
         print('KITTI r_err: {} deg/m'.format(r_err))
-        err_.extend(err)
+        t_errs.append(t_err)
+        r_errs.append(r_err)
         save_in_yeti_format(T_gt, T_pred, timestamps, [len(T_gt)], seq_names, root)
         pickle.dump([T_gt, T_pred, timestamps], open(root + 'odom' + seq_names[0] + '.obj', 'wb'))
         T_icra = None
@@ -113,8 +115,8 @@ if __name__ == '__main__':
     results = computeMedianError(T_gt_, T_pred_)
     print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
 
-    t_err, r_err = getStats(err_)
+    t_err = np.mean(t_errs)
+    r_err = np.mean(r_errs)
     print('Average KITTI metrics over all test sequences:')
     print('KITTI t_err: {} %'.format(t_err * 100))
     print('KITTI r_err: {} deg/m'.format(r_err * 180 / np.pi))
-    saveKittiErrors(err_, root + "kitti_err.obj")

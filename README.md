@@ -77,8 +77,11 @@ cmake .. && make
 
 - [ ] Test cleaned up code for regression
 - [ ] Add doc strings and delete unused code
+- [ ] Add input object types to functions, tensor shapes
 - [ ] Add example usage to README
 - [ ] Test UnderTheRadar implementation
 - [ ] Test "test" modules
-- [ ] Add script for downloading HERO results
+- [ ] Add script for downloading HERO odometry results
+- [ ] Add script for downloading pre-trained models
 - [ ] Train with batchsize > 2
+- [ ] Test the docker build instructions (add opencv)

@@ -38,7 +38,8 @@
         "use_ransac": false,
         "ransac_version": 0,
         "use_ctsteam": false,
-        "ex_translation_vs_in_s": [-1.03, 0, 0]
+        "ex_translation_vs_in_s": [-1.03, 0, 0],
+        "ex_rotation_sv": [1, 0, 0, 0, -1, 0, 0, 0, -1]
     },
     "lr": 0.00001,
     "weight_decay": 0,
@@ -59,6 +60,6 @@
     "augmentation": {
         "rot_max": 0.26
     },
-    "flip_y": true,
+    "flip_y": false,
     "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021]
 }
