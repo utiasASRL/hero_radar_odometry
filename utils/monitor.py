@@ -165,6 +165,7 @@ class SteamMonitor(MonitorBase):
         aux_init = False
         T_gt = []
         T_pred = []
+
         for batchi, batch in enumerate(self.valid_loader):
             ts = time()
             if (batchi + 1) % self.config['print_rate'] == 0:

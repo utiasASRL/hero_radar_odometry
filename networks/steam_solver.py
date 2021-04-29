@@ -20,7 +20,8 @@ class SteamSolver():
         self.log_det_thres_flag = config['steam']['log_det_thres_flag']
         self.log_det_thres_val = config['steam']['log_det_thres_val']
         self.log_det_topk = config['steam']['log_det_topk']
-        self.flip_y = config["flip_y"]
+        self.flip_y = config['flip_y']
+        self.dataset = config['dataset']
         self.T_aug = []
         # state variables
         self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
@@ -38,15 +39,14 @@ class SteamSolver():
         if config['steam']['use_ctsteam']:
             self.solver_cpp.useCTSteam()
         self.sigmapoints_flag = (config['steam']['expect_approx_opt'] == 1)
-        T_sv = np.eye(4, dtype=np.float32)
-        for i in range(3):  # set translation component of T_sv = [C_sv r_vs_in_s]
-            T_sv[i, 3] = config['steam']['ex_translation_vs_in_s'][i]
+        self.T_sv = np.eye(4, dtype=np.float32)
         k = 0
         for i in range(3):
+            self.T_sv[i, 3] = config['steam']['ex_translation_vs_in_s'][i]
             for j in range(3):
-                T_sv[i, j] = config['steam']['ex_rotation_sv'][k]
+                self.T_sv[i, j] = config['steam']['ex_rotation_sv'][k]
                 k += 1
-        self.solver_cpp.setExtrinsicTsv(T_sv)
+        self.solver_cpp.setExtrinsicTsv(self.T_sv)
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src):
         """
@@ -105,9 +105,15 @@ class SteamSolver():
                 times2 += [time_tgt[w].cpu().numpy().squeeze()]
                 if w == i:
                     tsrc = time_src[w].cpu().numpy().squeeze()
-                    t_refs.append(tsrc[0])
+                    if self.dataset == 'oxford':
+                        t_refs.append(tsrc[tsrc.shape[0] // 2])
+                    else:
+                        t_refs.append(tsrc[0])
                 ttgt = time_tgt[w].cpu().numpy().squeeze()
-                t_refs.append(ttgt[0])
+                if self.dataset == 'oxford':
+                    t_refs.append(ttgt[ttgt.shape[0] // 2])
+                else:
+                    t_refs.append(ttgt[0])
             # solver
             timestamps1, timestamps2 = self.getApproxTimeStamps(points1, points2, times1, times2)
             self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1, t_refs)
