@@ -124,7 +124,7 @@ def draw_batch_steam(batch, out, config):
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
            vutils.make_grid([p2p_img])
 
-def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, savePDF=False, fnames=None):
+def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, savePDF=False, fnames=None, flip=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
     idx = 0
@@ -134,11 +134,18 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
 
     matplotlib.rcParams.update({'font.size': 16, 'xtick.labelsize' : 16, 'ytick.labelsize' : 16,
                                 'axes.linewidth' : 1.5, 'font.family' : 'serif', 'pdf.fonttype' : 42})
+    T_flip = np.identity(4)
+    T_flip[1, 1] = -1
+    T_flip[2, 2] = -1
     imgs = []
     for seq_i, indices in enumerate(seq_indices):
         T_gt_ = np.identity(4)
         T_pred_ = np.identity(4)
         T_icra_ = np.identity(4)
+        if flip:
+            T_gt_ = np.matmul(T_flip, T_gt_)
+            T_pred_ = np.matmul(T_flip, T_pred_)
+            T_icra_ = np.matmul(T_flip, T_icra_)
         x_gt = []
         y_gt = []
         x_pred = []

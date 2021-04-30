@@ -92,7 +92,7 @@ class OxfordDataset(Dataset):
                 line = line.split(',')
                 if int(line[9]) == radar_time:
                     T = get_transform(float(line[2]), float(line[3]), float(line[7]))  # from next time to current
-                    return get_inverse_tf(T)  # T_2_1 from current time step to the next time step
+                    return get_inverse_tf(T), int(line[1]), int(line[0]) # T_2_1 from current time step to the next
         assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
     def __len__(self):
@@ -118,17 +118,12 @@ class OxfordDataset(Dataset):
                                         self.config['cart_resolution'],
                                         self.config['cart_pixel_width']).astype(np.float32)
         # Get ground truth transform between this frame and the next
-        time1 = int(self.frames[idx].split('.')[0])
-        if idx + 1 < len(self.frames):
-            time2 = int(self.frames[idx + 1].split('.')[0])
-        else:
-            time2 = 0
-        times = np.array([time1, time2]).reshape(1, 2)
-        T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
+        T_21, time1, time2 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/gt/radar_odometry.csv')
+        t_ref = np.array([time1, time2]).reshape(1, 2)
         polar = np.expand_dims(polar, axis=0)
         azimuths = np.expand_dims(azimuths, axis=0)
         timestamps = np.expand_dims(timestamps, axis=0)
-        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask, 'polar': polar, 'azimuths': azimuths,
+        return {'data': data, 'T_21': T_21, 't_ref': t_ref, 'mask': mask, 'polar': polar, 'azimuths': azimuths,
                 'timestamps': timestamps}
 
 def get_dataloaders(config):

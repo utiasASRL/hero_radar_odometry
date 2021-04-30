@@ -140,12 +140,12 @@ class BoreasDataset(OxfordDataset):
         if idx + 1 < len(self.frames):
             time2 = int(self.frames[idx + 1].split('.')[0])
         else:
-            time2 = 0
-        times = np.array([time1, time2]).reshape(1, 2)
+            time2 = time1 + 250000
+        t_ref = np.array([time1, time2]).reshape(1, 2)
         T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/applanix/radar_poses.csv')
         azimuths = np.expand_dims(azimuths, axis=0)
         timestamps = np.expand_dims(timestamps, axis=0)
-        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask,
+        return {'data': data, 'T_21': T_21, 't_ref': t_ref, 'mask': mask,
                 'azimuths': azimuths, 'timestamps': timestamps}
 
 def get_dataloaders_boreas(config):

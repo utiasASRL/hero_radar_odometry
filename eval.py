@@ -89,12 +89,12 @@ if __name__ == '__main__':
                 for w in range(batch['T_21'].size(0)-1):
                     T_gt.append(batch['T_21'][w].numpy().squeeze())
                     T_pred.append(get_T_ba(out, a=w, b=w+1))
-                    timestamps.append(batch['times'][w].numpy().squeeze())
+                    timestamps.append(batch['t_ref'][w].numpy().squeeze())
             else:
                 # append only the back of window
                 w = 0
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
-                
+
                 #Tp = get_T_ba(out, a=w, b=w+1)
                 #Tpinv = get_inverse_tf(Tp)
                 #T_pred.append(Tp)
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 print(batchi)
                 print('T_gt:\n{}'.format(T_gt[-1]))
                 print('T_pred:\n{}'.format(T_pred[-1]))
-                timestamps.append(batch['times'][w].numpy().squeeze())
+                timestamps.append(batch['t_ref'][w].numpy().squeeze())
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)

@@ -48,7 +48,8 @@ class SteamSolver():
                 k += 1
         self.solver_cpp.setExtrinsicTsv(self.T_sv)
 
-    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src):
+    def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src,
+                 t_ref_tgt, t_ref_src):
         """
             keypoint_coords: B*(W-1)x400x2
             pseudo_coords: B*(W-1)x400x2
@@ -104,16 +105,8 @@ class SteamSolver():
                 times1 += [time_src[w].cpu().numpy().squeeze()]
                 times2 += [time_tgt[w].cpu().numpy().squeeze()]
                 if w == i:
-                    tsrc = time_src[w].cpu().numpy().squeeze()
-                    if self.dataset == 'oxford':
-                        t_refs.append(tsrc[tsrc.shape[0] // 2])
-                    else:
-                        t_refs.append(tsrc[0])
-                ttgt = time_tgt[w].cpu().numpy().squeeze()
-                if self.dataset == 'oxford':
-                    t_refs.append(ttgt[ttgt.shape[0] // 2])
-                else:
-                    t_refs.append(ttgt[0])
+                    t_refs.append(t_ref_src[w, 0].cpu().item())
+                t_refs.append(t_ref_tgt[w, 0].cpu().item())
             # solver
             timestamps1, timestamps2 = self.getApproxTimeStamps(points1, points2, times1, times2)
             self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1, t_refs)

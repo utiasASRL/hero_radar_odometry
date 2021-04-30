@@ -12,3 +12,6 @@ config/pre2160.json
 config/pre2592.json
 plot_buddies.py
 vis_radar.py
+convert_to_txt.py
+plot_errs.py
+test_kitti.py
