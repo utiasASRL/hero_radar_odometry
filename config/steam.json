@@ -11,7 +11,7 @@
     "train_split": [0, 1, 3, 4, 5, 7, 9, 11, 12, 13, 14, 15, 16, 18, 19, 21, 22, 23, 26, 27, 28, 29, 30, 31],
     "validation_split": [25],
     "other_split": [2, 6, 8, 10, 17, 20, 24],
-    "test_split": [3],
+    "test_split": [25],
     "networks": {
         "unet": {
             "bilinear": true,
@@ -37,9 +37,11 @@
         "log_det_thres_val": 4.0,
         "log_det_topk": 20,
         "use_ransac": false,
-        "ransac_version": 0,
+        "ransac_version": 1,
         "use_ctsteam": true,
-        "ex_translation_vs_in_s": [-1.03, 0, 0]
+        "ex_translation_vs_in_s": [-0.99507, -0.0019, 0],
+        "ex_rotation_sv1": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+	"ex_rotation_sv": [1, 0, 0, 0, -1, 0, 0, 0, -1]
     },
     "lr": 0.00001,
     "weight_decay": 0,
@@ -60,6 +62,6 @@
     "augmentation": {
         "rot_max": 0.26
     },
-    "flip_y": true,
-    "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021]
+    "flip_y": false,
+    "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0001]
 }

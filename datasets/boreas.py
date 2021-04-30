@@ -130,7 +130,7 @@ class BoreasDataset(OxfordDataset):
 
         # Requires that the cartesian images and masks are pre-computed and stored alongside the dataset
         ###########
-        _, _, _, polar, _ = load_radar(frame, navtech_version=CIR204)
+        timestamps, azimuths, _, polar, _ = load_radar(frame, navtech_version=CIR204)
         data = np.expand_dims(cv2.imread(cart_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
         mask = np.expand_dims(cv2.imread(mask_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
         ###########
@@ -143,7 +143,10 @@ class BoreasDataset(OxfordDataset):
             time2 = 0
         times = np.array([time1, time2]).reshape(1, 2)
         T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/applanix/radar_poses.csv')
-        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask}
+        azimuths = np.expand_dims(azimuths, axis=0)
+        timestamps = np.expand_dims(timestamps, axis=0)
+        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask,
+                'azimuths': azimuths, 'timestamps': timestamps}
 
 def get_dataloaders_boreas(config):
     """Retrieves train, validation, and test data loaders."""
