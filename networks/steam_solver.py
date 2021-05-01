@@ -105,8 +105,8 @@ class SteamSolver():
                 times1 += [time_src[w].cpu().numpy().squeeze()]
                 times2 += [time_tgt[w].cpu().numpy().squeeze()]
                 if w == i:
-                    t_refs.append(t_ref_src[w, 0].cpu().item())
-                t_refs.append(t_ref_tgt[w, 0].cpu().item())
+                    t_refs.append(t_ref_src[w, 0, 0].cpu().item())
+                t_refs.append(t_ref_tgt[w, 0, 0].cpu().item())
             # solver
             timestamps1, timestamps2 = self.getApproxTimeStamps(points1, points2, times1, times2)
             self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1, t_refs)

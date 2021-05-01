@@ -45,7 +45,7 @@ class Up(nn.Module):
         super().__init__()
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         else:
             d = int(pow(2, np.floor(np.log(in_channels) / np.log(2))))
             self.up = nn.ConvTranspose2d(d, d, kernel_size=2, stride=2)
