@@ -16,8 +16,8 @@ from datasets.transforms import augmentBatch, augmentBatch2, augmentBatch3
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.deterministic = True
-#torch.manual_seed(0)
-#np.random.seed(0)
+torch.manual_seed(0)
+np.random.seed(0)
 torch.set_num_threads(8)
 torch.multiprocessing.set_sharing_strategy('file_system')
 print(torch.__version__)
@@ -95,7 +95,7 @@ if __name__ == '__main__':
                     batch = augmentBatch3(batch, config)
                 elif config['dataset'] == 'oxford' and config['model'] == 'UnderTheRadar':
                     batch = augmentBatch(batch, config)
-            optimizer.zero_grad()
+            #optimizer.zero_grad()
             try:
                 out = model(batch)
             except RuntimeError as e:
@@ -112,7 +112,9 @@ if __name__ == '__main__':
             if loss.requires_grad:
                 loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
-            optimizer.step()
+            if batchi % config['accumulate'] == 0:
+                optimizer.step()
+                optimizer.zero_grad()
             if (monitor.counter + 1) % config['save_rate'] == 0:
                 with torch.no_grad():
                     model.eval()
