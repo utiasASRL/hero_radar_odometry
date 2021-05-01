@@ -15,9 +15,8 @@ def get_inverse_tf(T):
 
 def get_transform(x, y, theta):
     """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
-    R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     T = np.identity(4, dtype=np.float32)
-    T[0:2, 0:2] = R
+    T[0:2, 0:2] = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     T[0, 3] = x
     T[1, 3] = y
     return T
@@ -81,7 +80,8 @@ def computeMedianError(T_gt, T_pred):
         r_error.append(180 * rotationError(T_error) / np.pi)
     t_error = np.array(t_error)
     r_error = np.array(r_error)
-    return [np.median(t_error), np.std(t_error), np.median(r_error), np.std(r_error), np.mean(t_error), np.mean(r_error)]
+    return [np.median(t_error), np.std(t_error), np.median(r_error), np.std(r_error), np.mean(t_error),
+            np.mean(r_error), t_error, r_error]
 
 def trajectoryDistances(poses):
     """Calculates path length along the trajectory."""
@@ -146,7 +146,7 @@ def computeKittiMetrics(T_gt, T_pred, seq_lens):
     for s in seq_lens:
         seq_indices.append(list(range(idx, idx + s - 1)))
         idx += (s - 1)
-    err = []
+    err_list = []
     for indices in seq_indices:
         T_gt_ = np.identity(4)
         T_pred_ = np.identity(4)
@@ -159,8 +159,13 @@ def computeKittiMetrics(T_gt, T_pred, seq_lens):
             enforce_orthog(T_pred_)
             poses_gt.append(T_gt_)
             poses_pred.append(T_pred_)
-        err.extend(calcSequenceErrors(poses_gt, poses_pred))
-    t_err, r_err = getStats(err)
+        err = calcSequenceErrors(poses_gt, poses_pred)
+        t_err, r_err = getStats(err)
+        err_list.append([t_err, r_err])
+    err_list = np.asarray(err_list)
+    avg = np.mean(err_list, axis=0)
+    t_err = avg[0]
+    r_err = avg[1]
     return t_err * 100, r_err * 180 / np.pi, err
 
 def saveKittiErrors(err, fname):
