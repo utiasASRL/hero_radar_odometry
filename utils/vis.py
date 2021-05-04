@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import torch
 import torchvision.utils as vutils
 from torchvision.transforms import ToTensor
-from utils.utils import get_transform2, enforce_orthog, get_inverse_tf
+from utils.utils import get_transform2, enforce_orthog, get_inverse_tf, get_T_ba
 
 def convert_plt_to_img():
     buf = io.BytesIO()
@@ -49,6 +49,35 @@ def draw_batch(batch, out, config):
     score_img = convert_plt_to_tensor()
 
     return vutils.make_grid([radar_img, score_img, match_img])
+
+def draw_matches(batch, out, config):
+    radar = batch['data'][0].squeeze().numpy()
+    plt.subplots()
+    plt.imshow(radar, cmap='gray')
+    src = out['src'][0].squeeze().detach().cpu().numpy()
+    tgt = out['tgt'][0].squeeze().detach().cpu().numpy()
+    nms = config['vis_keypoint_nms']
+    max_w = np.max(match_weights)
+    for i in range(src.shape[0]):
+        if match_weights[i] < nms * max_w:
+            continue
+        plt.plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1]], c='w', linewidth=2, zorder=2)
+        plt.scatter(src[i, 0], src[i, 1], c='g', s=5, zorder=3)
+        plt.scatter(tgt[i, 0], tgt[i, 1], c='r', s=5, zorder=4)
+    match_img1 = convert_plt_to_tensor()
+    plt.subplots()
+    plt.imshow(radar, cmap='gray')
+    T_src_tgt = get_T_ba(out, a=1, b=0)
+    for i in range(src.shape[0]):
+        if match_weights[i] < nms * max_w:
+            continue
+        xbar = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
+        xbar = np.matmul(T_src_tgt, xbar)
+        plt.plot([src[i, 0], xbar[0, 0]], [src[i, 1], xbar[1, 0]], c='w', linewidth=2, zorder=2)
+        plt.scatter(src[i, 0], src[i, 1], c='g', s=5, zorder=3)
+        plt.scatter(xbar[0, 0], xbar[1, 0], c='r', s=5, zorder=4)
+    match_img2 = convert_plt_to_tensor()
+    return vutils.make_grid([match_img1, match_img2]).cpu().numpy()
 
 def draw_batch_steam(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""

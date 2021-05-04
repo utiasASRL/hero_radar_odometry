@@ -40,10 +40,10 @@ class Keypoint(torch.nn.Module):
 
         norm_keypoints2D = normalize_coords(keypoint_coords, self.width, self.width).unsqueeze(1)
 
-        keypoint_desc = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear')
+        keypoint_desc = F.grid_sample(descriptors, norm_keypoints2D, mode='bilinear', align_corners=True)
         keypoint_desc = keypoint_desc.view(BW, encoder_dim, num_patches)  # BW x C x num_patches
 
-        keypoint_scores = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear')
+        keypoint_scores = F.grid_sample(weight_scores, norm_keypoints2D, mode='bilinear', align_corners=True)
         keypoint_scores = keypoint_scores.view(BW, weight_dim, num_patches)  # BW x 1 x n_patch
 
         return keypoint_coords, keypoint_scores, keypoint_desc

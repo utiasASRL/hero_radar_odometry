@@ -85,3 +85,4 @@ cmake .. && make
 - [ ] Add script for downloading pre-trained models
 - [ ] Train with batchsize > 2
 - [ ] Test the docker build instructions (add opencv)
+- [ ] Update docker with new deps (torch, torchvision)

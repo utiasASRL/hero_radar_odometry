@@ -94,18 +94,6 @@ if __name__ == '__main__':
                 # append only the back of window
                 w = 0
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
-
-                #Tp = get_T_ba(out, a=w, b=w+1)
-                #Tpinv = get_inverse_tf(Tp)
-                #T_pred.append(Tp)
-
-
-                #Tp = get_T_ba(out, a=w, b=w+1)
-                #Tpinv = get_inverse_tf(Tp)
-                #Tpinv[1, 3] *= -1
-                #Tp = get_inverse_tf(Tpinv)
-                #T_pred.append(Tp)
-
                 T_pred.append(get_T_ba(out, a=w, b=w+1))
                 print(batchi)
                 print('T_gt:\n{}'.format(T_gt[-1]))
