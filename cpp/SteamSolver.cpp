@@ -72,14 +72,16 @@ void SteamSolver::setExtrinsicTsv(const np::ndarray& T_sv) {
 void SteamSolver::optimize() {
     // Motion prior
     bool allowExtrapolation = true;
-    steam::se3::SteamTrajInterface traj(Qc_inv_, allowExtrapolation);
+    traj = steam::se3::SteamTrajInterface(Qc_inv_, allowExtrapolation);
+    traj_init = true;
     int64_t t0 = t_refs_[0];
     for (uint i = 0; i < states_.size(); ++i) {
-        TrajStateVar& state = states_.at(i);
-        steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
         int64_t delta = t_refs_[i] - t_refs_[0];
         double delta_t = double(delta) / 1.0e6;
-        traj.add(steam::Time(delta_t), temp, state.velocity);
+        states_[i].time = steam::Time(delta_t);
+        TrajStateVar& state = states_.at(i);
+        steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
+        traj.add(state.time, temp, state.velocity);
         if (i == 0) {  // lock first pose
             state.pose->setLock(true);
         }
@@ -194,6 +196,30 @@ void SteamSolver::getPoses(np::ndarray& poses) {
             for (uint c = 0; c < 4; ++c) {
                 poses[i][r][c] = float(Tsi(r, c));
             }
+        }
+    }
+}
+
+// Replaces pose (4x4) with T_ba
+void SteamSolver::getPoseBetweenTimes(np::ndarray& pose, const int64_t ta, const int64_t tb) {
+    if (!traj_init) {
+        std::cout << "WARNING: traj not yet initialized" << std::endl;
+        return;
+    }
+    int64_t t0 = t_refs_[0];
+    int64_t ta_ = int64_t(ta) - t0;
+    int64_t tb_ = int64_t(tb) - t0;
+    double ta = double(ta_) / 1.0e6;
+    double tb = double(tb_) / 1.0e6;
+    steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(ta));
+    steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(tb));
+    steam::se3::TransformEvaluator::Ptr T_eval_ptr = steam::se3::composeInverse(
+        steam::se3::compose(T_sv_, Tb0),
+        steam::se3::compose(T_sv_, Ta0));  // Tba = Tb0 * inv(Ta0)
+    Eigen::Matrix<double, 4, 4> Ta0_s = T_eval_ptr->evaluate().matrix();
+    for (uint i = 0; i < 4; ++i) {
+        for (uint j = 0; j < 4; ++j) {
+            pose[i][j] = float(Ta0_s(i, j));
         }
     }
 }

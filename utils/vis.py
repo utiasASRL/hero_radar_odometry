@@ -7,6 +7,7 @@ import torch
 import torchvision.utils as vutils
 from torchvision.transforms import ToTensor
 from utils.utils import get_transform2, enforce_orthog, get_inverse_tf, get_T_ba
+from utils.utils import getApproxTimeStamps, wrapto2pi
 
 def convert_plt_to_img():
     buf = io.BytesIO()
@@ -50,34 +51,87 @@ def draw_batch(batch, out, config):
 
     return vutils.make_grid([radar_img, score_img, match_img])
 
-def draw_matches(batch, out, config):
+def draw_matches(batch, out, config, solver):
+    azimuth_step = (2 * np.pi) / 400
+    cart_pixel_width = config['cart_pixel_width']
+    cart_resolution = config['cart_resolution']
+    if (cart_pixel_width % 2) == 0:
+        cart_min_range = (cart_pixel_width / 2 - 0.5) * cart_resolution
+    else:
+        cart_min_range = cart_pixel_width // 2 * cart_resolution
+    T_met_pix = np.array([[0, -cart_resolution, 0, cart_min_range],
+                          [cart_resolution, 0, 0, -cart_min_range],
+                          [0, 0, 1, 0],
+                          [0, 0, 0, 1]])
+    T_pix_met = get_inverse_tf(T_met_pix)
+
+    keypoint_ints = out['keypoint_ints']
+    ids = torch.nonzero(keypoint_ints[0, 0] > 0, as_tuple=False).squeeze(1)
+    ids_cpu = ids.cpu()
+    src = out['src_rc'][0, ids].squeeze().detach().cpu().numpy()
+    tgt = out['tgt_rc'][0, ids].squeeze().detach().cpu().numpy()
     radar = batch['data'][0].squeeze().numpy()
-    plt.subplots()
-    plt.imshow(radar, cmap='gray')
-    src = out['src'][0].squeeze().detach().cpu().numpy()
-    tgt = out['tgt'][0].squeeze().detach().cpu().numpy()
-    nms = config['vis_keypoint_nms']
-    max_w = np.max(match_weights)
+    fig, axs = plt.subplots(1, 5, tight_layout=True)
+    # Raw locations overlayed, no transforms
+    axs[0].imshow(radar, cmap='gray')
+    axs[0].set_title('raw')
     for i in range(src.shape[0]):
-        if match_weights[i] < nms * max_w:
-            continue
-        plt.plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1]], c='w', linewidth=2, zorder=2)
-        plt.scatter(src[i, 0], src[i, 1], c='g', s=5, zorder=3)
-        plt.scatter(tgt[i, 0], tgt[i, 1], c='r', s=5, zorder=4)
-    match_img1 = convert_plt_to_tensor()
-    plt.subplots()
-    plt.imshow(radar, cmap='gray')
-    T_src_tgt = get_T_ba(out, a=1, b=0)
+        axs[0].plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1]], c='w', linewidth=1, zorder=2)
+        axs[0].scatter(src[i, 0], src[i, 1], c='limegreen', s=5, zorder=3)
+        axs[0].scatter(tgt[i, 0], tgt[i, 1], c='r', s=5, zorder=4)
+
+    src = out['src'][0, ids].squeeze().detach().cpu().numpy()
+    tgt = out['tgt'][0, ids].squeeze().detach().cpu().numpy()
+    # Use Rigid Transform
+    axs[1].imshow(radar, cmap='gray')
+    axs[1].set_title('rigid')
+    T_tgt_src = get_T_ba(out, a=0, b=1)
+    error = np.zeros((src.shape[0], 2))
     for i in range(src.shape[0]):
-        if match_weights[i] < nms * max_w:
-            continue
-        xbar = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
-        xbar = np.matmul(T_src_tgt, xbar)
-        plt.plot([src[i, 0], xbar[0, 0]], [src[i, 1], xbar[1, 0]], c='w', linewidth=2, zorder=2)
-        plt.scatter(src[i, 0], src[i, 1], c='g', s=5, zorder=3)
-        plt.scatter(xbar[0, 0], xbar[1, 0], c='r', s=5, zorder=4)
-    match_img2 = convert_plt_to_tensor()
-    return vutils.make_grid([match_img1, match_img2]).cpu().numpy()
+        x1 = np.array([src[i, 0], src[i, 1], 0, 1]).reshape(4, 1)
+        x2 = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
+        x1 = T_tgt_src @ x1
+        e = x1 - x2
+        error[i, 0] = np.sqrt(e.T @ e)
+        error[i, 1] = int(wrapto2pi(np.arctan2(x2[i, 1], x2[i, 0])) // azimuth_step)
+        x1 = T_pix_met @ x1
+        x2 = T_pix_met @ x2
+        axs[1].plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=2, zorder=2)
+        axs[1].scatter(x1[0, 0], x1[1, 0], c='limegreen', s=5, zorder=3)
+        axs[1].scatter(x2[0, 0], x2[1, 0], c='r', s=5, zorder=4)
+    axs[2].bar(error[:, 1], error[:, 0])
+    axs[2].set_title('raw error')
+
+    # Use Interpolated Poses
+    t1 = batch['timestamps'][0].numpy().squeeze()
+    t2 = batch['timestamps'][1].numpy().squeeze()
+    times1 = getApproxTimeStamps([src], [t1])[0]
+    times2 = getApproxTimeStamps([tgt], [t2])[0]
+    t_refs = batch['t_ref'].numpy()
+
+    T_1a = np.identity(4, dtype=np.float32)
+    T_1b = np.identity(4, dtype=np.float32)
+    axs[3].imshow(radar, cmap='gray')
+    axs[3].set_title('interpolated')
+    for i in range(src.shape[0]):
+        solver.getPoseBetweenTimes(T_1a, times1[i], t_refs[1])
+        solver.getPoseBetweenTimes(T_1b, times2[i], t_refs[1])
+        x1 = np.array([src[i, 0], src[i, 1], 0, 1]).reshape(4, 1)
+        x2 = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
+        x1 = T_1a @ x1
+        x2 = T_1b @ x2
+        e = x1 - x2
+        error[i, 0] = np.sqrt(e.T @ e)
+        error[i, 1] = int(wrapto2pi(np.arctan2(x2[i, 1], x2[i, 0])) // azimuth_step)
+        x1 = T_pix_met @ x1
+        x2 = T_pix_met @ x2
+        axs[3].plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=2, zorder=2)
+        axs[3].scatter(x1[0, 0], x1[1, 0], c='limegreen', s=5, zorder=3)
+        axs[3].scatter(x2[0, 0], x2[1, 0], c='r', s=5, zorder=4)
+    axs[4].bar(error[:, 1], error[:, 0])
+    axs[4].set_title('interpolated error')
+
+    plt.savefig('matches.pdf', bbox_inches='tight', pad_inches=0.0)
 
 def draw_batch_steam(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""
@@ -145,7 +199,7 @@ def draw_batch_steam(batch, out, config):
 
     plt.imshow(radar, cmap='gray')
     plt.scatter(src[ids_cpu, 0], src[ids_cpu, 1], c=error2_sqrt[ids_cpu].detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
-    plt.clim(0.0, 1.0)
+    plt.clim(0.0, np.max(error2_sqrt))
     plt.colorbar()
     plt.title('P2P error')
     p2p_img = convert_plt_to_tensor()

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import cpp.build.SteamSolver as steamcpp
-from utils.utils import convert_to_weight_matrix
+from utils.utils import convert_to_weight_matrix, getApproxTimeStamps
 
 class SteamSolver():
     """
@@ -20,9 +20,9 @@ class SteamSolver():
         self.log_det_thres_flag = config['steam']['log_det_thres_flag']
         self.log_det_thres_val = config['steam']['log_det_thres_val']
         self.log_det_topk = config['steam']['log_det_topk']
-        self.flip_y = config['flip_y']
         self.dataset = config['dataset']
         self.T_aug = []
+        self.debug = False
         # state variables
         self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
                              (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
@@ -65,7 +65,6 @@ class SteamSolver():
         else:
             self.solver_cpp.resetTraj()
         num_points = keypoint_coords.size(1)
-        zeros_vec = np.zeros((num_points, 1), dtype=np.float32)
 
         R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
         t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
@@ -85,7 +84,6 @@ class SteamSolver():
                 # points must be list of N x 3
                 points1_temp = pseudo_coords[w, ids].detach().cpu().numpy()
                 points2_temp = keypoint_coords[w, ids].detach().cpu().numpy()
-                zeros_vec_temp = zeros_vec[ids.cpu()]
                 # weights must be list of N x 3 x 3
                 weights_temp, weights_d = convert_to_weight_matrix(match_weights[w, :, ids].T, w, self.T_aug)
                 # threshold on log determinant
@@ -99,8 +97,8 @@ class SteamSolver():
                 else:
                     ids = np.arange(weights_temp.size(0)).squeeze()
                 # append
-                points1 += [np.concatenate((points1_temp[ids], zeros_vec_temp[ids]), 1)]
-                points2 += [np.concatenate((points2_temp[ids], zeros_vec_temp[ids]), 1)]
+                points1 += [np.pad(points1_temp[ids], pad_width=[(0, 0), (0, 1)])]
+                points2 += [np.pad(points2_temp[ids], pad_width=[(0, 0), (0, 1)])]
                 weights += [weights_temp[ids].detach().cpu().numpy()]
                 times1 += [time_src[w].cpu().numpy().squeeze()]
                 times2 += [time_tgt[w].cpu().numpy().squeeze()]
@@ -108,7 +106,8 @@ class SteamSolver():
                     t_refs.append(t_ref_src[w, 0, 0].cpu().item())
                 t_refs.append(t_ref_tgt[w, 0, 0].cpu().item())
             # solver
-            timestamps1, timestamps2 = self.getApproxTimeStamps(points1, points2, times1, times2)
+            timestamps1 = getApproxTimeStamps(points1, times1)
+            timestamps2 = getApproxTimeStamps(points2, times2)
             self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1, t_refs)
             self.solver_cpp.optimize()
             # get pose output
@@ -121,47 +120,5 @@ class SteamSolver():
             R_tgt_src[b] = self.poses[b, :, :3, :3]
             t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
 
-        return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
-
-    def getApproxTimeStamps(self, points1, points2, times1, times2):
-        azimuth_step = (2 * np.pi) / 400
-        # Helper to ensure angle is within [0, 2 * PI)
-        def wrapto2pi(phi):
-            if phi < 0:
-                return phi + 2 * np.pi
-            elif phi >= 2 * np.pi:
-                return phi - 2 * np.pi
-            else:
-                return phi
-        timestamps1 = []
-        timestamps2 = []
-        for i in range(len(points1)):
-            for j in range(2):
-                if j == 0:
-                    p = points1[i]
-                    times = times1[i]
-                else:
-                    p = points2[i]
-                    times = times2[i]
-                point_times = []
-                for k in range(p.shape[0]):
-                    x = p[k, 0]
-                    y = p[k, 1]
-                    if self.flip_y:
-                        y *= -1
-                    phi = np.arctan2(y, x)
-                    phi = wrapto2pi(phi)
-                    time_idx = phi / azimuth_step
-                    t1 = times[int(np.floor(time_idx))]
-                    idx2 = int(np.ceil(time_idx))
-                    t2 = times[idx2 if idx2 < 400 else 399]
-                    # interpolate to get slightly more precise timestamp
-                    ratio = time_idx % 1
-                    t = int(t1 + ratio * (t2 - t1))
-                    point_times.append(t)
-                point_times = np.array(point_times)
-                if j == 0:
-                    timestamps1.append(point_times)
-                else:
-                    timestamps2.append(point_times)
-        return timestamps1, timestamps2
+        return torch.from_numpy(R_tgt_src).to(self.gpuid),
+               torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)

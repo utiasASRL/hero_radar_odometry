@@ -39,6 +39,7 @@ public:
     void useRansac() {use_ransac = true;}
     void setRansacVersion(const unsigned int& version) {ransac_version = uint(version);}
     void useCTSteam() {ct_steam = true;}
+    void getPoseBetweenTimes(np::ndarray& pose, const int64_t ta, const int64_t tb);
 
 private:
     // Solver
@@ -63,6 +64,8 @@ private:
     bool use_ransac = false;
     unsigned int ransac_version = 0;
     bool ct_steam = false;
+    steam::se3::SteamTrajInterface traj;
+    bool traj_init = false;
 };
 
 // boost wrapper
@@ -81,5 +84,6 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("useRansac", &SteamSolver::useRansac)
         .def("setRansacVersion", &SteamSolver::setRansacVersion)
         .def("useCTSteam", &SteamSolver::useCTSteam)
+        .def("getPoseBetweenTimes", &SteamSolver::getPoseBetweenTimes)
         .def("getSigmapoints2N", &SteamSolver::getSigmapoints2N);
 }

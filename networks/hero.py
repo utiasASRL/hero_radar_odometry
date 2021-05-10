@@ -45,10 +45,6 @@ class HERO(torch.nn.Module):
             keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug[:, :2, :2].transpose(1, 2))
             self.solver.T_aug = batch['T_aug']
 
-        if self.config["flip_y"]:
-            pseudo_coords_xy[:, :, 1] *= -1.0
-            keypoint_coords_xy[:, :, 1] *= -1.0
-
         # binary mask to remove keypoints from 'empty' regions of the input radar scan
         keypoint_ints = mask_intensity_filter(mask[tgt_ids], self.patch_size, self.patch_mean_thres)
 

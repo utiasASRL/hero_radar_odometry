@@ -212,7 +212,6 @@ class TestDistortion(unittest.TestCase):
             config = json.load(f)
         config['window_size'] = 2
         config['gpuid'] = 'cpu'
-        config['flip_y'] = False
         config['qc_diag'] = [1.0, 1.0, 1.0, 1.0, 1.0, 1]
         config['steam']['use_ransac'] = False
         config['steam']['ransac_version'] = 0

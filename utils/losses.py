@@ -39,6 +39,7 @@ def unsupervised_loss(out, batch, config, solver):
     point_loss = 0
     logdet_loss = 0
     unweighted_point_loss = 0
+    zeropad = torch.nn.ZeroPad2d((0, 1, 0, 0))
 
     # loop through each batch
     bcount = 0
@@ -54,9 +55,8 @@ def unsupervised_loss(out, batch, config, solver):
                 continue
 
             # points must be list of N x 3
-            zeros_vec = torch.zeros_like(src_coords[w, ids, 0:1])
-            points1 = torch.cat((src_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
-            points2 = torch.cat((tgt_coords[w, ids], zeros_vec), dim=1).unsqueeze(-1)    # N x 3 x 1
+            points1 = zeropad(src_coords[w, ids]).unsqueeze(-1)    # N x 3 x 1
+            points2 = zeropad(tgt_coords[w, ids]).unsqueeze(-1)    # N x 3 x 1
             weights_mat, weights_d = convert_to_weight_matrix(match_weights[w, :, ids].T, w, T_aug)
             ones = torch.ones(weights_mat.shape).to(gpuid)
 

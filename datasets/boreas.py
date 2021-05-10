@@ -130,7 +130,7 @@ class BoreasDataset(OxfordDataset):
 
         # Requires that the cartesian images and masks are pre-computed and stored alongside the dataset
         ###########
-        timestamps, azimuths, _, polar, _ = load_radar(frame, navtech_version=CIR204)
+        timestamps, azimuths, _, polar = load_radar(frame)
         data = np.expand_dims(cv2.imread(cart_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
         mask = np.expand_dims(cv2.imread(mask_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
         ###########
