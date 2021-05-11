@@ -63,7 +63,7 @@ def draw_matches(batch, out, config, solver):
                           [cart_resolution, 0, 0, -cart_min_range],
                           [0, 0, 1, 0],
                           [0, 0, 0, 1]])
-    T_pix_met = get_inverse_tf(T_met_pix)
+    T_pix_met = np.linalg.inv(T_met_pix)
 
     keypoint_ints = out['keypoint_ints']
     ids = torch.nonzero(keypoint_ints[0, 0] > 0, as_tuple=False).squeeze(1)
@@ -71,19 +71,21 @@ def draw_matches(batch, out, config, solver):
     src = out['src_rc'][0, ids].squeeze().detach().cpu().numpy()
     tgt = out['tgt_rc'][0, ids].squeeze().detach().cpu().numpy()
     radar = batch['data'][0].squeeze().numpy()
-    fig, axs = plt.subplots(1, 5, tight_layout=True)
+    fig, axs = plt.subplots(1, 3, tight_layout=True)
     # Raw locations overlayed, no transforms
-    axs[0].imshow(radar, cmap='gray')
+    axs[0].imshow(radar, cmap='gray', extent=(0, 640, 640, 0), interpolation='none')
+    axs[0].set_axis_off()
     axs[0].set_title('raw')
     for i in range(src.shape[0]):
         axs[0].plot([src[i, 0], tgt[i, 0]], [src[i, 1], tgt[i, 1]], c='w', linewidth=1, zorder=2)
-        axs[0].scatter(src[i, 0], src[i, 1], c='limegreen', s=5, zorder=3)
-        axs[0].scatter(tgt[i, 0], tgt[i, 1], c='r', s=5, zorder=4)
+        axs[0].scatter(src[i, 0], src[i, 1], c='limegreen', s=2, zorder=3)
+        axs[0].scatter(tgt[i, 0], tgt[i, 1], c='r', s=2, zorder=4)
 
     src = out['src'][0, ids].squeeze().detach().cpu().numpy()
     tgt = out['tgt'][0, ids].squeeze().detach().cpu().numpy()
     # Use Rigid Transform
-    axs[1].imshow(radar, cmap='gray')
+    axs[1].imshow(radar, cmap='gray', extent=(0, 640, 640, 0), interpolation='none')
+    axs[1].set_axis_off()
     axs[1].set_title('rigid')
     T_tgt_src = get_T_ba(out, a=0, b=1)
     error = np.zeros((src.shape[0], 2))
@@ -92,15 +94,13 @@ def draw_matches(batch, out, config, solver):
         x2 = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
         x1 = T_tgt_src @ x1
         e = x1 - x2
-        error[i, 0] = np.sqrt(e.T @ e)
-        error[i, 1] = int(wrapto2pi(np.arctan2(x2[i, 1], x2[i, 0])) // azimuth_step)
+        error[i, 1] = np.sqrt(e.T @ e)
+        error[i, 0] = int(wrapto2pi(np.arctan2(x2[1, 0], x2[0, 0])) // azimuth_step)
         x1 = T_pix_met @ x1
         x2 = T_pix_met @ x2
-        axs[1].plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=2, zorder=2)
-        axs[1].scatter(x1[0, 0], x1[1, 0], c='limegreen', s=5, zorder=3)
-        axs[1].scatter(x2[0, 0], x2[1, 0], c='r', s=5, zorder=4)
-    axs[2].bar(error[:, 1], error[:, 0])
-    axs[2].set_title('raw error')
+        axs[1].plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
+        axs[1].scatter(x1[0, 0], x1[1, 0], c='limegreen', s=2, zorder=3)
+        axs[1].scatter(x2[0, 0], x2[1, 0], c='r', s=2, zorder=4)
 
     # Use Interpolated Poses
     t1 = batch['timestamps'][0].numpy().squeeze()
@@ -111,27 +111,38 @@ def draw_matches(batch, out, config, solver):
 
     T_1a = np.identity(4, dtype=np.float32)
     T_1b = np.identity(4, dtype=np.float32)
-    axs[3].imshow(radar, cmap='gray')
-    axs[3].set_title('interpolated')
+    axs[2].imshow(radar, cmap='gray', extent=(0, 640, 640, 0), interpolation='none')
+    axs[2].set_axis_off()
+    axs[2].set_title('interp')
+    error2 = np.zeros((src.shape[0], 2))
     for i in range(src.shape[0]):
-        solver.getPoseBetweenTimes(T_1a, times1[i], t_refs[1])
-        solver.getPoseBetweenTimes(T_1b, times2[i], t_refs[1])
+        solver.getPoseBetweenTimes(T_1a, times1[i], t_refs[1, 0, 0])
+        solver.getPoseBetweenTimes(T_1b, times2[i], t_refs[1, 0, 0])
         x1 = np.array([src[i, 0], src[i, 1], 0, 1]).reshape(4, 1)
         x2 = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
         x1 = T_1a @ x1
         x2 = T_1b @ x2
         e = x1 - x2
-        error[i, 0] = np.sqrt(e.T @ e)
-        error[i, 1] = int(wrapto2pi(np.arctan2(x2[i, 1], x2[i, 0])) // azimuth_step)
+        error2[i, 1] = np.sqrt(e.T @ e)
+        error2[i, 0] = int(wrapto2pi(np.arctan2(x2[1, 0], x2[0, 0])) // azimuth_step)
         x1 = T_pix_met @ x1
         x2 = T_pix_met @ x2
-        axs[3].plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=2, zorder=2)
-        axs[3].scatter(x1[0, 0], x1[1, 0], c='limegreen', s=5, zorder=3)
-        axs[3].scatter(x2[0, 0], x2[1, 0], c='r', s=5, zorder=4)
-    axs[4].bar(error[:, 1], error[:, 0])
-    axs[4].set_title('interpolated error')
+        axs[2].plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
+        axs[2].scatter(x1[0, 0], x1[1, 0], c='limegreen', s=2, zorder=3)
+        axs[2].scatter(x2[0, 0], x2[1, 0], c='r', s=2, zorder=4)
 
     plt.savefig('matches.pdf', bbox_inches='tight', pad_inches=0.0)
+    plt.figure()
+
+    idx = np.argsort(error[:, 0])
+    error = error[idx, :]
+    idx = np.argsort(error2[:, 0])
+    error2 = error2[idx, :]
+    plt.plot(error[:, 0], error[:, 1], color='b', label='raw error', linewidth=1)
+    plt.plot(error2[:, 0], error2[:, 1], color='r', label='interp error', linewidth=1)
+    plt.title('raw error')
+    plt.legend()
+    plt.savefig('matches2.pdf', bbox_inches='tight', pad_inches=0.0)
 
 def draw_batch_steam(batch, out, config):
     """Creates an image of the radar scan, scores, and keypoint matches for a single batch."""

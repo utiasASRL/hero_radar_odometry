@@ -120,5 +120,4 @@ class SteamSolver():
             R_tgt_src[b] = self.poses[b, :, :3, :3]
             t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
 
-        return torch.from_numpy(R_tgt_src).to(self.gpuid),
-               torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
+        return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)

@@ -11,7 +11,7 @@ from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
 from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format, get_T_ba
 from utils.utils import load_icra21_results, getStats, get_inverse_tf
-from utils.vis import plot_sequences
+from utils.vis import plot_sequences, draw_matches
 
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
@@ -99,6 +99,8 @@ if __name__ == '__main__':
                 print('T_gt:\n{}'.format(T_gt[-1]))
                 print('T_pred:\n{}'.format(T_pred[-1]))
                 timestamps.append(batch['t_ref'][w].numpy().squeeze())
+            if batchi == 86:
+                draw_matches(batch, out, config, model.solver.solver_cpp)
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)

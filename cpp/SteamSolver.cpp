@@ -194,10 +194,8 @@ void SteamSolver::getPoseBetweenTimes(np::ndarray& pose, const int64_t ta, const
     int64_t t0 = t_refs_[0];
     int64_t ta_ = int64_t(ta) - t0;
     int64_t tb_ = int64_t(tb) - t0;
-    double ta = double(ta_) / 1.0e6;
-    double tb = double(tb_) / 1.0e6;
-    steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(ta));
-    steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(tb));
+    steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(double(ta_) / 1.0e6));
+    steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(double(tb_) / 1.0e6));
     steam::se3::TransformEvaluator::Ptr T_eval_ptr = steam::se3::composeInverse(
         steam::se3::compose(T_sv_, Tb0),
         steam::se3::compose(T_sv_, Ta0));  // Tba = Tb0 * inv(Ta0)
