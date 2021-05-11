@@ -434,9 +434,9 @@ def undistort_pointcloud(points, point_times, t_refs, solver):
         ptimes = point_times[i]
         t_ref = t_refs[i]
         for j in range(M):
-            T_a0 = np.identity(4, dtype=np.float32)
-            solver.getPoseAtTime(T_a0, ptimes[j], t_ref)
-            pbar = get_inverse_tf(T_a0) @ p[j].reshape(4, 1)
+            T_0a = np.identity(4, dtype=np.float32)
+            solver.getPoseBetweenTimes(T_0a, ptimes[j], t_ref)
+            pbar = T_0a @ p[j].reshape(4, 1)
             p[j, :] = pbar[:]
         points[i] = p
     return points

@@ -34,7 +34,7 @@ class HERO(torch.nn.Module):
 
         detector_scores, weight_scores, desc = self.unet(data)
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
-        pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
+        pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc, keypoint_coords)
         keypoint_coords = keypoint_coords[tgt_ids]
 
         pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.config)
