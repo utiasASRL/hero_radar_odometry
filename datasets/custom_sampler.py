@@ -12,11 +12,12 @@ class RandomWindowBatchSampler(Sampler):
         self.batch_size = batch_size
         self.window_size = window_size
         self.drop_last = drop_last
+        self.skip = skip
 
     def __iter__(self):
         batch = []
         for idx in self.sampler:
-            batch += [idx + k for k in range(self.window_size)]
+            batch += [idx + k * (1 + self.skip) for k in range(self.window_size)]
             if len(batch) == self.batch_size*self.window_size:
                 yield batch
                 batch = []
@@ -39,11 +40,12 @@ class SequentialWindowBatchSampler(Sampler):
         self.batch_size = batch_size
         self.window_size = window_size
         self.drop_last = drop_last
+        self.skip = skip
 
     def __iter__(self):
         batch = []
         for idx in range(len(self.valid_frames)):
-            batch += [idx + k for k in range(self.window_size)]
+            batch += [idx + k * (1 + self.skip) for k in range(self.window_size)]
             if len(batch) == self.batch_size*self.window_size:
                 yield batch
                 batch = []

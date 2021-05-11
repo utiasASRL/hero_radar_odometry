@@ -16,6 +16,7 @@ import bisect
 import csv
 import numpy as np
 import numpy.matlib as ml
+from math import sin, cos, atan2, sqrt
 
 def build_se3_transform(xyzrpy):
     """Creates an SE3 transform from translation and Euler angles.
@@ -33,7 +34,7 @@ def build_se3_transform(xyzrpy):
     if len(xyzrpy) != 6:
         raise ValueError("Must supply 6 values to build transform")
 
-    se3 = matlib.identity(4)
+    se3 = ml.identity(4)
     se3[0:3, 0:3] = euler_to_so3(xyzrpy[3:6])
     se3[0:3, 3] = np.matrix(xyzrpy[0:3]).transpose()
     return se3
@@ -145,18 +146,20 @@ def interpolate_ins_poses(ins_path, pose_timestamps, origin_timestamp, use_rtk=F
         ins_timestamps = [0]
         abs_poses = [ml.identity(4)]
 
-        upper_timestamp = max(max(pose_timestamps), origin_timestamp)
+        upper_timestamp = max(max(pose_timestamps), origin_timestamp) + 125000
+        lower_timestamp = min(min(pose_timestamps), origin_timestamp) - 125000
 
         for row in ins_reader:
             timestamp = int(row[0])
-            ins_timestamps.append(timestamp)
-
-            utm = row[5:8] if not use_rtk else row[4:7]
-            rpy = row[-3:] if not use_rtk else row[11:14]
-            xyzrpy = [float(v) for v in utm] + [float(v) for v in rpy]
-            abs_pose = build_se3_transform(xyzrpy)
-            abs_poses.append(abs_pose)
-
+            if timestamp >= lower_timestamp:
+                ins_timestamps.append(timestamp)
+                utm = row[5:8] if not use_rtk else row[4:7]
+                rpy = row[-3:] if not use_rtk else row[11:14]
+                rpy[0] = 0
+                rpy[1] = 0
+                xyzrpy = [float(v) for v in utm] + [float(v) for v in rpy]
+                abs_pose = build_se3_transform(xyzrpy)
+                abs_poses.append(abs_pose)
             if timestamp >= upper_timestamp:
                 break
 

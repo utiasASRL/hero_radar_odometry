@@ -43,6 +43,9 @@ class OxfordDataset(Dataset):
             dataset_prefix = '2019'
         elif config['dataset'] == 'boreas':
             dataset_prefix = 'boreas'
+        self.T_radar_imu = np.eye(4, dtype=np.float32)
+        for i in range(3):
+            self.T_radar_imu[i, 3] = config['steam']['ex_translation_vs_in_s'][i]
         sequences = get_sequences(self.data_dir, dataset_prefix)
         self.sequences = self.get_sequences_split(sequences, split)
         self.seq_idx_range = {}
@@ -98,6 +101,7 @@ class OxfordDataset(Dataset):
                         line2 = lines[i + self.skip].split(',')
                         T2 = get_transform(float(line2[2]), float(line2[3]), float(line2[7]))
                         T = np.matmul(T, T2)
+                        return get_inverse_tf(T), int(line[1]), int(line2[1])
                     return get_inverse_tf(T), int(line[1]), int(line[0]) # T_2_1 from current time step to the next
         assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
@@ -106,7 +110,8 @@ class OxfordDataset(Dataset):
             This function extracts the ground truth transform from the INS data.
             Returns the transform T_2_1 from current (time1) to next (time2)
         """
-        return interpolate_ins_poses(gt_path, [time1], time2)[0]
+        T = np.array(interpolate_ins_poses(gt_path, [time1], time2)[0])
+        return self.T_radar_imu @ T @ get_inverse_tf(self.T_radar_imu)
 
     def __len__(self):
         return len(self.frames)
@@ -134,8 +139,8 @@ class OxfordDataset(Dataset):
         radar_time = int(self.frames[idx].split('.')[0])
 
         T_21, time1, time2 = self.get_groundtruth_odometry(radar_time, self.data_dir + seq + '/gt/radar_odometry.csv')
-        if config('use_ins'):
-            T_21 = self.get_groundruth_ins(time1, time2, self.data_dir + seq + '/gps/ins.csv')
+        if self.config['use_ins']:
+            T_21 = np.array(self.get_groundruth_ins(time1, time2, self.data_dir + seq + '/gps/ins.csv'))
         t_ref = np.array([time1, time2]).reshape(1, 2)
         polar = np.expand_dims(polar, axis=0)
         azimuths = np.expand_dims(azimuths, axis=0)
