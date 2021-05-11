@@ -140,7 +140,8 @@ class OxfordDataset(Dataset):
 
         T_21, time1, time2 = self.get_groundtruth_odometry(radar_time, self.data_dir + seq + '/gt/radar_odometry.csv')
         if self.config['use_ins']:
-            T_21 = np.array(self.get_groundruth_ins(time1, time2, self.data_dir + seq + '/gps/ins.csv'))
+            #T_21 = np.array(self.get_groundruth_ins(time1, time2, self.data_dir + seq + '/gps/ins.csv'))
+            T_21, time1, time2 = self.get_groundtruth_odometry(radar_time, self.data_dir + seq + '/gt/radar_odometry_ins.csv')
         t_ref = np.array([time1, time2]).reshape(1, 2)
         polar = np.expand_dims(polar, axis=0)
         azimuths = np.expand_dims(azimuths, axis=0)

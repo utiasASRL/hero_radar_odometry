@@ -18,6 +18,8 @@ import numpy as np
 import numpy.matlib as ml
 from math import sin, cos, atan2, sqrt
 
+MATRIX_MATCH_TOLERANCE = 1e-4
+
 def build_se3_transform(xyzrpy):
     """Creates an SE3 transform from translation and Euler angles.
 
@@ -67,6 +69,36 @@ def euler_to_so3(rpy):
     R_zyx = R_z * R_y * R_x
     return R_zyx
 
+def so3_to_euler(so3):
+    """Converts an SO3 rotation matrix to Euler angles
+
+    Args:
+        so3: 3x3 rotation matrix
+
+    Returns:
+        numpy.matrixlib.defmatrix.matrix: list of Euler angles (size 3)
+
+    Raises:
+        ValueError: if so3 is not 3x3
+        ValueError: if a valid Euler parametrisation cannot be found
+
+    """
+    if so3.shape != (3, 3):
+        raise ValueError("SO3 matrix must be 3x3")
+    roll = atan2(so3[2, 1], so3[2, 2])
+    yaw = atan2(so3[1, 0], so3[0, 0])
+    denom = sqrt(so3[0, 0] ** 2 + so3[1, 0] ** 2)
+    pitch_poss = [atan2(-so3[2, 0], denom), atan2(-so3[2, 0], -denom)]
+
+    R = euler_to_so3((roll, pitch_poss[0], yaw))
+
+    if (so3 - R).sum() < MATRIX_MATCH_TOLERANCE:
+        return np.matrix([roll, pitch_poss[0], yaw])
+    else:
+        R = euler_to_so3((roll, pitch_poss[1], yaw))
+        if (so3 - R).sum() > MATRIX_MATCH_TOLERANCE:
+            raise ValueError("Could not find valid pitch angle")
+        return np.matrix([roll, pitch_poss[1], yaw])
 
 def so3_to_quaternion(so3):
     """Converts an SO3 rotation matrix to a quaternion
