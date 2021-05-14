@@ -95,9 +95,8 @@ if __name__ == '__main__':
                 w = 0
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
                 T_pred.append(get_T_ba(out, a=w, b=w+1))
-                print(batchi)
-                print('T_gt:\n{}'.format(T_gt[-1]))
-                print('T_pred:\n{}'.format(T_pred[-1]))
+                #print('T_gt:\n{}'.format(T_gt[-1]))
+                #print('T_pred:\n{}'.format(T_pred[-1]))
                 timestamps.append(batch['t_ref'][w].numpy().squeeze())
             if batchi == 86:
                 draw_matches(batch, out, config, model.solver.solver_cpp)

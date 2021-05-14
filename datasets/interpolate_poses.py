@@ -183,6 +183,9 @@ def interpolate_ins_poses(ins_path, pose_timestamps, origin_timestamp, use_rtk=F
 
         for row in ins_reader:
             timestamp = int(row[0])
+            if timestamp < ins_timestamps[-1]:
+                print('WARNING: INS GT ERROR DETECTED, SKIPPING: {}'.format(timestamp))
+                continue
             if timestamp >= lower_timestamp:
                 ins_timestamps.append(timestamp)
                 utm = row[5:8] if not use_rtk else row[4:7]
@@ -229,8 +232,7 @@ def interpolate_poses(pose_timestamps, abs_poses, requested_timestamps, origin_t
     abs_positions = np.zeros((3, len(abs_poses)))
     for i, pose in enumerate(abs_poses):
         if i > 0 and pose_timestamps[i-1] >= pose_timestamps[i]:
-            raise ValueError('Pose timestamps must be in ascending order')
-
+            raise ValueError('Pose timestamps must be in ascending order: {}, {}, {}'.format(i, pose_timestamps[i-1], pose_timestamps[i]))
         abs_quaternions[:, i] = so3_to_quaternion(pose[0:3, 0:3])
         abs_positions[:, i] = np.ravel(pose[0:3, 3])
 

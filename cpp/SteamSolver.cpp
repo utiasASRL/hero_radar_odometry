@@ -88,6 +88,16 @@ void SteamSolver::optimize() {
     }
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
+    if (vel_prior_) {
+    	Eigen::Matrix<double,6,1> velocity = states_[0].velocity->getValue();
+    	velocity[1] = 0;  // encourage lateral velocity to be close to zero
+    	Eigen::Matrix<double, 6, 6> vel_cov;
+    	vel_cov.setZero();
+   	Eigen::Array<double, 1, 6> vel_cov_diag;
+    	vel_cov_diag << 1, 1e-3, 1, 1, 1, 1;
+    	vel_cov.diagonal() = vel_cov_diag;
+    	traj.addVelocityPrior(steam::Time(0.0), velocity, vel_cov);
+    }
     traj.appendPriorCostTerms(costTerms);
 
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
@@ -158,6 +168,16 @@ void SteamSolver::optimize() {
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));
             costTerms->add(cost);
         }
+    }
+    if (zero_vel_prior_flag_) {
+        Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
+        steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
+        for (uint i = 0; i < states_.size(); ++i) {
+            steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
+            steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
+                new steam::WeightedLeastSqCostTerm<3, 6>(error, vel_prior_noise_model, sharedLossFuncL2));
+            costTerms->add(cost);
+        }  // end i
     }
     steam::OptimizationProblem problem;
     // Add state variables

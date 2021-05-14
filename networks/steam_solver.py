@@ -47,6 +47,9 @@ class SteamSolver():
                 self.T_sv[i, j] = config['steam']['ex_rotation_sv'][k]
                 k += 1
         self.solver_cpp.setExtrinsicTsv(self.T_sv)
+        self.solver_cpp.setZeroVelPriorFlag(config['steam']['zero_vel_prior'])
+        self.solver_cpp.setVelPriorFlag(config['steam']['vel_prior'])
+        self.flip_y = config['flip_y']
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src,
                  t_ref_tgt, t_ref_src):
@@ -106,8 +109,8 @@ class SteamSolver():
                     t_refs.append(t_ref_src[w, 0, 0].cpu().item())
                 t_refs.append(t_ref_tgt[w, 0, 0].cpu().item())
             # solver
-            timestamps1 = getApproxTimeStamps(points1, times1)
-            timestamps2 = getApproxTimeStamps(points2, times2)
+            timestamps1 = getApproxTimeStamps(points1, times1, self.flip_y)
+            timestamps2 = getApproxTimeStamps(points2, times2, self.flip_y)
             self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1, t_refs)
             self.solver_cpp.optimize()
             # get pose output

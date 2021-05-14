@@ -394,7 +394,7 @@ def wrapto2pi(phi):
     else:
         return phi
 
-def getApproxTimeStamps(points, times):
+def getApproxTimeStamps(points, times, flip_y=False):
     """ Retrieves the approximate timestamp of each target point
         points: List of np.array() (N, 2)
         times: List of np.array() (400,) * time at each azimuth
@@ -410,6 +410,8 @@ def getApproxTimeStamps(points, times):
         for k in range(p.shape[0]):
             x = p[k, 0]
             y = p[k, 1]
+            if flip_y:
+                y *= -1
             phi = np.arctan2(y, x)
             phi = wrapto2pi(phi)
             time_idx = phi / azimuth_step
