@@ -10,19 +10,14 @@ from datasets.boreas import get_dataloaders_boreas
 from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
 from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format, get_T_ba
-from utils.utils import load_icra21_results, getStats, get_inverse_tf
+from utils.utils import load_icra21_results, getStats, get_inverse_tf, get_folder_from_file_path
 from utils.vis import plot_sequences, draw_matches
 
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.deterministic = True
 
-def get_folder_from_file_path(path):
-    elems = path.split('/')
-    newpath = ""
-    for j in range(0, len(elems) - 1):
-        newpath += elems[j] + "/"
-    return newpath
+
 
 if __name__ == '__main__':
     torch.set_num_threads(8)

@@ -442,3 +442,10 @@ def undistort_pointcloud(points, point_times, t_refs, solver):
             p[j, :] = pbar[:]
         points[i] = p
     return points
+
+def get_folder_from_file_path(path):
+    elems = path.split('/')
+    newpath = ""
+    for j in range(0, len(elems) - 1):
+        newpath += elems[j] + "/"
+    return newpath

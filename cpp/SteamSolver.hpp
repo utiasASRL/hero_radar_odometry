@@ -70,6 +70,7 @@ private:
     bool traj_init = false;
     bool zero_vel_prior_flag_ = false;
     bool vel_prior_ = false;
+    std::vector<std::vector<int>> inliers_list;
 };
 
 // boost wrapper
@@ -87,9 +88,10 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("getVelocities", &SteamSolver::getVelocities)
         .def("useRansac", &SteamSolver::useRansac)
         .def("setRansacVersion", &SteamSolver::setRansacVersion)
-	.def("setZeroVelPriorFlag", &SteamSolver::setZeroVelPriorFlag)
-	.def("setVelPriorFlag", &SteamSolver::setVelPriorFlag)
+        .def("setZeroVelPriorFlag", &SteamSolver::setZeroVelPriorFlag)
+        .def("setVelPriorFlag", &SteamSolver::setVelPriorFlag)
         .def("useCTSteam", &SteamSolver::useCTSteam)
         .def("getPoseBetweenTimes", &SteamSolver::getPoseBetweenTimes)
+        .def("getInliers", &SteamSolver::getInliers)
         .def("getSigmapoints2N", &SteamSolver::getSigmapoints2N);
 }
