@@ -21,7 +21,7 @@
         },
         "matcher_block": {
             "softmax_temp": 0.01,
-            "score_comp": false
+            "sparse": false
         }
     },
     "steam": {
@@ -59,6 +59,6 @@
     "augmentation": {
         "rot_max": 0.26
     },
-    "flip_y": true,
+    "skip": 0,
     "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021]
 }

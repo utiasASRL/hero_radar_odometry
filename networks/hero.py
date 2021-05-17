@@ -29,11 +29,12 @@ class HERO(torch.nn.Module):
     def forward(self, batch):
         data = batch['data'].to(self.gpuid)
         mask = batch['mask'].to(self.gpuid)
-        timestamps = batch['timestamps'].to(self.gpuid)
+        timestamps = batch['timestamps']
+        t_ref = batch['t_ref']
 
         detector_scores, weight_scores, desc = self.unet(data)
         keypoint_coords, keypoint_scores, keypoint_desc = self.keypoint(detector_scores, weight_scores, desc)
-        pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc)
+        pseudo_coords, match_weights, tgt_ids, src_ids = self.softmax_matcher(keypoint_scores, keypoint_desc, desc, keypoint_coords)
         keypoint_coords = keypoint_coords[tgt_ids]
 
         pseudo_coords_xy = convert_to_radar_frame(pseudo_coords, self.config)
@@ -45,16 +46,18 @@ class HERO(torch.nn.Module):
             keypoint_coords_xy = torch.matmul(keypoint_coords_xy, T_aug[:, :2, :2].transpose(1, 2))
             self.solver.T_aug = batch['T_aug']
 
-        if self.config["flip_y"]:
+        if self.config['flip_y']:
             pseudo_coords_xy[:, :, 1] *= -1.0
             keypoint_coords_xy[:, :, 1] *= -1.0
 
         # binary mask to remove keypoints from 'empty' regions of the input radar scan
         keypoint_ints = mask_intensity_filter(mask[tgt_ids], self.patch_size, self.patch_mean_thres)
-        time_tgt = torch.index_select(timestamps, 0, tgt_ids)
-        time_src = torch.index_select(timestamps, 0, src_ids)
+        time_tgt = torch.index_select(timestamps, 0, tgt_ids.cpu())
+        time_src = torch.index_select(timestamps, 0, src_ids.cpu())
+        t_ref_tgt = torch.index_select(t_ref, 0, tgt_ids.cpu())
+        t_ref_src = torch.index_select(t_ref, 0, src_ids.cpu())
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
-                                                              keypoint_ints, time_tgt, time_src)
+                                                              keypoint_ints, time_tgt, time_src, t_ref_tgt, t_ref_src)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,

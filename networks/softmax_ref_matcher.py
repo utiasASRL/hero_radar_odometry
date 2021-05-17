@@ -10,6 +10,7 @@ class SoftmaxRefMatcher(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.softmax_temp = config['networks']['matcher_block']['softmax_temp']
+        self.sparse = config['networks']['matcher_block']['sparse']
         self.window_size = config['window_size']
         self.B = config['batch_size']
         self.gpuid = config['gpuid']
@@ -20,7 +21,7 @@ class SoftmaxRefMatcher(nn.Module):
         coords = torch.stack((u_coord, v_coord), dim=1)  # HW x 2
         self.src_coords_dense = coords.unsqueeze(0).to(self.gpuid)  # 1 x HW x 2
 
-    def forward(self, keypoint_scores, keypoint_desc, desc_dense):
+    def forward(self, keypoint_scores, keypoint_desc, desc_dense, keypoint_coords):
         """
             keypoint_scores: BWxSxN
             keypoint_desc: BWxCxN
@@ -35,16 +36,31 @@ class SoftmaxRefMatcher(nn.Module):
         tgt_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
         src_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
         # loop for each batch
-        for i in range(self.B):
-            win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size).to(self.gpuid)
-            tgt_desc = keypoint_desc[win_ids]  # (window - 1) x C x N
-            tgt_desc = F.normalize(tgt_desc, dim=1)
-            match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc_unrolled[i:i+1])  # (window - 1) x N x HW
-            soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # (window - 1) x N x HW
-            pseudo_ids = torch.arange(i * (self.window_size - 1), i * (self.window_size - 1) + self.window_size - 1)
-            pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
-                soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (window - 1) x N x 2
-            tgt_ids[pseudo_ids] = win_ids
-            src_ids[pseudo_ids] = i * self.window_size
+        if not self.sparse:
+            for i in range(self.B):
+                win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size).to(self.gpuid)
+                tgt_desc = keypoint_desc[win_ids]  # (window - 1) x C x N
+                tgt_desc = F.normalize(tgt_desc, dim=1)
+                match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc_unrolled[i:i+1])  # (window - 1) x N x HW
+                soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # (window - 1) x N x HW
+                pseudo_ids = torch.arange(i * (self.window_size - 1), i * (self.window_size - 1) + self.window_size - 1)
+                pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
+                    soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (window - 1) x N x 2
+                tgt_ids[pseudo_ids] = win_ids
+                src_ids[pseudo_ids] = i * self.window_size
+        else:
+            for i in range(self.B):
+                win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size).to(self.gpuid)
+                tgt_desc = keypoint_desc[win_ids]
+                src_desc = keypoint_desc[i*self.window_size:i*self.window_size+1]
+                tgt_desc = F.normalize(tgt_desc, dim=1)
+                src_desc = F.normalize(src_desc, dim=1)
+                match_vals = torch.matmul(tgt_desc.transpose(2, 1), src_desc)
+                soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)
+                src_coords = keypoint_coords[i*self.window_size:i*self.window_size+1]
+                pseudo_ids = torch.arange(i * (self.window_size - 1), i * (self.window_size - 1) + self.window_size - 1)
+                pseudo_coords[pseudo_ids] = torch.matmul(src_coords.transpose(2, 1), soft_match_vals.transpose(2, 1)).transpose(2, 1)
+                tgt_ids[pseudo_ids] = win_ids
+                src_ids[pseudo_ids] = i * self.window_size
 
         return pseudo_coords, keypoint_scores[tgt_ids], tgt_ids, src_ids

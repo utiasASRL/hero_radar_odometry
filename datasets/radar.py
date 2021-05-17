@@ -18,7 +18,7 @@ import cv2
 CTS350 = 0    # Oxford
 CIR204 = 1    # Boreas
 
-def load_radar(example_path, navtech_version=CTS350):
+def load_radar(example_path):
     """Decode a single Oxford Radar RobotCar Dataset radar example
     Args:
         example_path (AnyStr): Oxford Radar RobotCar Dataset Example png
@@ -28,13 +28,9 @@ def load_radar(example_path, navtech_version=CTS350):
         valid (np.ndarray) Mask of whether azimuth data is an original sensor reading or interpolated from adjacent
             azimuths
         fft_data (np.ndarray): Radar power readings along each azimuth
-        radar_resolution (float): Resolution of the polar radar data (metres per pixel)
     """
     # Hard coded configuration to simplify parsing code
     encoder_size = 5600
-    radar_resolution = np.array([0.0432], np.float32)
-    if navtech_version == CIR204:
-        radar_resolution = np.array([0.0596, np.float32])
     raw_example_data = cv2.imread(example_path, cv2.IMREAD_GRAYSCALE)
     timestamps = raw_example_data[:, :8].copy().view(np.int64)
     azimuths = (raw_example_data[:, 8:10].copy().view(np.uint16) / float(encoder_size) * 2 * np.pi).astype(np.float32)
@@ -43,30 +39,7 @@ def load_radar(example_path, navtech_version=CTS350):
     fft_data[:, :42] = 0
     fft_data = np.squeeze(fft_data)
 
-    return timestamps, azimuths, valid, fft_data, radar_resolution
-
-# This fixes the wobble in CIR204 data from Boreas
-def get_azimuth_index(azimuths, azimuth):
-    """For a given azimuth (float), this function returns the corresponding interpolated azimuth index."""
-    mind = 1000
-    closest = 0
-    M = len(azimuths)
-    for i, azimuth_orig in enumerate(azimuths):
-        d = abs(azimuth_orig - azimuth)
-        if d < mind:
-            mind = d
-            closest = i
-    if azimuths[closest] < azimuth:
-        delta = 0
-        if closest < (M - 1):
-            delta = (azimuth - azimuths[closest]) / float(azimuths[closest + 1] - azimuths[closest])
-        closest += delta
-    elif azimuths[closest] > azimuth:
-        delta = 0
-        if closest > 0:
-            delta = (azimuths[closest] - azimuth) / float(azimuths[closest] - azimuths[closest - 1])
-        closest -= delta
-    return closest
+    return timestamps, azimuths, valid, fft_data
 
 def radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resolution, cart_pixel_width,
                              interpolate_crossover=True, navtech_version=CTS350):
@@ -99,9 +72,26 @@ def radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resoluti
     sample_u = (sample_range - radar_resolution / 2) / radar_resolution
     sample_v = (sample_angle - azimuths[0]) / azimuth_step
     if navtech_version == CIR204:
-        for i in range(0, sample_v.shape[0]):
-            for j in range(0, sample_v.shape[1]):
-                sample_v[i, j] = get_azimuth_index(azimuths, sample_angle[i, j])
+        azimuths = azimuths.reshape((1, 1, 400))  # 1 x 1 x 400
+        sample_angle = np.expand_dims(sample_angle, axis=-1)  # H x W x 1
+        diff =  np.abs(azimuths - sample_angle)
+        c3 = np.argmin(diff, axis=2)
+        azimuths = azimuths.squeeze()
+        c3 = c3.reshape(cart_pixel_width, cart_pixel_width)  # azimuth indices (closest)
+        mindiff = sample_angle.squeeze() - azimuths[c3]
+        sample_angle = sample_angle.squeeze()
+        mindiff = mindiff.squeeze()
+
+        subc3 = c3 * (c3 < 399)
+        aplus = azimuths[subc3 + 1]
+        a1 = azimuths[subc3]
+        delta1 = mindiff * (mindiff > 0) * (c3 < 399) / (aplus - a1)
+        subc3 = c3 * (c3 > 0)
+        a2 = azimuths[subc3]
+        aminus = azimuths[1 + (c3 > 0) * (subc3 - 2)]
+        delta2 = mindiff * (mindiff < 0) * (c3 > 0) / (a2 - aminus)
+        sample_v = c3 + delta1 + delta2
+        sample_v = sample_v.astype(np.float32)
 
     # We clip the sample points to the minimum sensor reading range so that we
     # do not have undefined results in the centre of the image. In practice

@@ -38,7 +38,10 @@ public:
     void getSigmapoints2N(np::ndarray& sigma_T);
     void useRansac() {use_ransac = true;}
     void setRansacVersion(const unsigned int& version) {ransac_version = uint(version);}
+    void setZeroVelPriorFlag(const bool zero_vel) {zero_vel_prior_flag_ = zero_vel;}
+    void setVelPriorFlag(const bool vel_prior) {vel_prior_ = vel_prior;}
     void useCTSteam() {ct_steam = true;}
+    void getPoseBetweenTimes(np::ndarray& pose, const int64_t ta, const int64_t tb);
 
 private:
     // Solver
@@ -61,8 +64,12 @@ private:
     steam::se3::TransformEvaluator::Ptr T_sv_;
     // RANSAC
     bool use_ransac = false;
-    unsigned int ransac_version = 0;
-    bool ct_steam = false;
+    unsigned int ransac_version = 0;  // 0: RIGID, 1: MC-RANSAC
+    bool ct_steam = false;  // Use timestamps for each measurement in optimization
+    steam::se3::SteamTrajInterface traj;
+    bool traj_init = false;
+    bool zero_vel_prior_flag_ = false;
+    bool vel_prior_ = false;
 };
 
 // boost wrapper
@@ -80,6 +87,9 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("getVelocities", &SteamSolver::getVelocities)
         .def("useRansac", &SteamSolver::useRansac)
         .def("setRansacVersion", &SteamSolver::setRansacVersion)
+	.def("setZeroVelPriorFlag", &SteamSolver::setZeroVelPriorFlag)
+	.def("setVelPriorFlag", &SteamSolver::setVelPriorFlag)
         .def("useCTSteam", &SteamSolver::useCTSteam)
+        .def("getPoseBetweenTimes", &SteamSolver::getPoseBetweenTimes)
         .def("getSigmapoints2N", &SteamSolver::getSigmapoints2N);
 }

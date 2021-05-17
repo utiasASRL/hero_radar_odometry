@@ -70,7 +70,7 @@ class BoreasDataset(OxfordDataset):
 
     def get_frames_with_gt(self, frames, gt_path):
         # Drop the last few frame
-        drop = self.config['window_size'] - 1
+        drop = self.config['window_size'] - 1 - self.skip
         return frames[:-drop]
 
     def get_groundtruth_odometry(self, radar_time, gt_path):
@@ -130,7 +130,7 @@ class BoreasDataset(OxfordDataset):
 
         # Requires that the cartesian images and masks are pre-computed and stored alongside the dataset
         ###########
-        timestamps, azimuths, _, polar, _ = load_radar(frame, navtech_version=CIR204)
+        timestamps, azimuths, _, polar = load_radar(frame)
         data = np.expand_dims(cv2.imread(cart_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
         mask = np.expand_dims(cv2.imread(mask_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
         ###########
@@ -140,12 +140,12 @@ class BoreasDataset(OxfordDataset):
         if idx + 1 < len(self.frames):
             time2 = int(self.frames[idx + 1].split('.')[0])
         else:
-            time2 = 0
-        times = np.array([time1, time2]).reshape(1, 2)
+            time2 = time1 + 250000
+        t_ref = np.array([time1, time2]).reshape(1, 2)
         T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/applanix/radar_poses.csv')
         azimuths = np.expand_dims(azimuths, axis=0)
         timestamps = np.expand_dims(timestamps, axis=0)
-        return {'data': data, 'T_21': T_21, 'times': times, 'mask': mask,
+        return {'data': data, 'T_21': T_21, 't_ref': t_ref, 'mask': mask,
                 'azimuths': azimuths, 'timestamps': timestamps}
 
 def get_dataloaders_boreas(config):
@@ -155,9 +155,9 @@ def get_dataloaders_boreas(config):
     train_dataset = BoreasDataset(config, 'train')
     valid_dataset = BoreasDataset(vconfig, 'validation')
     test_dataset = BoreasDataset(vconfig, 'test')
-    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens)
-    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens)
-    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens)
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens, skip=config['skip'])
+    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens, skip=config['skip'])
+    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens, skip=config['skip'])
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
     valid_loader = DataLoader(valid_dataset, batch_sampler=valid_sampler, num_workers=config['num_workers'])
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, num_workers=config['num_workers'])

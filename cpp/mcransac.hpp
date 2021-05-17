@@ -115,7 +115,7 @@ public:
 
 private:
     Eigen::MatrixXd p1, p2;
-    double tolerance = 0.35;
+    double tolerance = 2.0;  // 0.35
     double inlier_ratio = 0.9;
     int iterations = 100;
     Eigen::MatrixXd T_best;
@@ -196,7 +196,7 @@ public:
 private:
     Eigen::MatrixXd p1bar, p2bar;
     std::vector<double> delta_ts;
-    double tolerance = 0.1225;
+    double tolerance = 4.0;  // 0.1225
     double inlier_ratio = 0.9;
     int iterations = 100;
     int max_gn_iterations = 10;

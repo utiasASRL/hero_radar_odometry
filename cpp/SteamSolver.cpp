@@ -72,20 +72,32 @@ void SteamSolver::setExtrinsicTsv(const np::ndarray& T_sv) {
 void SteamSolver::optimize() {
     // Motion prior
     bool allowExtrapolation = true;
-    steam::se3::SteamTrajInterface traj(Qc_inv_, allowExtrapolation);
+    traj = steam::se3::SteamTrajInterface(Qc_inv_, allowExtrapolation);
+    traj_init = true;
     int64_t t0 = t_refs_[0];
     for (uint i = 0; i < states_.size(); ++i) {
-        TrajStateVar& state = states_.at(i);
-        steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
         int64_t delta = t_refs_[i] - t_refs_[0];
         double delta_t = double(delta) / 1.0e6;
-        traj.add(steam::Time(delta_t), temp, state.velocity);
+        states_[i].time = steam::Time(delta_t);
+        TrajStateVar& state = states_.at(i);
+        steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
+        traj.add(state.time, temp, state.velocity);
         if (i == 0) {  // lock first pose
             state.pose->setLock(true);
         }
     }
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
+    if (vel_prior_) {
+    	Eigen::Matrix<double,6,1> velocity = states_[0].velocity->getValue();
+    	velocity[1] = 0;  // encourage lateral velocity to be close to zero
+    	Eigen::Matrix<double, 6, 6> vel_cov;
+    	vel_cov.setZero();
+   	Eigen::Array<double, 1, 6> vel_cov_diag;
+    	vel_cov_diag << 1, 1e-3, 1, 1, 1, 1;
+    	vel_cov.diagonal() = vel_cov_diag;
+    	traj.addVelocityPrior(steam::Time(0.0), velocity, vel_cov);
+    }
     traj.appendPriorCostTerms(costTerms);
 
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
@@ -112,19 +124,6 @@ void SteamSolver::optimize() {
                 ransac.getTransform(T);
                 ransac.getInliers(T, inliers);
             }
-    	    /*Eigen::Matrix<double, 4, 4> Tmd;
-            for (uint ii = 0; ii < 4; ++ii) {
-                for (uint jj = 0; jj < 4; ++jj) {
-                    Tmd(ii, jj) = T(ii, jj);
-                }
-            }
-            lgmath::se3::Transformation T_lg(Tmd);
-            states_[i].pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_lg));
-            Eigen::Matrix<double, 6, 1> wmd;
-            for (uint ii = 0; ii < 6; ++ii) {
-                wmd(ii, 0) = motion_vec(ii);
-            }
-            states_[i].velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(wmd));*/
         } else {
             for (uint j = 0; j < p1_[i-1].shape(0); ++j) {
                 inliers.push_back(j);
@@ -170,8 +169,16 @@ void SteamSolver::optimize() {
             costTerms->add(cost);
         }
     }
-    // if (use_ransac)
-    //    return;
+    if (zero_vel_prior_flag_) {
+        Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
+        steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
+        for (uint i = 0; i < states_.size(); ++i) {
+            steam::SE2VelPriorEval::Ptr error(new steam::SE2VelPriorEval(states_[i].velocity));
+            steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
+                new steam::WeightedLeastSqCostTerm<3, 6>(error, vel_prior_noise_model, sharedLossFuncL2));
+            costTerms->add(cost);
+        }  // end i
+    }
     steam::OptimizationProblem problem;
     // Add state variables
     for (uint i = 0; i < states_.size(); ++i) {
@@ -194,6 +201,28 @@ void SteamSolver::getPoses(np::ndarray& poses) {
             for (uint c = 0; c < 4; ++c) {
                 poses[i][r][c] = float(Tsi(r, c));
             }
+        }
+    }
+}
+
+// Replaces pose (4x4) with T_ba
+void SteamSolver::getPoseBetweenTimes(np::ndarray& pose, const int64_t ta, const int64_t tb) {
+    if (!traj_init) {
+        std::cout << "WARNING: traj not yet initialized" << std::endl;
+        return;
+    }
+    int64_t t0 = t_refs_[0];
+    int64_t ta_ = int64_t(ta) - t0;
+    int64_t tb_ = int64_t(tb) - t0;
+    steam::se3::TransformEvaluator::ConstPtr Ta0 = traj.getInterpPoseEval(steam::Time(double(ta_) / 1.0e6));
+    steam::se3::TransformEvaluator::ConstPtr Tb0 = traj.getInterpPoseEval(steam::Time(double(tb_) / 1.0e6));
+    steam::se3::TransformEvaluator::Ptr T_eval_ptr = steam::se3::composeInverse(
+        steam::se3::compose(T_sv_, Tb0),
+        steam::se3::compose(T_sv_, Ta0));  // Tba = Tb0 * inv(Ta0)
+    Eigen::Matrix<double, 4, 4> Ta0_s = T_eval_ptr->evaluate().matrix();
+    for (uint i = 0; i < 4; ++i) {
+        for (uint j = 0; j < 4; ++j) {
+            pose[i][j] = float(Ta0_s(i, j));
         }
     }
 }

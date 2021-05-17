@@ -18,9 +18,10 @@ RUN apt-get install gcc g++ python3 python3-pip python3-dev libglib2.0-0 libgl1-
 # Install pip packages
 RUN pip3 install --upgrade setuptools
 RUN pip3 install --upgrade pip
-RUN pip3 install torch==1.5.0+cu101 torchvision==0.6.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip3 install torch==1.7.1+cu101 torchvision==0.8.2+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 RUN pip3 install tensorboard
 RUN pip3 install -Iv tensorboardx==2.1 matplotlib==3.2.2 opencv-python==3.4.11.45
+RUN pip3 install numpy sklearn
 
 # git and wget
 RUN apt install git wget -y --no-install-recommends

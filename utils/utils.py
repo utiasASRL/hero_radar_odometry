@@ -9,39 +9,24 @@ def get_inverse_tf(T):
     R = T[0:3, 0:3]
     t = T[0:3, 3].reshape(3, 1)
     T2[0:3, 0:3] = R.transpose()
-    t = np.matmul(-1 * R.transpose(), t)
-    T2[0:3, 3] = np.squeeze(t)
+    T2[0:3, 3:] = np.matmul(-1 * R.transpose(), t)
     return T2
 
-'''
 def get_transform(x, y, theta):
     """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
-    R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     T = np.identity(4, dtype=np.float32)
-    T[0:2, 0:2] = R
+    T[0:2, 0:2] = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     T[0, 3] = x
     T[1, 3] = y
     return T
-'''
-
-
-def get_transform(x, y, theta):
-    R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-    T = np.identity(4, dtype=np.float32)
-    T[0:2, 0:2] = R
-    xbar = np.array([x, y]).reshape((2, 1))
-    #xbar = -R @ xbar
-    T[0:2, 3] = xbar[:, 0]
-    return T
-
 
 def get_transform2(R, t):
-    T = np.identity(4)
+    T = np.identity(4, dtype=np.float32)
     T[0:3, 0:3] = R
     T[0:3, 3] = t.squeeze()
     return T
 
-def enforce_orthog(T, dim=2):
+def enforce_orthog(T, dim=3):
     """Enforces the orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix."""
     if dim == 2:
         if abs(np.linalg.det(T[0:2, 0:2]) - 1) < 1e-10:
@@ -72,6 +57,62 @@ def enforce_orthog(T, dim=2):
         T[0:3, 1] = newcol1
         T[0:3, 2] = c2
     return T
+
+def carrot(xbar):
+    x = xbar.squeeze()
+    if x.shape[0] == 3:
+        return np.array([[0, -x[2], x[1]],
+                         [x[2], 0, -x[0]],
+                         [-x[1], x[0], 0]])
+    elif x.shape[0] == 6:
+        return np.array([[0, -x[5], x[4], x[0]],
+                         [x[5], 0, -x[3], x[1]],
+                         [-x[4], x[3], 0, x[2]],
+                         [0, 0, 0, 1]])
+    else:
+        print('WARNING: attempted carrot operator on invalid vector shape')
+        return xbar
+
+def se3ToSE3(xi):
+    """Lie Vector xi = [rho, phi]^T (6 x 1) --> SE(3) T = [C, R; 0 0 0 1] (4 x 4)"""
+    T = np.identity(4, dtype=np.float32)
+    rho = xi[0:3].reshape(3, 1)
+    phibar = xi[3:6].reshape(3, 1)
+    phi = np.linalg.norm(phibar)
+    R = np.identity(3)
+    if phi != 0:
+        phibar /= phi  # normalize
+        I = np.identity(3)
+        R = np.cos(phi) * I + (1 - np.cos(phi)) * phibar @ phibar.T + np.sin(phi) * carrot(phibar)
+        J = I * np.sin(phi) / phi + (1 - np.sin(phi) / phi) * phibar @ phibar.T + \
+            carrot(phibar) * (1 - np.cos(phi)) / phi
+        rho = J @ rho
+    T[0:3, 0:3] = R
+    T[0:3, 3:] = rho
+    return T
+
+def SE3tose3(T):
+    """SE(3) T = [C, R; 0 0 0 1] (4 x 4) --> Lie Vector xi = [rho, phi]^T (6 x 1)"""
+    R = T[0:3, 0:3]
+    evals, evecs = np.linalg.eig(R)
+    idx = -1
+    for i in range(3):
+        if evals[i].real != 0 and evals[i].imag == 0:
+            idx = i
+            break
+    assert(idx != -1)
+    abar = evecs[idx].real.reshape(3, 1)
+    phi = np.arccos((np.trace(R) - 1) / 2)
+    rho = T[0:3, 3:]
+    if phi != 0:
+        I = np.identity(3)
+        J = I * np.sin(phi) / phi + (1 - np.sin(phi) / phi) * abar @ abar.T + \
+                carrot(abar) * (1 - np.cos(phi)) / phi
+        rho = np.linalg.inv(J) @ rho
+    xi = np.zeros((6, 1))
+    xi[0:3, 0:] = rho
+    xi[3:, 0:] = phi * abar
+    return xi
 
 # Use axis-angle representation to get a single number for rotation error
 def rotationError(T):
@@ -252,15 +293,32 @@ def convert_to_radar_frame(pixel_coords, config):
     t = torch.tensor([[cart_min_range], [-cart_min_range]]).expand(B, 2, N).to(gpuid)
     return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
 
+# Used with UnderTheRadar
 def get_indices(batch_size, window_size):
-    src_inds = []
-    tgt_inds = []
+    src_ids = []
+    tgt_ids = []
     for i in range(batch_size):
         for j in range(window_size - 1):
             idx = i * window_size + j
-            src_inds.append(idx)
-            tgt_inds.append(idx + 1)
-    return src_inds, tgt_inds
+            src_ids.append(idx)
+            tgt_ids.append(idx + 1)
+    return src_ids, tgt_ids
+
+# Used with HERO
+def get_indices2(batch_size, window_size, asTensor=False):
+    src_ids = []
+    tgt_ids = []
+    for i in range(batch_size):
+        idx = i * window_size
+        for j in range(idx + 1, idx + window_size):
+            tgt_ids.append(j)
+            src_ids.append(idx)
+    if asTensor:
+        src_ids = np.asarray(src_ids, dtype=np.int64)
+        tgt_ids = np.asarray(tgt_ids, dtype=np.int64)
+        return torch.from_numpy(src_ids), torch.from_numpy(tgt_ids)
+    else:
+        return src_ids, tgt_ids
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
@@ -319,10 +377,68 @@ def convert_to_weight_matrix(w, window_id, T_aug=[]):
     return A, d
 
 def mask_intensity_filter(data, patch_size, patch_mean_thres=0.05):
-    """Given a cartesian mask of likely target pixels (data), this function computes the percentage of
+    """ Given a cartesian mask of likely target pixels (data), this function computes the percentage of
         likely target pixels in a given square match of the input. The output is a list of booleans indicate whether
         each patch either has more (True) or less (False) % likely target pixels than the patch_mean_thres.
     """
     int_patches = F.unfold(data, kernel_size=patch_size, stride=patch_size)
     keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)  # BW x 1 x num_patches
     return keypoint_int >= patch_mean_thres
+
+def wrapto2pi(phi):
+    """Ensures that the output angle phi is within the interval [0, 2*pi)"""
+    if phi < 0:
+        return phi + 2 * np.pi * np.ceil(phi / (-2 * np.pi))
+    elif phi >= 2 * np.pi:
+        return (phi / (2 * np.pi) % 1) * 2 * np.pi
+    else:
+        return phi
+
+def getApproxTimeStamps(points, times, flip_y=False):
+    """ Retrieves the approximate timestamp of each target point
+        points: List of np.array() (N, 2)
+        times: List of np.array() (400,) * time at each azimuth
+        Out: List of np.array() (N,)
+    """
+    azimuth_step = (2 * np.pi) / 400
+    timestamps = []
+    BW = len(points)  # batch * window_size
+    for i in range(len(points)):
+        p = points[i]
+        ptimes = times[i]
+        point_times = []
+        for k in range(p.shape[0]):
+            x = p[k, 0]
+            y = p[k, 1]
+            if flip_y:
+                y *= -1
+            phi = np.arctan2(y, x)
+            phi = wrapto2pi(phi)
+            time_idx = phi / azimuth_step
+            t1 = ptimes[int(np.floor(time_idx))]
+            idx2 = int(np.ceil(time_idx))
+            t2 = ptimes[idx2 if idx2 < 400 else 399]
+            # interpolate to get slightly more precise timestamp
+            ratio = time_idx % 1
+            t = int(t1 + ratio * (t2 - t1))
+            point_times.append(t)
+        timestamps.append(np.array(point_times))
+    return timestamps
+
+def undistort_pointcloud(points, point_times, t_refs, solver):
+    """ Removes motion distortion from pointclouds
+        points: List of np.array() (N, 2-4)
+        point_times: List of np.array() (N,) * time at each point
+        t_refs: A reference time for each pointcloud, transform each point into the sensor frame at this time.
+    """
+    for i in range(len(points)):
+        p = points[i]
+        ptimes = point_times[i]
+        t_ref = t_refs[i]
+        for j in range(M):
+            T_0a = np.identity(4, dtype=np.float32)
+            solver.getPoseBetweenTimes(T_0a, ptimes[j], t_ref)
+            pbar = T_0a @ p[j].reshape(4, 1)
+            p[j, :] = pbar[:]
+        points[i] = p
+    return points
