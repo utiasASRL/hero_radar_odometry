@@ -207,9 +207,10 @@ def draw_batch_steam(batch, out, config):
     t_st_in_t = out['t'][0, -1, :2, :]
     error = tgt_p - (R_tgt_src @ src_p + t_st_in_t)
     error2_sqrt = torch.sqrt(torch.sum(error * error, dim=0).squeeze())
+    error2_sqrt = error2_sqrt[ids_cpu].detach().cpu().numpy()
 
     plt.imshow(radar, cmap='gray')
-    plt.scatter(src[ids_cpu, 0], src[ids_cpu, 1], c=error2_sqrt[ids_cpu].detach().cpu().numpy(), s=5, zorder=2, cmap='rainbow')
+    plt.scatter(src[ids_cpu, 0], src[ids_cpu, 1], c=error2_sqrt, s=5, zorder=2, cmap='rainbow')
     plt.clim(0.0, np.max(error2_sqrt))
     plt.colorbar()
     plt.title('P2P error')
