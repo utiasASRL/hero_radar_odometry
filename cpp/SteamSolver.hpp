@@ -42,6 +42,7 @@ public:
     void setVelPriorFlag(const bool vel_prior) {vel_prior_ = vel_prior;}
     void useCTSteam() {ct_steam = true;}
     void getPoseBetweenTimes(np::ndarray& pose, const int64_t ta, const int64_t tb);
+    void getInliers(p::list &inliers);
 
 private:
     // Solver

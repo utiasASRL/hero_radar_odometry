@@ -1,5 +1,5 @@
 {
-    "model": "HERO",
+    "model": "YETI",
     "dataset": "boreas",
     "data_dir": "/workspace/nas/ASRL/2021-Boreas/",
     "log_dir": "/workspace/Documents/logs/2021-03-04/boreas1_aug026_cnn8_window3_res2240_width640/",
@@ -9,7 +9,7 @@
     "cart_pixel_width": 640,
     "train_split": [0, 1, 2, 3, 4, 5, 10],
     "validation_split": [6],
-    "test_split": [8, 9, 11],
+    "test_split": [11],
     "networks": {
         "unet": {
             "bilinear": true,
@@ -34,11 +34,13 @@
         "log_det_thres_flag": false,
         "log_det_thres_val": 4.0,
         "log_det_topk": 20,
-        "use_ransac": false,
+        "use_ransac": true,
         "ransac_version": 0,
         "use_ctsteam": false,
-        "ex_translation_vs_in_s": [0, 0, 0]
-
+        "ex_translation_vs_in_s": [0, 0, 0],
+	"ex_rotation_sv": [1, 0, 0, 0, -1, 0, 0, 0, -1],
+	"zero_vel_prior": false,
+        "vel_prior": false
     },
     "lr": 0.00001,
     "weight_decay": 0,
@@ -46,7 +48,7 @@
     "momentum": 0,
     "clip_norm": 10.0,
     "batch_size": 1,
-    "window_size": 4,
+    "window_size": 2,
     "num_workers": 4,
     "max_iterations": 300000,
     "max_epochs": 3,
@@ -60,5 +62,7 @@
         "rot_max": 0.26
     },
     "skip": 0,
-    "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021]
+    "flip_y": false,
+    "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021],
+    "use_ins": false
 }

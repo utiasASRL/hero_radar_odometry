@@ -1,5 +1,5 @@
 {
-    "model": "HERO",
+    "model": "YETI",
     "dataset": "oxford",
     "data_dir1": "/workspace/raid/krb/oxford-radar-robotcar-dataset/",
     "data_dir": "/workspace/nas/ASRL/2021-krb/oxford-radar-robotcar-dataset/",
@@ -36,7 +36,7 @@
         "log_det_thres_flag": false,
         "log_det_thres_val": 4.0,
         "log_det_topk": 20,
-        "use_ransac": false,
+        "use_ransac": true,
         "ransac_version": 0,
         "use_ctsteam": false,
         "ex_translation_vs_in_s1": [-0.99507, -0.0019, 0],
@@ -48,7 +48,7 @@
         "ex_rotation_sv1": [1, 0, 0, 0, -1, 0, 0, 0, -1],
         "ex_rotation_sv0": [1, 0, 0, 0, 1, 0, 0, 0, 1],
         "zero_vel_prior": false,
-        "vel_prior": true
+        "vel_prior": false
     },
     "lr": 0.00001,
     "weight_decay": 0,
@@ -56,7 +56,7 @@
     "momentum": 0,
     "clip_norm": 10.0,
     "batch_size": 1,
-    "window_size": 4,
+    "window_size": 2,
     "num_workers": 4,
     "max_iterations": 400000,
     "max_epochs": 4,

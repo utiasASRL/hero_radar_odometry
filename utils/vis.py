@@ -9,9 +9,9 @@ from torchvision.transforms import ToTensor
 from utils.utils import get_transform2, enforce_orthog, get_inverse_tf, get_T_ba
 from utils.utils import getApproxTimeStamps, wrapto2pi
 
-def convert_plt_to_img():
+def convert_plt_to_img(dpi=128):
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0)
     plt.close()
     buf.seek(0)
     return PIL.Image.open(buf)
@@ -267,11 +267,11 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
 
         plt.figure(figsize=(10, 10), tight_layout=True)
         plt.grid(color='k', which='both', linestyle='--', alpha=0.75, dashes=(8.5, 8.5))
-        plt.axes().set_aspect('equal')
+        #plt.axes().set_aspect('equal')
         plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT')
         if len(x_icra) > 0 and len(y_icra) > 0:
             plt.plot(x_icra, y_icra, 'r', linewidth=2.5, label='MC-RANSAC')
-        plt.plot(x_pred, y_pred, 'b', linewidth=2.5, label='HERO')
+        plt.plot(x_pred, y_pred, 'b', linewidth=2.5, label='YETI')
         plt.xlabel('x (m)', fontsize=16)
         plt.ylabel('y (m)', fontsize=16)
         plt.legend(loc="upper left", edgecolor='k', fancybox=False)

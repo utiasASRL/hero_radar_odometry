@@ -238,8 +238,17 @@ void SteamSolver::getVelocities(np::ndarray& vels) {
     }
 }
 
-void SteamSolver::getInliers(std::vector<std::vector<int>>& inliers) {
-    inliers = inliers_list;
+void SteamSolver::getInliers(p::list &inliers) {
+    for (std::vector<int> inliers_ : inliers_list) {
+	p::list temp;
+	for (int idx : inliers_) {
+		temp.append(idx);
+	}
+	inliers.append(temp);
+    }
+    //for (int idx : inliers_list[0]) {
+	//inliers.append(idx);
+    //}
 }
 
 void SteamSolver::getSigmapoints2N(np::ndarray& sigma_T) {

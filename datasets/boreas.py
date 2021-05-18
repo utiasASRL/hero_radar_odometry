@@ -143,9 +143,10 @@ class BoreasDataset(OxfordDataset):
             time2 = time1 + 250000
         t_ref = np.array([time1, time2]).reshape(1, 2)
         T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/applanix/radar_poses.csv')
+        polar = np.expand_dims(polar, axis=0)
         azimuths = np.expand_dims(azimuths, axis=0)
         timestamps = np.expand_dims(timestamps, axis=0)
-        return {'data': data, 'T_21': T_21, 't_ref': t_ref, 'mask': mask,
+        return {'data': data, 'T_21': T_21, 't_ref': t_ref, 'mask': mask, 'polar': polar,
                 'azimuths': azimuths, 'timestamps': timestamps}
 
 def get_dataloaders_boreas(config):
