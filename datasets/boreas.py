@@ -136,13 +136,15 @@ class BoreasDataset(OxfordDataset):
         ###########
 
         # Get ground truth transform between this frame and the next
-        time1 = int(self.frames[idx].split('.')[0])
+        radar_time = int(self.frames[idx].split('.')[0])
+        T_21 = self.get_groundtruth_odometry(radar_time, self.data_dir + seq + '/applanix/radar_poses.csv')
+        time1 = timestamps[0, 0]
         if idx + 1 < len(self.frames):
-            time2 = int(self.frames[idx + 1].split('.')[0])
+            timestamps2, _, _, _ = load_radar(self.data_dir + seq + '/radar/' + self.frames[idx + 1])
+            time2 = timestamps2[0, 0]
         else:
             time2 = time1 + 250000
         t_ref = np.array([time1, time2]).reshape(1, 2)
-        T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/applanix/radar_poses.csv')
         azimuths = np.expand_dims(azimuths, axis=0)
         timestamps = np.expand_dims(timestamps, axis=0)
         return {'data': data, 'T_21': T_21, 't_ref': t_ref, 'mask': mask,

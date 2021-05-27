@@ -406,6 +406,8 @@ def getApproxTimeStamps(points, times, flip_y=False):
     for i in range(len(points)):
         p = points[i]
         ptimes = times[i]
+        delta_t = ptimes[-1] - ptimes[-2]
+        ptimes = np.append(ptimes, int(ptimes[-1] + delta_t))
         point_times = []
         for k in range(p.shape[0]):
             x = p[k, 0]
@@ -416,8 +418,7 @@ def getApproxTimeStamps(points, times, flip_y=False):
             phi = wrapto2pi(phi)
             time_idx = phi / azimuth_step
             t1 = ptimes[int(np.floor(time_idx))]
-            idx2 = int(np.ceil(time_idx))
-            t2 = ptimes[idx2 if idx2 < 400 else 399]
+            t2 = ptimes[int(np.ceil(time_idx))]
             # interpolate to get slightly more precise timestamp
             ratio = time_idx % 1
             t = int(t1 + ratio * (t2 - t1))
