@@ -9,7 +9,15 @@ from torch.utils.data import Dataset, DataLoader
 from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBatchSampler
 from datasets.radar import load_radar, radar_polar_to_cartesian
 from datasets.interpolate_poses import interpolate_ins_poses
-from utils.utils import get_inverse_tf, get_transform
+from utils.utils import get_inverse_tf
+
+def get_transform_oxford(x, y, theta):
+    """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
+    T = np.identity(4, dtype=np.float32)
+    T[0:2, 0:2] = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    T[0, 3] = x
+    T[1, 3] = y
+    return T
 
 def get_sequences(path, prefix='2019'):
     """Retrieves a list of all the sequences in the dataset with the given prefix."""
@@ -96,10 +104,10 @@ class OxfordDataset(Dataset):
             for i, line in enumerate(lines):
                 line = line.split(',')
                 if int(line[9]) == radar_time:
-                    T = get_transform(float(line[2]), float(line[3]), float(line[7]))  # from next time to current
+                    T = get_transform_oxford(float(line[2]), float(line[3]), float(line[7]))  # from next time to current
                     if self.skip > 0 and i + self.skip < len(lines):
                         line2 = lines[i + self.skip].split(',')
-                        T2 = get_transform(float(line2[2]), float(line2[3]), float(line2[7]))
+                        T2 = get_transform_oxford(float(line2[2]), float(line2[3]), float(line2[7]))
                         T = np.matmul(T, T2)
                         return get_inverse_tf(T), int(line[1]), int(line2[1])
                     return get_inverse_tf(T), int(line[1]), int(line[0]) # T_2_1 from current time step to the next
