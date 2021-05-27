@@ -36,9 +36,9 @@
         "log_det_topk": 20,
         "use_ransac": true,
         "ransac_version": 0,
-        "use_ctsteam": false,
+        "use_ctsteam": true,
         "ex_translation_vs_in_s": [0, 0, 0],
-	"ex_rotation_sv": [1, 0, 0, 0, -1, 0, 0, 0, -1],
+	"ex_rotation_sv": [1, 0, 0, 0, 1, 0, 0, 0, 1],
 	"zero_vel_prior": false,
         "vel_prior": false
     },
@@ -62,7 +62,7 @@
         "rot_max": 0.26
     },
     "skip": 0,
-    "flip_y": false,
+    "flip_y": true,
     "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021],
     "use_ins": false
 }

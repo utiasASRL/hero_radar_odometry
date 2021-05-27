@@ -160,7 +160,7 @@ public:
         delta_ts = std::vector<double>(N, 0.0);
         for (uint i = 0; i < N; ++i) {
             int64_t delta_t = t2[i] - t1[i];
-            delta_ts[i] = double(delta_t) / 1000000.0;
+            delta_ts[i] = double(delta_t) / 1.0e6;
             if (delta_ts[i] > max_delta_t) {
                 max_delta_t = delta_ts[i];
             }

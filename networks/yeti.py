@@ -67,6 +67,9 @@ class YETI(torch.nn.Module):
         p2p = np.expand_dims(p2p, axis=0)
         pseudo_coords_xy = torch.from_numpy(p1)
         keypoint_coords_xy = torch.from_numpy(p2)
+        if self.config['flip_y']:
+            pseudo_coords_xy[:, :, 1] *= -1.0
+            keypoint_coords_xy[:, :, 1] *= -1.0
         pseudo_coords = torch.from_numpy(p1p)
         keypoint_coords = torch.from_numpy(p2p)
         time_tgt = timestamps[tgt_ids]

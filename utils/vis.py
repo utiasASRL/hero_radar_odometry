@@ -266,8 +266,10 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
                 y_icra.append(T_icra_temp[1, 3])
 
         plt.figure(figsize=(10, 10), tight_layout=True)
+        plt.xlim(-2000, 1000)
+        plt.ylim(-500, 2500)
         plt.grid(color='k', which='both', linestyle='--', alpha=0.75, dashes=(8.5, 8.5))
-        #plt.axes().set_aspect('equal')
+        plt.axes().set_aspect('equal')
         plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT')
         if len(x_icra) > 0 and len(y_icra) > 0:
             plt.plot(x_icra, y_icra, 'r', linewidth=2.5, label='MC-RANSAC')

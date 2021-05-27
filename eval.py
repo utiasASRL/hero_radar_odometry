@@ -93,8 +93,8 @@ if __name__ == '__main__':
                 #print('T_gt:\n{}'.format(T_gt[-1]))
                 #print('T_pred:\n{}'.format(T_pred[-1]))
                 timestamps.append(batch['t_ref'][w].numpy().squeeze())
-            if batchi == 86:
-                draw_matches(batch, out, config, model.solver.solver_cpp)
+            #if batchi == 86:
+            #    draw_matches(batch, out, config, model.solver.solver_cpp)
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)

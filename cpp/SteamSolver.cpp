@@ -110,7 +110,7 @@ void SteamSolver::optimize() {
 
         std::vector<int> inliers;
         if (use_ransac) {
-            srand(t0 / 1e6);  // fix random seed for repeatability
+            srand(t0 / 1.0e6);  // fix random seed for repeatability
             Eigen::VectorXd motion_vec = Eigen::VectorXd::Zero(6);
             Eigen::MatrixXd T;
             if (ransac_version == 1) {
@@ -125,6 +125,19 @@ void SteamSolver::optimize() {
                 ransac.getTransform(T);
                 ransac.getInliers(T, inliers);
             }
+    	    /*Eigen::Matrix<double, 4, 4> Tmd;
+            for (uint ii = 0; ii < 4; ++ii) {
+                for (uint jj = 0; jj < 4; ++jj) {
+                    Tmd(ii, jj) = T(ii, jj);
+                }
+            }
+            lgmath::se3::Transformation T_lg(Tmd);
+            states_[i].pose = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(T_lg));
+            Eigen::Matrix<double, 6, 1> wmd;
+            for (uint ii = 0; ii < 6; ++ii) {
+                wmd(ii, 0) = motion_vec(ii);
+            }
+            states_[i].velocity = steam::VectorSpaceStateVar::Ptr(new steam::VectorSpaceStateVar(wmd));*/
         } else {
             for (uint j = 0; j < p1_[i-1].shape(0); ++j) {
                 inliers.push_back(j);

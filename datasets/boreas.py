@@ -15,6 +15,7 @@ from datasets.oxford import OxfordDataset, mean_intensity_mask
 CTS350 = 0
 CIR204 = 1    # Boreas
 T_prime = np.array([[1, 0, 0, 0],[0, -1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]])
+#T_prime = np.array([[1, 0, 0, 0],[0, 1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]])
 
 def roll(r):
     return np.array([[1, 0, 0], [0, np.cos(r), np.sin(r)], [0, -np.sin(r), np.cos(r)]], dtype=np.float64)
@@ -136,13 +137,15 @@ class BoreasDataset(OxfordDataset):
         ###########
 
         # Get ground truth transform between this frame and the next
-        time1 = int(self.frames[idx].split('.')[0])
+        radar_time = int(self.frames[idx].split('.')[0])
+        T_21 = self.get_groundtruth_odometry(radar_time, self.data_dir + seq + '/applanix/radar_poses.csv')
+        time1 = timestamps[0, 0]
         if idx + 1 < len(self.frames):
-            time2 = int(self.frames[idx + 1].split('.')[0])
+            timestamps2, _, _, _ = load_radar(self.data_dir + seq + '/radar/' + self.frames[idx + 1])
+            time2 = timestamps2[0, 0]
         else:
             time2 = time1 + 250000
         t_ref = np.array([time1, time2]).reshape(1, 2)
-        T_21 = self.get_groundtruth_odometry(time1, self.data_dir + seq + '/applanix/radar_poses.csv')
         polar = np.expand_dims(polar, axis=0)
         azimuths = np.expand_dims(azimuths, axis=0)
         timestamps = np.expand_dims(timestamps, axis=0)

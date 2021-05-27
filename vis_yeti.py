@@ -141,16 +141,16 @@ if __name__ == '__main__':
             out = model(batch)
         T_gt.append(batch['T_21'][0].numpy().squeeze())
         T_pred.append(get_T_ba(out, a=0, b=1))
-        #print('T_gt:\n{}'.format(T_gt[-1]))
-        #print('T_pred:\n{}'.format(T_pred[-1]))
+        print('T_gt:\n{}'.format(T_gt[-1]))
+        print('T_pred:\n{}'.format(T_pred[-1]))
         inliers = []
         model.solver.solver_cpp.getInliers(inliers)
         match_img = draw_match(batch, out, config, model.solver, inliers)
         # Get closest camera image, crop it
-        radar_time = batch['t_ref'][0][0][0].item()
+        radar_time = int(batch['t_ref'][0][0][0].item() * 1e3)
         cam_img = get_closest_image(radar_time, config['data_dir'] + seq_name + '/camera/')
         # draw odom path 
-        odom_img = plot_sequences(T_gt, T_pred, [len(T_gt)], returnTensor=False)[0]
+        odom_img = plot_sequences(T_gt, T_pred, [len(T_gt)], returnTensor=False, flip=False)[0]
         odom_img = np.array(odom_img)[:, :, :3]
         odom_img = odom_img[:, :, ::-1]
         # panel the images together, save as png file
