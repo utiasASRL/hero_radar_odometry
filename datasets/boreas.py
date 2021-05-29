@@ -71,7 +71,7 @@ class BoreasDataset(OxfordDataset):
 
     def get_frames_with_gt(self, frames, gt_path):
         # Drop the last few frame
-        drop = self.config['window_size'] - 1 - self.skip
+        drop = self.config['window_size'] - 1
         return frames[:-drop]
 
     def get_groundtruth_odometry(self, radar_time, gt_path):
@@ -158,9 +158,9 @@ def get_dataloaders_boreas(config):
     train_dataset = BoreasDataset(config, 'train')
     valid_dataset = BoreasDataset(vconfig, 'validation')
     test_dataset = BoreasDataset(vconfig, 'test')
-    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens, skip=config['skip'])
-    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens, skip=config['skip'])
-    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens, skip=config['skip'])
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens)
+    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens)
+    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens)
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
     valid_loader = DataLoader(valid_dataset, batch_sampler=valid_sampler, num_workers=config['num_workers'])
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, num_workers=config['num_workers'])

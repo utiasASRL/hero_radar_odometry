@@ -14,5 +14,6 @@ plot_buddies.py
 vis_radar.py
 convert_to_txt.py
 plot_errs.py
+plot_errs2.py
 test_kitti.py
 get_vel_sigma.py

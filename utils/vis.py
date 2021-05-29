@@ -211,7 +211,7 @@ def draw_batch_steam(batch, out, config):
 
     plt.imshow(radar, cmap='gray')
     plt.scatter(src[ids_cpu, 0], src[ids_cpu, 1], c=error2_sqrt, s=5, zorder=2, cmap='rainbow')
-    plt.clim(0.0, np.max(error2_sqrt))
+    plt.clim(0.0, 1)
     plt.colorbar()
     plt.title('P2P error')
     p2p_img = convert_plt_to_tensor()
@@ -240,7 +240,6 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
         if flip:
             T_gt_ = np.matmul(T_flip, T_gt_)
             T_pred_ = np.matmul(T_flip, T_pred_)
-            T_icra_ = np.matmul(T_flip, T_icra_)
         x_gt = []
         y_gt = []
         x_pred = []

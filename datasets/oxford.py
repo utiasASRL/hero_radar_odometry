@@ -45,7 +45,6 @@ class OxfordDataset(Dataset):
     def __init__(self, config, split='train'):
         self.config = config
         self.data_dir = config['data_dir']
-        self.skip = int(config['skip'])
         dataset_prefix = ''
         if config['dataset'] == 'oxford':
             dataset_prefix = '2019'
@@ -80,7 +79,7 @@ class OxfordDataset(Dataset):
         # For the Oxford Dataset we do a search from the end backwards because some
         # of the sequences don't have GT as the end, but they all have GT at the beginning.
         def check_if_frame_has_gt(frame, gt_lines):
-            for i in range(len(gt_lines) - 1 - self.skip, -1, -1):
+            for i in range(len(gt_lines) - 1, -1, -1):
                 line = gt_lines[i].split(',')
                 if frame == int(line[9]):
                     return True
@@ -105,11 +104,6 @@ class OxfordDataset(Dataset):
                 line = line.split(',')
                 if int(line[9]) == radar_time:
                     T = get_transform_oxford(float(line[2]), float(line[3]), float(line[7]))  # from next time to current
-                    if self.skip > 0 and i + self.skip < len(lines):
-                        line2 = lines[i + self.skip].split(',')
-                        T2 = get_transform_oxford(float(line2[2]), float(line2[3]), float(line2[7]))
-                        T = np.matmul(T, T2)
-                        return get_inverse_tf(T), int(line[1]), int(line2[1])
                     return get_inverse_tf(T), int(line[1]), int(line[0]) # T_2_1 from current time step to the next
         assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
@@ -164,9 +158,9 @@ def get_dataloaders(config):
     train_dataset = OxfordDataset(config, 'train')
     valid_dataset = OxfordDataset(vconfig, 'validation')
     test_dataset = OxfordDataset(vconfig, 'test')
-    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens, skip=config['skip'])
-    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens, skip=config['skip'])
-    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens, skip=config['skip'])
+    train_sampler = RandomWindowBatchSampler(config['batch_size'], config['window_size'], train_dataset.seq_lens)
+    valid_sampler = SequentialWindowBatchSampler(1, config['window_size'], valid_dataset.seq_lens)
+    test_sampler = SequentialWindowBatchSampler(1, config['window_size'], test_dataset.seq_lens)
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=config['num_workers'])
     valid_loader = DataLoader(valid_dataset, batch_sampler=valid_sampler, num_workers=config['num_workers'])
     test_loader = DataLoader(test_dataset, batch_sampler=test_sampler, num_workers=config['num_workers'])

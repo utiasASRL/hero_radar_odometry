@@ -47,13 +47,7 @@ if __name__ == '__main__':
     elif args.pretrain is not None:
         ckpt_path = args.pretrain
 
-    if config['optimizer'] == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
-    elif config['optimizer'] == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
-    elif config['optimizer'] == 'sgd':
-        optimizer = torch.optim.SGD(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'],
-                                    momentum=config['momentum'])
+    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2.5e4 / config['val_rate'], factor=0.5)
     if config['model'] == 'UnderTheRadar':
@@ -107,7 +101,7 @@ if __name__ == '__main__':
                 continue
             if loss.requires_grad:
                 loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_norm'])
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 10)
             optimizer.step()
             if (monitor.counter + 1) % config['save_rate'] == 0:
                 with torch.no_grad():
