@@ -90,11 +90,11 @@ void SteamSolver::optimize() {
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
     if (vel_prior_) {
     	Eigen::Matrix<double,6,1> velocity = states_[0].velocity->getValue();
-    	velocity[1] = 0;  // encourage lateral velocity to be close to zero
+    	// velocity[1] = 0;  // encourage lateral velocity to be close to zero
     	Eigen::Matrix<double, 6, 6> vel_cov;
     	vel_cov.setZero();
    	Eigen::Array<double, 1, 6> vel_cov_diag;
-    	vel_cov_diag << 1, 1e-3, 1, 1, 1, 1;
+    	vel_cov_diag << 1, 1, 1, 1, 1, 1;
     	vel_cov.diagonal() = vel_cov_diag;
     	traj.addVelocityPrior(steam::Time(0.0), velocity, vel_cov);
     }

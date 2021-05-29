@@ -5,7 +5,7 @@ import torch
 import cpp.build.steampy as steampy
 import cpp.build.SteamSolver as SteamCpp
 from networks.steam_solver import SteamSolver
-from utils.utils import get_inverse_tf, rotationError, translationError
+from utils.utils import get_inverse_tf, rotationError, translationError, getApproxTimeStamps
 
 def get_times(t0, M=400):
     times = torch.zeros(M, dtype=torch.int64)
@@ -56,8 +56,13 @@ class TestSteam(unittest.TestCase):
         R = torch.from_numpy(poses[1, 0, :3, :3])
         t = torch.from_numpy(poses[1, 0, :3, 3:])
 
-        r_err = rotationError(R, R_gt)
-        t_err = translationError(t, t_gt)
+        T = poses[1, 0].reshape(4, 4)
+        T_gt = np.identity(4, dtype=np.float32)
+        T_gt[:3, :3] = R_gt.numpy()
+        T_gt[:3, 3:] = t_gt.numpy()
+
+        r_err = rotationError(get_inverse_tf(T) @ T_gt)
+        t_err = translationError(get_inverse_tf(T) @ T_gt)
         self.assertTrue(r_err < 1e-4, "Rotation: {} != {}".format(R, R_gt))
         self.assertTrue(t_err < 1e-4, "Translation: {} != {}".format(t, t_gt))
 
@@ -84,11 +89,21 @@ class TestSteam(unittest.TestCase):
             np.expand_dims(np.eye(4, dtype=np.float32), 0),
             (window_size, 1, 1))
 
+        # get timestamps
+        t1 = 0
+        t2 = 250000
+        times1 = get_times(t1)
+        times2 = get_times(t2)
+        t_ref = [t1, t2]
+        timestamps1 = getApproxTimeStamps([points1], [times1], flip_y=False)
+        timestamps2 = getApproxTimeStamps([points2], [times2], flip_y=False)
+
         # run steam
         dt = 0.25
-        solver = SteamCpp.SteamSolver(dt, window_size, False)
+        solver = SteamCpp.SteamSolver(dt, window_size)
         solver.setMeas([np.concatenate((points2, zeros_vec), 1)],
-                       [np.concatenate((points1, zeros_vec), 1)], [identity_weights])
+                       [np.concatenate((points1, zeros_vec), 1)], [identity_weights],
+                       timestamps2, timestamps1, t_ref)
         solver.optimize()
 
         # get pose output
@@ -98,38 +113,49 @@ class TestSteam(unittest.TestCase):
         R = torch.from_numpy(poses[1, :2, :2])
         t = torch.from_numpy(poses[1, :2, 3:])
 
-        r_err = rotationError(R, R_gt)
-        t_err = translationError(t, t_gt)
+        T = poses[1].reshape(4, 4)
+        T_gt = np.identity(4, dtype=np.float32)
+        T_gt[:2, :2] = R_gt.numpy()
+        T_gt[:2, 3:] = t_gt.numpy()
+
+        r_err = rotationError(get_inverse_tf(T) @ T_gt)
+        t_err = translationError(get_inverse_tf(T) @ T_gt)
         self.assertTrue(r_err < 1e-4, "Rotation: {} != {}".format(R, R_gt))
         self.assertTrue(t_err < 1e-4, "Translation: {} != {}".format(t, t_gt))
 
-    def test_Tsv(self):
-        with open('config/steam.json', 'r') as f:
+    def test_steam(self, flip_y=False, ex_rotation_sv=[1, 0, 0, 0, 1, 0, 0, 0, 1]):
+        with open('config/test2.json', 'r') as f:
             config = json.load(f)
+        config['flip_y'] = flip_y
+        config['steam']['ex_rotation_sv'] = ex_rotation_sv
+
         # initialize solver
         solver = SteamSolver(config)
 
         # create test data
         N = 100
-        src = torch.randn(2, N)
+        src = torch.randn((2, N), dtype=torch.float32)
         theta = np.pi / 8
-        R_gt = torch.tensor([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-        t_gt = torch.tensor([[1], [2]])
+        #if flip_y:
+        #    R_gt = torch.tensor([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]], dtype=torch.float32)
+        #else:
+        R_gt = torch.tensor([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]], dtype=torch.float32)
+        t_gt = torch.tensor([[1], [2]], dtype=torch.float32)
         out = R_gt @ src + t_gt
 
         zeropad = torch.nn.ZeroPad2d((0, 1, 0, 0))
         points1 = zeropad(src.T).unsqueeze(0)  # pseudo
         points2 = zeropad(out.T).unsqueeze(0)  # keypoint
 
-        if self.config['flip_y']:
+        if config['flip_y']:
             points1[:, :, 1] *= -1.0
             points2[:, :, 1] *= -1.0
 
         t0 = 0
         t1 = 250000
         t2 = 500000
-        times_src = get_times(t0).reshape(1, 1, 400)
-        times_tgt = get_times(t1).reshape(1, 1, 400)
+        time_src = get_times(t0).reshape(1, 1, 400)
+        time_tgt = get_times(t1).reshape(1, 1, 400)
         t_ref_src = torch.tensor([0, t1]).reshape(1, 1, 2)
         t_ref_tgt = torch.tensor([t1, t2]).reshape(1, 1, 2)
 
@@ -139,14 +165,26 @@ class TestSteam(unittest.TestCase):
         R_out, t_out = solver.optimize(points2, points1, match_weights, keypoint_ints,
                                          time_tgt, time_src, t_ref_tgt, t_ref_src)
 
-        T_pred = get_T_ba(R_out, t_out, 0, 1)
-        R = T_pred[:3, :3]
-        t = T_pred[:3, 3:]
+        T = get_T_ba(R_out, t_out, 0, 1)
+        if flip_y:
+            T_prime = np.array([[1, 0, 0, 0],[0, -1, 0, 0],[0, 0, -1, 0],[0,0,0,1]])
+            T = T_prime @ T @ T_prime
+        R = T[:3, :3]
+        t = T[:3, 3:]
+        T_gt = np.identity(4, dtype=np.float32)
+        T_gt[:2, :2] = R_gt.numpy()
+        T_gt[:2, 3:] = t_gt.numpy()
 
-        r_err = rotationError(R, R_gt)
-        t_err = translationError(t, t_gt)
-        self.assertTrue(r_err < 1e-4, "Rotation: {} != {}".format(R, R_gt))
-        self.assertTrue(t_err < 1e-4, "Translation: {} != {}".format(t, t_gt))
+        r_err = rotationError(get_inverse_tf(T) @ T_gt)
+        t_err = translationError(get_inverse_tf(T) @ T_gt)
+        self.assertTrue(r_err < 1e-4, "Rotation error: {}, \n{}\n !=\n {}".format(r_err, R, R_gt))
+        self.assertTrue(t_err < 1e-4, "Translation error: {}, \n{}\n !=\n {}".format(t_err, t, t_gt))
+    
+    def test_flip(self):
+        self.test_steam(flip_y=True)
+
+    def test_Tsv(self):
+        self.test_steam(flip_y=False, ex_rotation_sv=[1, 0, 0, 0, -1, 0, 0, 0, -1])
 
 if __name__ == '__main__':
     unittest.main()

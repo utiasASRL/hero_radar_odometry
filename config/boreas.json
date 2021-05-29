@@ -3,7 +3,7 @@
     "dataset": "boreas",
     "data_dir": "/workspace/nas/ASRL/2021-Boreas/",
     "log_dir": "/workspace/Documents/logs/2021-03-04/boreas1_aug026_cnn8_window3_res2240_width640/",
-    "gpuid": "cuda:3",
+    "gpuid": "cuda:1",
     "radar_resolution": 0.0596,
     "cart_resolution": 0.2384,
     "cart_pixel_width": 640,
@@ -37,8 +37,10 @@
         "use_ransac": false,
         "ransac_version": 0,
         "use_ctsteam": false,
-        "ex_translation_vs_in_s": [0, 0, 0]
-
+        "ex_translation_vs_in_s": [0, 0, 0],
+	"ex_rotation_sv": [1, 0, 0, 0, -1, 0, 0, 0, -1],
+        "zero_vel_prior": false,
+        "vel_prior": false
     },
     "lr": 0.00001,
     "weight_decay": 0,
@@ -60,5 +62,6 @@
         "rot_max": 0.26
     },
     "skip": 0,
+    "flip_y": false,
     "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021]
 }
