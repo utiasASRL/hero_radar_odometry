@@ -53,10 +53,23 @@ class SteamSolver():
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src,
                  t_ref_tgt, t_ref_src):
-        """
-            keypoint_coords: B*(W-1)x400x2
-            pseudo_coords: B*(W-1)x400x2
-            match_weights: B*(W-1)xSx400
+        """ Given the matched keypoints locations between the target frames (keypoint_coords) and the
+            source frame (pseudo_coords), this module uses STEAM to estimate the most likely transformations and
+            velocities between frames.
+        Args:
+            keypoint_coords (torch.tensor): (b*(w-1),N,2) target keypoint locations in metric coordinates
+            pseudo_coords (torch.tensor): (b*(w-1),N,2) source keypoint locations in metric coordinates
+            match_weights (torch.tensor): (b*(w-1),S,N) weight associated with each src-tgt match S=score_dim (1=scalar, 3=matrix)
+            keypoint_ints (torch.tensor): (b*w,1,N) Some keypoints are masked out during inference, 1 == keep, 0 == reject
+            time_tgt (torch.tensor): (b*(w-1),400) Timestamps output by the sensor for each azimuth of the polar data
+            tim_src (torch.tensor): (b*(w-1),400) Timestamps output by the sensor for each azimuth of the polar data
+            t_ref_tgt (torch.tensor): (b*(w-1),1,2) Reference times for each target frame
+            t_ref_src (torch.tensor): (b*(w-1),1,2) Reference times for each source frame
+        Returns:
+            The following are components of T_tgt_src (4x4 homogeneous transformation matrix), so the translation is actually
+            the translation from tgt to src as measured in tgt.
+            R_tgt_src_pred (torch.tensor): (b, w, 3, 3) predicted rotation from src to tgt, indexed by window (0=identity)
+            t_tgt_src_pred (torch.tensor): (b, w, 3, 1) predicted translation
         """
         self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
                              (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
@@ -67,7 +80,6 @@ class SteamSolver():
             self.solver_cpp.slideTraj()
         else:
             self.solver_cpp.resetTraj()
-        num_points = keypoint_coords.size(1)
 
         R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
         t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)

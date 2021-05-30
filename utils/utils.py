@@ -4,7 +4,12 @@ import torch
 import torch.nn.functional as F
 
 def get_inverse_tf(T):
-    """Returns the inverse of a given 4x4 homogeneous transform."""
+    """Returns the inverse of a given 4x4 homogeneous transform.
+    Args:
+        T (np.ndarray): 4x4 transformation matrix
+    Returns:
+        np.ndarray: inv(T)
+    """
     T2 = np.identity(4, dtype=np.float32)
     R = T[0:3, 0:3]
     t = T[0:3, 3].reshape(3, 1)
@@ -13,7 +18,14 @@ def get_inverse_tf(T):
     return T2
 
 def get_transform(x, y, theta):
-    """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
+    """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta).
+    Args:
+        x (float): x-translation
+        y (float): y-translation
+        theta (float): rotation
+    Returns:
+        np.ndarray: 4x4 transformation matrix
+    """
     T = np.identity(4, dtype=np.float32)
     T[0:2, 0:2] = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     T[0, 3] = x
@@ -21,13 +33,26 @@ def get_transform(x, y, theta):
     return T
 
 def get_transform2(R, t):
+    """Returns a 4x4 homogeneous 3D transform
+    Args:
+        R (np.ndarray): (3,3) rotation matrix
+        t (np.ndarray): (3,1) translation vector
+    Returns:
+        np.ndarray: 4x4 transformation matrix
+    """
     T = np.identity(4, dtype=np.float32)
     T[0:3, 0:3] = R
     T[0:3, 3] = t.squeeze()
     return T
 
 def enforce_orthog(T, dim=3):
-    """Enforces the orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix."""
+    """Enforces orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix.
+    Args:
+        T (np.ndarray): 4x4 transformation matrix
+        dim (int): dimensionality of the transform 2==2D, 3==3D
+    Returns:
+        np.ndarray: 4x4 transformation matrix with orthogonality conditions on the rotation matrix enforced.
+    """
     if dim == 2:
         if abs(np.linalg.det(T[0:2, 0:2]) - 1) < 1e-10:
             return T
@@ -38,11 +63,13 @@ def enforce_orthog(T, dim=3):
             return T
         a = (R[0, 0] + R[1, 1]) / 2
         b = (-R[1, 0] + R[0, 1]) / 2
-        sum = np.sqrt(a**2 + b**2)
-        a /= sum
-        b /= sum
-        R[0, 0] = a; R[0, 1] = b
-        R[1, 0] = -b; R[1, 1] = a
+        s = np.sqrt(a**2 + b**2)
+        a /= s
+        b /= s
+        R[0, 0] = a
+        R[0, 1] = b
+        R[1, 0] = -b
+        R[1, 1] = a
         T[0:2, 0:2] = R
     if dim == 3:
         if abs(np.linalg.det(T[0:3, 0:3]) - 1) < 1e-10:
@@ -59,6 +86,13 @@ def enforce_orthog(T, dim=3):
     return T
 
 def carrot(xbar):
+    """Overloaded operator. converts 3x1 vectors into a member of Lie Alebra so(3)
+        Also, converts 6x1 vectors into a member of Lie Algebra se(3)
+    Args:
+        xbar (np.ndarray): if 3x1, xbar is a vector of rotation angles, if 6x1 a vector of 3 trans and 3 rot angles.
+    Returns:
+        np.ndarray: Lie Algebra 3x3 matrix so(3) if input 3x1, 4x4 matrix se(3) if input 6x1.
+    """
     x = xbar.squeeze()
     if x.shape[0] == 3:
         return np.array([[0, -x[2], x[1]],
@@ -69,12 +103,17 @@ def carrot(xbar):
                          [x[5], 0, -x[3], x[1]],
                          [-x[4], x[3], 0, x[2]],
                          [0, 0, 0, 1]])
-    else:
-        print('WARNING: attempted carrot operator on invalid vector shape')
-        return xbar
+    print('WARNING: attempted carrot operator on invalid vector shape')
+    return xbar
 
 def se3ToSE3(xi):
-    """Lie Vector xi = [rho, phi]^T (6 x 1) --> SE(3) T = [C, R; 0 0 0 1] (4 x 4)"""
+    """Converts 6x1 vectors representing the Lie Algebra, se(3) into a 4x4 homogeneous transform in SE(3)
+        Lie Vector xi = [rho, phi]^T (6 x 1) --> SE(3) T = [C, r; 0 0 0 1] (4 x 4)
+    Args:
+        xi (np.ndarray): 6x1 vector
+    Returns:
+        np.ndarray: 4x4 transformation matrix
+    """
     T = np.identity(4, dtype=np.float32)
     rho = xi[0:3].reshape(3, 1)
     phibar = xi[3:6].reshape(3, 1)
@@ -92,7 +131,13 @@ def se3ToSE3(xi):
     return T
 
 def SE3tose3(T):
-    """SE(3) T = [C, R; 0 0 0 1] (4 x 4) --> Lie Vector xi = [rho, phi]^T (6 x 1)"""
+    """Converts 4x4 homogeneous transforms in SE(3) to 6x1 vectors representing the Lie Algebra, se(3)
+        SE(3) T = [C, r; 0 0 0 1] (4 x 4) --> Lie Vector xi = [rho, phi]^T (6 x 1)
+    Args:
+        T (np.ndarray): 4x4 transformation matrix
+    Returns:
+        np.ndarray: 6x1 vector
+    """
     R = T[0:3, 0:3]
     evals, evecs = np.linalg.eig(R)
     idx = -1
@@ -107,26 +152,51 @@ def SE3tose3(T):
     if phi != 0:
         I = np.identity(3)
         J = I * np.sin(phi) / phi + (1 - np.sin(phi) / phi) * abar @ abar.T + \
-                carrot(abar) * (1 - np.cos(phi)) / phi
+            carrot(abar) * (1 - np.cos(phi)) / phi
         rho = np.linalg.inv(J) @ rho
     xi = np.zeros((6, 1))
     xi[0:3, 0:] = rho
     xi[3:, 0:] = phi * abar
     return xi
 
-# Use axis-angle representation to get a single number for rotation error
 def rotationError(T):
+    """Calculates a single rotation value corresponding to the upper-left 3x3 rotation matrix.
+        Uses axis-angle representation to get a single number for rotation
+    Args:
+        T (np.ndarray): 4x4 transformation matrix T = [C, r; 0 0 0 1]
+    Returns:
+        float: rotation
+    """
     d = 0.5 * (np.trace(T[0:3, 0:3]) - 1)
     return np.arccos(max(min(d, 1.0), -1.0))
 
 def translationError(T, dim=2):
+    """Calculates a euclidean distance corresponding to the translation vector within a 4x4 transform.
+    Args:
+        T (np.ndarray): 4x4 transformation matrix T = [C, r; 0 0 0 1]
+        dim (int): If dim=2 we only use x,y, otherwise we use all dims.
+    Returns:
+        float: translation distance
+    """
     if dim == 2:
         return np.sqrt(T[0, 3]**2 + T[1, 3]**2)
-    if dim == 3:
-        return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
+    return np.sqrt(T[0, 3]**2 + T[1, 3]**2 + T[2, 3]**2)
 
 def computeMedianError(T_gt, T_pred):
-    """Computes the median translation and rotation error along with their standard deviations."""
+    """Computes the median translation and rotation errors along with their standard deviations.
+    Args:
+        T_gt (List[np.ndarray]): each entry in list is 4x4 transformation matrix
+        T_pred (List[np.ndarray]): each entry in list is 4x4 transformation matrix
+    Returns:
+        t_err_med (float): median translation error
+        t_err_std (float): standard dev translation error
+        r_err_med (float): median rotation error
+        r_err_std (float): standard dev rotation error
+        t_err_mean (float): mean translation error
+        r_err_mean (float): mean rotation error
+        t_error (List[float]): list of all translation errors
+        r_error (List[float]): list of all rotation errors
+    """
     t_error = []
     r_error = []
     for i, T in enumerate(T_gt):
@@ -139,7 +209,12 @@ def computeMedianError(T_gt, T_pred):
             np.mean(r_error), t_error, r_error]
 
 def trajectoryDistances(poses):
-    """Calculates path length along the trajectory."""
+    """Calculates path length along the trajectory.
+    Args:
+        poses (List[np.ndarray]): list of 4x4 poses (T_2_1 from current to next)
+    Returns:
+        List[float]: distance along the trajectory, increasing as a function of time / list index
+    """
     dist = [0]
     for i in range(1, len(poses)):
         P1 = get_inverse_tf(poses[i - 1])
@@ -150,12 +225,28 @@ def trajectoryDistances(poses):
     return dist
 
 def lastFrameFromSegmentLength(dist, first_frame, length):
+    """Retrieves the index of the last frame for our current analysis.
+        last_frame should be 'dist' meters away from first_frame in terms of distance traveled along the trajectory.
+    Args:
+        dist (List[float]): distance along the trajectory, increasing as a function of time / list index
+        first_frame (int): index of the starting frame for this sequence
+        length (float): length of the current segment being evaluated
+    Returns:
+        last_frame (int): index of the last frame in this segment
+    """
     for i in range(first_frame, len(dist)):
         if dist[i] > dist[first_frame] + length:
             return i
     return -1
 
 def calcSequenceErrors(poses_gt, poses_pred):
+    """Calculate the translation and rotation error for each subsequence across several different lengths.
+    Args:
+        T_gt (List[np.ndarray]): each entry in list is 4x4 transformation matrix, ground truth transforms
+        T_pred (List[np.ndarray]): each entry in list is 4x4 transformation matrix, predicted transforms
+    Returns:
+        err (List[Tuple]) each entry in list is [first_frame, r_err, t_err, length, speed]
+    """
     lengths = [100, 200, 300, 400, 500, 600, 700, 800]
     err = []
     step_size = 4  # Every second
@@ -180,6 +271,7 @@ def calcSequenceErrors(poses_gt, poses_pred):
     return err
 
 def getStats(err):
+    """Computes the average translation and rotation within a sequence (across subsequences of diff lengths)."""
     t_err = 0
     r_err = 0
     for e in err:
@@ -190,11 +282,16 @@ def getStats(err):
     return t_err, r_err
 
 def computeKittiMetrics(T_gt, T_pred, seq_lens):
-    """
-        Computes the translational (%) and rotational drift (deg/m) in the KITTI style.
-        T_gt: List of 4x4 homogeneous transforms (Frame t to Frame t+1)
-        T_pred: List of 4x4 homogeneous transforms (Frame t to Frame t+1)
-        seq_lens: List of sequence lengths
+    """Computes the translational (%) and rotational drift (deg/m) in the KITTI style.
+        KITTI rotation and translation metrics are computed for each sequence individually and then
+        averaged across the sequences.
+    Args:
+        T_gt (List[np.ndarray]): List of 4x4 homogeneous transforms (Frame t to Frame t+1)
+        T_pred (List[np.ndarray]): List of 4x4 homogeneous transforms (Frame t to Frame t+1)
+        seq_lens (List[int]): List of sequence lengths
+    Returns:
+        t_err: Average KITTI Translation ERROR (%)
+        r_err: Average KITTI Rotation Error (deg / m)
     """
     seq_indices = []
     idx = 0
@@ -221,7 +318,7 @@ def computeKittiMetrics(T_gt, T_pred, seq_lens):
     avg = np.mean(err_list, axis=0)
     t_err = avg[0]
     r_err = avg[1]
-    return t_err * 100, r_err * 180 / np.pi, err
+    return t_err * 100, r_err * 180 / np.pi
 
 def saveKittiErrors(err, fname):
     pickle.dump(err, open(fname, 'wb'))
@@ -230,7 +327,14 @@ def loadKittiErrors(fname):
     return pickle.load(open(fname, 'rb'))
 
 def save_in_yeti_format(T_gt, T_pred, timestamps, seq_lens, seq_names, root='./'):
-    """This function converts outputs to a format that is backwards compatible with the yeti repository."""
+    """This function converts outputs to a file format that is backwards compatible with the yeti repository.
+    Args:
+        T_gt (List[np.ndarray]): each entry in list is 4x4 transformation matrix, ground truth transforms
+        T_pred (List[np.ndarray]): each entry in list is 4x4 transformation matrix, predicted transforms
+        seq_lens (List[int]): length of each sequence in number of frames
+        seq_names (List[AnyStr]): name of each sequence
+        root (AnyStr): name of the root data folder
+    """
     seq_indices = []
     idx = 0
     for s in seq_lens:
@@ -252,6 +356,14 @@ def save_in_yeti_format(T_gt, T_pred, timestamps, seq_lens, seq_names, root='./'
                                                            timestamps[i][0], timestamps[i][1]))
 
 def load_icra21_results(results_loc, seq_names, seq_lens):
+    """Loads ICRA 2021 results for MC-RANSAC (Burnett et al.) on the Oxford Radar Dataset.
+    Args:
+        results_loc (AnyStr): path to the folder containing the results.
+        seq_names (List[AnyStr]): names of the sequences that we want results for.
+        seq_lens (List[int]): length of each sequence in number of frames
+    Returns:
+        T_icra (List[np.ndarray]): each entry in list is 4x4 transformation matrix, MC-RANSAC results.
+    """
     T_icra = []
     for i, seq_name in enumerate(seq_names):
         fname = results_loc + 'accuracy' + seq_name + '.csv'
@@ -273,17 +385,30 @@ def load_icra21_results(results_loc, seq_names, seq_lens):
     return T_icra
 
 def normalize_coords(coords_2D, width, height):
-    """Normalizes coords_2D (BW x N x 2) to be within [-1, 1] """
+    """Normalizes coords_2D (BW x N x 2) in pixel coordinates to be within [-1, 1]
+    Args:
+        coords_2D (torch.tensor): (b*w,N,2)
+        width (float): width of the image in pixels
+        height (float): height of the image in pixels
+    Returns:
+        torch.tensor: (b*w,N,2) coordinates normalized to be within [-1,1]
+    """
     batch_size = coords_2D.size(0)
     u_norm = (2 * coords_2D[:, :, 0].reshape(batch_size, -1) / (width - 1)) - 1
     v_norm = (2 * coords_2D[:, :, 1].reshape(batch_size, -1) / (height - 1)) - 1
     return torch.stack([u_norm, v_norm], dim=2)  # BW x num_patches x 2
 
 def convert_to_radar_frame(pixel_coords, config):
+    """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame.
+    Args:
+        pixel_coords (torch.tensor): (B,N,2) pixel coordinates
+        config (json): parse configuration file
+    Returns:
+        torch.tensor: (B,N,2) metric coordinates
+    """
     cart_pixel_width = config['cart_pixel_width']
     cart_resolution = config['cart_resolution']
     gpuid = config['gpuid']
-    """Converts pixel_coords (B x N x 2) from pixel coordinates to metric coordinates in the radar frame."""
     if (cart_pixel_width % 2) == 0:
         cart_min_range = (cart_pixel_width / 2 - 0.5) * cart_resolution
     else:
@@ -293,8 +418,10 @@ def convert_to_radar_frame(pixel_coords, config):
     t = torch.tensor([[cart_min_range], [-cart_min_range]]).expand(B, 2, N).to(gpuid)
     return (torch.bmm(R, pixel_coords.transpose(2, 1)) + t).transpose(2, 1)
 
-# Used with UnderTheRadar
 def get_indices(batch_size, window_size):
+    """Retrieves batch indices for for source and target frames.
+       This is intended to be used with the UnderTheRadar model.
+    """
     src_ids = []
     tgt_ids = []
     for i in range(batch_size):
@@ -304,8 +431,10 @@ def get_indices(batch_size, window_size):
             tgt_ids.append(idx + 1)
     return src_ids, tgt_ids
 
-# Used with HERO
 def get_indices2(batch_size, window_size, asTensor=False):
+    """Retrieves batch indices for for source and target frames.
+       This is intended to be used with the HERO model.
+    """
     src_ids = []
     tgt_ids = []
     for i in range(batch_size):
@@ -317,14 +446,21 @@ def get_indices2(batch_size, window_size, asTensor=False):
         src_ids = np.asarray(src_ids, dtype=np.int64)
         tgt_ids = np.asarray(tgt_ids, dtype=np.int64)
         return torch.from_numpy(src_ids), torch.from_numpy(tgt_ids)
-    else:
-        return src_ids, tgt_ids
+    return src_ids, tgt_ids
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
 def get_T_ba(out, a, b):
+    """Retrieves the transformation matrix from a to b given the output of the DNN.
+    Args:
+        out (dict): output of the DNN, contains the predicted transforms.
+        a (int): index of the start frame
+        b (int): index of the end frame
+    Returns:
+        np.ndarray: 4x4 transformation matrix T_ba from a to b
+    """
     T_b0 = np.eye(4)
     T_b0[:3, :3] = out['R'][0, b].detach().cpu().numpy()
     T_b0[:3, 3:4] = out['t'][0, b].detach().cpu().numpy()
@@ -334,12 +470,17 @@ def get_T_ba(out, a, b):
     return np.matmul(T_b0, get_inverse_tf(T_a0))
 
 def convert_to_weight_matrix(w, window_id, T_aug=[]):
-    """
-        w: n_points x S
-        This function converts the S-dimensional weights estimated for each keypoint into
+    """This function converts the S-dimensional weights estimated for each keypoint into
         a 2x2 weight (inverse covariance) matrix for each keypoint.
         If S = 1, Wout = diag(exp(w), exp(w), 1e4)
         If S = 3, use LDL^T to obtain 2x2 covariance, place on top-LH corner. 1e4 bottom-RH corner.
+    Args:
+        w (torch.tensor): (n_points, S), S = score_dim, S=1=scalar, S=3=matrix
+        window_id (int): index of the window currently being analyzed
+        T_aug (torch.tensor): optional argument which is passed from data augmention with random rotations.
+    Returns:
+        A (torch.tensor): (n_points,3,3) 3x3 weight matrices
+        d (torch.tensor): (n_points, 3) 3-dim weight vectors (diagonal of the weight matrices)
     """
     z_weight = 9.2103  # 9.2103 = log(1e4), 1e4 is inverse variance of 1cm std dev
     if w.size(1) == 1:
@@ -377,9 +518,15 @@ def convert_to_weight_matrix(w, window_id, T_aug=[]):
     return A, d
 
 def mask_intensity_filter(data, patch_size, patch_mean_thres=0.05):
-    """ Given a cartesian mask of likely target pixels (data), this function computes the percentage of
+    """Given a cartesian mask of likely target pixels (data), this function computes the percentage of
         likely target pixels in a given square match of the input. The output is a list of booleans indicate whether
         each patch either has more (True) or less (False) % likely target pixels than the patch_mean_thres.
+    Args:
+        data (torch.tensor): input 2D binary mask (b*w, 1, H, W)
+        patch_size (int): size of patches in pixels
+        patch_mean_thres (float): ratio of pixels within a patch that need to be 1 for it to be kept
+    Returns:
+        torch.tensor: (b*w,1,num_patches) for each patch, 0 == reject, 1 == keep
     """
     int_patches = F.unfold(data, kernel_size=patch_size, stride=patch_size)
     keypoint_int = torch.mean(int_patches, dim=1, keepdim=True)  # BW x 1 x num_patches
@@ -391,19 +538,19 @@ def wrapto2pi(phi):
         return phi + 2 * np.pi * np.ceil(phi / (-2 * np.pi))
     elif phi >= 2 * np.pi:
         return (phi / (2 * np.pi) % 1) * 2 * np.pi
-    else:
-        return phi
+    return phi
 
 def getApproxTimeStamps(points, times, flip_y=False):
-    """ Retrieves the approximate timestamp of each target point
-        points: List of np.array() (N, 2)
-        times: List of np.array() (400,) * time at each azimuth
-        Out: List of np.array() (N,)
+    """Retrieves the approximate timestamp of each target point.
+    Args:
+        points (List[np.ndarray]): each entry in list is (N,2)
+        times (List[np.ndarray]): each entry in list is (400,) corresponding to timestamps from sensor for each azimuth
+    Returns:
+        List[np.ndarray]: each entry in list is (N,) corresponding to the interpolated time for each measurement.
     """
     azimuth_step = (2 * np.pi) / 400
     timestamps = []
-    BW = len(points)  # batch * window_size
-    for i in range(len(points)):
+    for i, p in enumerate(points):
         p = points[i]
         ptimes = times[i]
         delta_t = ptimes[-1] - ptimes[-2]
@@ -427,18 +574,21 @@ def getApproxTimeStamps(points, times, flip_y=False):
     return timestamps
 
 def undistort_pointcloud(points, point_times, t_refs, solver):
-    """ Removes motion distortion from pointclouds
-        points: List of np.array() (N, 2-4)
-        point_times: List of np.array() (N,) * time at each point
-        t_refs: A reference time for each pointcloud, transform each point into the sensor frame at this time.
+    """Removes motion distortion from pointclouds.
+    Args:
+        points (List[np.ndarray]): each entry in list is (N, 2-4)
+        point_times (List[np.ndarray]): each entry in list is (N,) timestamp for each point
+        t_refs (List[int]): Reference time for each pointcloud, transform each point into the sensor frame at this time.
+    Returns:
+        List[np.ndarray]: pointclouds with motion distortion removed.
     """
-    for i in range(len(points)):
+    for i, p in enumerate(points):
         p = points[i]
         ptimes = point_times[i]
         t_ref = t_refs[i]
-        for j in range(M):
+        for j, ptime in enumerate(ptimes):
             T_0a = np.identity(4, dtype=np.float32)
-            solver.getPoseBetweenTimes(T_0a, ptimes[j], t_ref)
+            solver.getPoseBetweenTimes(T_0a, ptime, t_ref)
             pbar = T_0a @ p[j].reshape(4, 1)
             p[j, :] = pbar[:]
         points[i] = p

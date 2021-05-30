@@ -17,12 +17,16 @@ class SoftmaxMatcher(nn.Module):
 
     def forward(self, keypoint_scores, keypoint_desc, scores_dense, desc_dense):
         """
-            keypoint_scores: BWx1xN
-            keypoint_desc: BWxCxN
-            scores_dense: BWx1xHxW
-            desc_dense: BWxCxHxW
+        Args:
+            keypoint_scores (torch.tensor): (b*w,1,N)
+            keypoint_desc (torch.tensor): (b*w,C,N)
+            scores_dense (torch.tensor): (b*w,1,H,W)
+            desc_dense (torch.tensor): (b*w,C,H,W)
+        Returns:
+            pseudo_coords (torch.tensor): (b,N,2)
+            match_weights (torch.tensor): (b,1,N)
+            kp_inds (List[int]): length(b) indices along batch dimension for 'keypoint' data
         """
-        # TODO: loop if window_size is greater than 2 (for cycle loss)
         BW, encoder_dim, n_points = keypoint_desc.size()
         batch_size = int(BW / self.window_size)
         _, _, height, width = desc_dense.size()

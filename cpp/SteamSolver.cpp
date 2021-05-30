@@ -1,3 +1,10 @@
+//////////////////////////////////////////////////////////////////////////////////////////////
+/// \file SteamSolver.cpp
+///
+/// \author David Yoon, Keenan Burnett
+/// \brief A C++ class with a boost::python wrapper for optimizing odometry poses over a sliding
+///     window with a motion prior.
+//////////////////////////////////////////////////////////////////////////////////////////////
 #include <iostream>
 #include "SteamSolver.hpp"
 #include "P2P3ErrorEval.hpp"
@@ -89,14 +96,14 @@ void SteamSolver::optimize() {
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
     if (vel_prior_) {
-    	Eigen::Matrix<double,6,1> velocity = states_[0].velocity->getValue();
-    	// velocity[1] = 0;  // encourage lateral velocity to be close to zero
-    	Eigen::Matrix<double, 6, 6> vel_cov;
-    	vel_cov.setZero();
-   	Eigen::Array<double, 1, 6> vel_cov_diag;
-    	vel_cov_diag << 1, 1, 1, 1, 1, 1;
-    	vel_cov.diagonal() = vel_cov_diag;
-    	traj.addVelocityPrior(steam::Time(0.0), velocity, vel_cov);
+        Eigen::Matrix<double, 6, 1> velocity = states_[0].velocity->getValue();
+        // velocity[1] = 0;  // encourage lateral velocity to be close to zero
+        Eigen::Matrix<double, 6, 6> vel_cov;
+        vel_cov.setZero();
+           Eigen::Array<double, 1, 6> vel_cov_diag;
+        vel_cov_diag << 1, 1, 1, 1, 1, 1;
+        vel_cov.diagonal() = vel_cov_diag;
+        traj.addVelocityPrior(steam::Time(0.0), velocity, vel_cov);
     }
     traj.appendPriorCostTerms(costTerms);
 

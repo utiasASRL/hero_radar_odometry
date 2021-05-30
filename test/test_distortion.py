@@ -14,11 +14,9 @@ def wrapto2pi(phi):
         return phi + 2 * np.pi
     elif phi >= 2 * np.pi:
         return phi - 2 * np.pi
-    else:
-        return phi
+    return phi
 
 def get_lines(vertices):
-    eps = 1e-8
     N = vertices.shape[0]
     lines = np.zeros((7, N - 1))
     for i in range(N - 1):
@@ -28,7 +26,7 @@ def get_lines(vertices):
         y2 = vertices[i+1, 1]
         phi = wrapto2pi(np.arctan2(y2 - y1, x2 - x1))
         if (0 <= phi and phi < 0.25 * PI) or (0.75 * PI <= phi and phi < 1.25 * PI) or \
-            (1.75 * PI <= phi and phi < 2 * PI):
+                (1.75 * PI <= phi and phi < 2 * PI):
             m = (y2 - y1) / (x2 - x1)
             b = y1 - m * x1
             flag = False
@@ -60,7 +58,14 @@ class TestDistortion(unittest.TestCase):
 
         lines = get_lines(square)
 
-        x1 = []; y1 = []; x2 = []; y2 = []; a1 = []; a2 = []; t1 = []; t2 = [];
+        x1 = []
+        y1 = []
+        x2 = []
+        y2 = []
+        a1 = []
+        a2 = []
+        t1 = []
+        t2 = []
 
         delta_t = 0.25 / 400.0
         time = 0.0
@@ -68,7 +73,9 @@ class TestDistortion(unittest.TestCase):
         desc1 = np.zeros((400, 2))
         desc2 = np.zeros((400, 2))
 
-        x_pos_vec = []; y_pos_vec = []; theta_pos_vec = [];
+        x_pos_vec = []
+        y_pos_vec = []
+        theta_pos_vec = []
 
         for scan in range(2):
             for i in range(400):
@@ -96,7 +103,7 @@ class TestDistortion(unittest.TestCase):
                     t2.append(time * 1e6)
 
                 if (0 <= theta and theta < 0.25 * PI) or (0.75 * PI <= theta and theta < 1.25 * PI) or \
-                    (1.75 * PI <= theta and theta < 2 * PI):
+                        (1.75 * PI <= theta and theta < 2 * PI):
                     m = np.tan(theta)
                     b = y_pos - m * x_pos
                     flag = False
@@ -127,17 +134,17 @@ class TestDistortion(unittest.TestCase):
                         x_int = m * y_int + b
 
                     if (0 <= theta and theta < PI and (y_int - y_pos) < 0) or \
-                        (PI <= theta and theta < 2 * PI and (y_int - y_pos) > 0):
+                            (PI <= theta and theta < 2 * PI and (y_int - y_pos) > 0):
                         continue
-                    if  (((0 <= theta and theta < 0.5 * PI) or (1.5 * PI <= theta and theta < 2 * PI)) and
-                        (x_int - x_pos) < 0) or \
-                        (0.5 * PI <= theta and theta < 1.5 * PI and (x_int - x_pos) > 0):
+                    if (((0 <= theta and theta < 0.5 * PI) or (1.5 * PI <= theta and theta < 2 * PI)) and
+                            (x_int - x_pos) < 0) or \
+                            (0.5 * PI <= theta and theta < 1.5 * PI and (x_int - x_pos) > 0):
                         continue
                     x_range = [lines[3, j], lines[5, j]]
                     y_range = [lines[4, j], lines[6, j]]
                     x_range.sort()
                     y_range.sort()
-                    #if x_int < x_range[0] or x_int > x_range[1] or y_int < y_range[0] or y_int > y_range[1]:
+                    # if x_int < x_range[0] or x_int > x_range[1] or y_int < y_range[0] or y_int > y_range[1]:
                     #    continue
 
                     d = (x_pos - x_int)**2 + (y_pos - y_int)**2
@@ -207,6 +214,10 @@ class TestDistortion(unittest.TestCase):
         t2 = np.array(t2, dtype=np.int64).reshape((1, 400, 1))
         t1 = torch.from_numpy(t1)
         t2 = torch.from_numpy(t2)
+        t1 = 250000
+        t2 = 500000
+        t_ref_1 = torch.tensor([0, t1]).reshape(1, 1, 2)
+        t_ref_2 = torch.tensor([t1, t2]).reshape(1, 1, 2)
 
         with open('config/steam.json') as f:
             config = json.load(f)
@@ -218,7 +229,7 @@ class TestDistortion(unittest.TestCase):
         config['steam']['use_ctsteam'] = True
 
         solver = SteamSolver(config)
-        R_tgt_src_pred, t_tgt_src_pred = solver.optimize(p2, p1, match_weights, keypoint_ints, t2, t1)
+        R_tgt_src_pred, t_tgt_src_pred = solver.optimize(p2, p1, match_weights, keypoint_ints, t2, t1, t_ref_2, t_ref_1)
         T_pred = np.identity(4)
         T_pred[0:3, 0:3] = R_tgt_src_pred[0, 1].cpu().numpy()
         T_pred[0:3, 3:] = t_tgt_src_pred[0, 1].cpu().numpy()
@@ -239,7 +250,7 @@ class TestDistortion(unittest.TestCase):
         print('T_true:\n{}'.format(T_10))
 
         Terr = T_01 @ T_pred
-        
+
         t_err = translationError(Terr)
         r_err = rotationError(Terr) * 180 / np.pi
 

@@ -1,3 +1,7 @@
+"""
+    Custom sampler classes for randomly (or sequentially) sampling batches of windows.
+    Authors: ASRL
+"""
 from itertools import accumulate
 from torch.utils.data import Sampler, SubsetRandomSampler
 

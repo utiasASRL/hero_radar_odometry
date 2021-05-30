@@ -1,32 +1,49 @@
-import numpy as np
 import torch
 from utils.utils import get_indices, convert_to_weight_matrix
 
-def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config):
+def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config, alpha=10.0):
+    """This function computes the L1 loss between the predicted and groundtruth translation in addition to
+        the rotation loss (R_pred.T * R) - I.
+    Args:
+        R_tgt_src_pred (torch.tensor): (b,3,3) predicted rotation
+        t_tgt_src_pred (torch.tensor): (b,3,1) predicted translation
+        batch (dict): input data for the batch
+        config (json): parsed config file
+    Returns:
+        svd_loss (float): supervised loss
+        dict_loss (dict): a dictionary containing the separate loss components
+    """
     T_21 = batch['T_21'].to(config['gpuid'])
     # Get ground truth transforms
     kp_inds, _ = get_indices(config['batch_size'], config['window_size'])
     T_tgt_src = T_21[kp_inds]
     R_tgt_src = T_tgt_src[:, :3, :3]
     t_tgt_src = T_tgt_src[:, :3, 3].unsqueeze(-1)
-    svd_loss, R_loss, t_loss = SVD_loss(R_tgt_src, R_tgt_src_pred, t_tgt_src, t_tgt_src_pred, config['gpuid'])
+    batch_size = R_tgt_src.size(0)
+    identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(config['gpuid'])
+    loss_fn = torch.nn.L1Loss()
+    R_loss = loss_fn(torch.matmul(R_tgt_src_pred.transpose(2, 1), R_tgt_src), identity)
+    t_loss = loss_fn(t_tgt_src_pred, t_tgt_src)
+    svd_loss = t_loss + alpha * R_loss
     dict_loss = {'R_loss': R_loss, 't_loss': t_loss}
     return svd_loss, dict_loss
 
-def SVD_loss(R, R_pred, t, t_pred, gpuid='cpu', alpha=10.0):
-    batch_size = R.size(0)
-    identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(gpuid)
-    loss_fn = torch.nn.L1Loss()
-    R_loss = alpha * loss_fn(torch.matmul(R_pred.transpose(2, 1), R), identity)
-    t_loss = 1.0 * loss_fn(t_pred, t)
-    svd_loss = R_loss + t_loss
-    return svd_loss, R_loss, t_loss
-
 def unsupervised_loss(out, batch, config, solver):
-    src_coords = out['src']
-    tgt_coords = out['tgt']
-    match_weights = out['match_weights']
-    keypoint_ints = out['keypoint_ints']
+    """This function uses the reprojection between matched pairs of points as a training signal.
+        Transformations aligning pairs of frames are estimated using a non-differentiable estimator.
+    Args:
+        out (dict): The output of the DNN
+        batch (dict): input data for the batch
+        config (json): parsed config file
+        solver: The steam_solver python wrapper class
+    Returns:
+        total_loss (float): unsupervised loss
+        dict_loss (dict): a dictionary containing the separate loss components
+    """
+    src_coords = out['src']                 # (b*(w-1),N,2) src keypoint locations in metric
+    tgt_coords = out['tgt']                 # (b*(w-1),N,2) tgt keypoint locations in metric
+    match_weights = out['match_weights']    # (b*(w-1),S,N) match weights S=1=scalar, S=3=matrix
+    keypoint_ints = out['keypoint_ints']    # (b*w,1,N) 0==reject, 1==keep
     batch_size = config['batch_size']
     window_size = config['window_size']
     gpuid = config['gpuid']
@@ -87,7 +104,7 @@ def unsupervised_loss(out, batch, config, solver):
             elif expect_approx_opt == 1:
                 # sigmapoints
                 Rsp = torch.from_numpy(solver.poses_sp[b, w-i, :, :3, :3]).to(gpuid).unsqueeze(1)  # s x 1 x 3 x 3
-                tsp = torch.from_numpy(solver.poses_sp[b, w-i, :, :3, 3:4]).to(gpuid).unsqueeze(1) # s x 1 x 3 x 1
+                tsp = torch.from_numpy(solver.poses_sp[b, w-i, :, :3, 3:4]).to(gpuid).unsqueeze(1)  # s x 1 x 3 x 1
 
                 points2 = points2[ids].unsqueeze(0)  # 1 x n x 3 x 1
                 points1_in_2 = Rsp @ (points1[ids].unsqueeze(0)) + tsp  # s x n x 3 x 1

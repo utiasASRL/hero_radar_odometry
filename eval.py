@@ -1,16 +1,15 @@
 import argparse
 import json
 from time import time
+import pickle
 import numpy as np
 import torch
-import pickle
 
 from datasets.oxford import get_dataloaders
 from datasets.boreas import get_dataloaders_boreas
 from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
-from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors, save_in_yeti_format, get_T_ba
-from utils.utils import load_icra21_results, getStats, get_inverse_tf
+from utils.utils import computeMedianError, computeKittiMetrics, save_in_yeti_format, get_T_ba, load_icra21_results
 from utils.vis import plot_sequences, draw_matches
 
 torch.backends.cudnn.benchmark = False
@@ -95,16 +94,18 @@ if __name__ == '__main__':
                 w = 0
                 T_gt.append(batch['T_21'][w].numpy().squeeze())
                 T_pred.append(get_T_ba(out, a=w, b=w+1))
-                #print('T_gt:\n{}'.format(T_gt[-1]))
-                #print('T_pred:\n{}'.format(T_pred[-1]))
+                #
+                # print('T_gt:\n{}'.format(T_gt[-1]))
+                # print('T_pred:\n{}'.format(T_pred[-1]))
                 timestamps.append(batch['t_ref'][w].numpy().squeeze())
-            #if batchi == 86:
+            #
+            # if batchi == 86:
             #    draw_matches(batch, out, config, model.solver.solver_cpp)
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)
         time_used_.extend(time_used)
-        t_err, r_err, err = computeKittiMetrics(T_gt, T_pred, [len(T_gt)])
+        t_err, r_err = computeKittiMetrics(T_gt, T_pred, [len(T_gt)])
         print('SEQ: {} : {}'.format(seq_num, seq_names[0]))
         print('KITTI t_err: {} %'.format(t_err))
         print('KITTI r_err: {} deg/m'.format(r_err))
@@ -114,14 +115,15 @@ if __name__ == '__main__':
         pickle.dump([T_gt, T_pred, timestamps], open(root + 'odom' + seq_names[0] + '.obj', 'wb'))
         T_icra = None
         if config['dataset'] == 'oxford':
-            T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
+            if config['compare_yeti']:
+                T_icra = load_icra21_results('./results/icra21/', seq_names, seq_lens)
         fname = root + seq_names[0] + '.pdf'
         plot_sequences(T_gt, T_pred, [len(T_gt)], returnTensor=False, T_icra=T_icra, savePDF=True, fnames=[fname])
 
     print('time_used: {}'.format(sum(time_used_) / len(time_used_)))
     results = computeMedianError(T_gt_, T_pred_)
     with open('errs.obj', 'wb') as f:
-            pickle.dump([nkpts, results[-2], results[-1]], f)
+        pickle.dump([nkpts, results[-2], results[-1]], f)
     print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
 
     t_err = np.mean(t_errs)

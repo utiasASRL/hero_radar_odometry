@@ -109,12 +109,12 @@ if __name__ == '__main__':
                     mname = os.path.join(config['log_dir'], '{}.pt'.format(monitor.counter + 1))
                     print('saving model', mname)
                     torch.save({
-                                'model_state_dict': model.state_dict(),
-                                'optimizer_state_dict': optimizer.state_dict(),
-                                'scheduler_state_dict': scheduler.state_dict(),
-                                'counter': monitor.counter,
-                                'epoch': epoch,
-                                }, mname)
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'scheduler_state_dict': scheduler.state_dict(),
+                        'counter': monitor.counter,
+                        'epoch': epoch,
+                        }, mname)
                     model.train()
             if (monitor.counter + 1) % config['backup_rate'] == 0:
                 with torch.no_grad():
@@ -122,12 +122,12 @@ if __name__ == '__main__':
                     mname = os.path.join(config['log_dir'], 'latest.pt')
                     print('saving model', mname)
                     torch.save({
-                                'model_state_dict': model.state_dict(),
-                                'optimizer_state_dict': optimizer.state_dict(),
-                                'scheduler_state_dict': scheduler.state_dict(),
-                                'counter': monitor.counter,
-                                'epoch': epoch,
-                                }, mname)
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'scheduler_state_dict': scheduler.state_dict(),
+                        'counter': monitor.counter,
+                        'epoch': epoch,
+                        }, mname)
                     model.train()
 
             valid_metric = monitor.step(loss, dict_loss)

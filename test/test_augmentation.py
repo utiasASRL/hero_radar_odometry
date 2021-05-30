@@ -1,9 +1,8 @@
 import unittest
-import json
 import numpy as np
 import torch
 from datasets.transforms import augmentBatch
-from utils.utils import get_inverse_tf, get_transform2, rotationError, translationError
+from utils.utils import get_inverse_tf
 
 def convert_to_metric(pixel_coords, cart_resolution, cart_pixel_width):
     if (cart_pixel_width % 2) == 0:
@@ -61,32 +60,6 @@ class TestAugmentation(unittest.TestCase):
                     break
             outliers += outlier
         self.assertTrue(outliers == 0)
-
-    def test_nn(self):
-        with open('config/test.json') as f:
-            config = json.load(f)
-        _, _, test_loader = get_dataloaders(config)
-        pretrain = ''
-        model = UnderTheRadar(config)
-        model.load_state_dict(torch.load(args.pretrain, map_location=torch.device(config['gpuid'])), strict=False)
-        model.to(config['gpuid'])
-        model.eval()
-
-        for batchi, batch in enumerate(test_loader):
-            batch = augmentBatch(batch, config)
-            out = model(batch)
-            T_gt = batch['T_21'][0].numpy().squeeze()
-            R_pred = out['R'][0].detach().cpu().numpy().squeeze()
-            t_pred = out['t'][0].detach().cpu().numpy().squeeze()
-            T_pred = get_transform2(R_pred, t_pred)
-            break
-
-        print(T_gt)
-        print(T_pred)
-        T_error = np.matmul(T, get_inverse_tf(T_pred))
-        t_error = translationError(T_error)
-        r_error = rotationError(r_error)
-
 
 if __name__ == '__main__':
     unittest.main()

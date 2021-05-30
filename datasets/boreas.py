@@ -10,11 +10,9 @@ from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBa
 from datasets.radar import load_radar, radar_polar_to_cartesian
 from utils.utils import get_inverse_tf, get_transform
 from datasets.oxford import OxfordDataset, mean_intensity_mask
-#import cpp.build.DataLoader as dataloadercpp
 
-CTS350 = 0
+CTS350 = 0    # Oxford
 CIR204 = 1    # Boreas
-#T_prime = np.array([[1, 0, 0, 0],[0, -1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]])
 T_prime = np.array([[1, 0, 0, 0],[0, 1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]])
 
 def roll(r):
@@ -27,20 +25,32 @@ def yaw(y):
     return np.array([[np.cos(y), np.sin(y), 0], [-np.sin(y), np.cos(y), 0], [0, 0, 1]], dtype=np.float64)
 
 def yawPitchRollToRot(y, p, r):
-    """Converts yaw-pitch-roll angles into a 3x3 rotation matrix: SO(3)"""
+    """Converts yaw-pitch-roll angles into a 3x3 rotation matrix: SO(3)
+    Args:
+        y (float): yaw
+        p (float): pitch
+        r (float): roll
+    Returns:
+        np.ndarray: 3x3 rotation matrix
+    """
     Y = yaw(y)
     P = pitch(p)
     R = roll(r)
     C = np.matmul(P, Y)
     return np.matmul(R, C)
 
-def rotToYawPitchRoll(C, eps = 1e-15):
-    """Converts a 3x3 rotation matrix SO(3) to yaw-pitch-roll angles."""
+def rotToYawPitchRoll(C):
+    """Converts a 3x3 rotation matrix SO(3) to yaw-pitch-roll angles
+    Args:
+        C (np.ndarray): 3x3 rotation matrix
+    Returns:
+        List[float]: yaw, pitch, roll angles
+    """
     i = 2
     j = 1
     k = 0
     c_y = np.sqrt(C[i, i]**2 + C[j, i]**2)
-    if c_y > eps:
+    if c_y > 1e-15:
         r = np.arctan2(C[j, i], C[i, i])
         p = np.arctan2(-C[k, i], c_y)
         y = np.arctan2(C[k, j], C[k, k])
@@ -51,8 +61,12 @@ def rotToYawPitchRoll(C, eps = 1e-15):
     return y, p, r
 
 def get_transform_boreas(gt):
-    """Retrieve 4x4 homogeneous transform for a given parsed line of the ground truth csv for the pose of the sensor"""
-    # gt: list of floats or doubles
+    """Retrieve 4x4 homogeneous transform for a given parsed line of the ground truth pose csv
+    Args:
+        gt (List[float]): parsed line from ground truth csv file
+    Returns:
+        np.ndarray: 4x4 transformation matrix (pose of sensor)
+    """
     T = np.identity(4, dtype=np.float64)
     C_enu_sensor = yawPitchRollToRot(gt[10], gt[9], gt[8])
     T[0, 3] = gt[2]
@@ -65,17 +79,29 @@ class BoreasDataset(OxfordDataset):
     """Boreas Radar Dataset"""
     def __init__(self, config, split='train'):
         super().__init__(config, split)
-        self.navtech_version = CTS350
+        self.navtech_version = CIR204
         #self.dataloader = dataloadercpp.DataLoader(self.config['radar_resolution'], self.config['cart_resolution'],
         #                                           self.config['cart_pixel_width'], self.navtech_version)
 
     def get_frames_with_gt(self, frames, gt_path):
-        # Drop the last few frame
+        """Retrieves the subset of frames that have groundtruth
+        Args:
+            frames (List[AnyStr]): List of file names
+            gt_path (AnyStr): path to the ground truth csv file
+        Returns:
+            List[AnyStr]: List of file names with ground truth
+        """
         drop = self.config['window_size'] - 1
         return frames[:-drop]
 
     def get_groundtruth_odometry(self, radar_time, gt_path):
-        """For a given time stamp (UNIX INT64), returns 4x4 transformation matrix from current time to next."""
+        """Retrieves the groundtruth 4x4 transform from current time to next
+        Args:
+            radar_time (int): UNIX INT64 time stamp that we want groundtruth for (also the filename for radar)
+            gt_path (AnyStr): path to the ground truth csv file
+        Returns:
+            np.ndarray: 4x4 transformation matrix from current time to next (T_2_1)
+        """
         def parse(gps_line):
             out = [float(x) for x in gps_line.split(',')]
             out[0] = int(gps_line.split(',')[0])
@@ -152,7 +178,14 @@ class BoreasDataset(OxfordDataset):
                 'azimuths': azimuths, 'timestamps': timestamps}
 
 def get_dataloaders_boreas(config):
-    """Retrieves train, validation, and test data loaders."""
+    """Returns the dataloaders for training models in pytorch.
+    Args:
+        config (json): parsed configuration file
+    Returns:
+        train_loader (DataLoader)
+        valid_loader (DataLoader)
+        test_loader (DataLoader)
+    """
     vconfig = dict(config)
     vconfig['batch_size'] = 1
     train_dataset = BoreasDataset(config, 'train')

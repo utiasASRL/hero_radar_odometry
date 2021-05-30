@@ -1,7 +1,8 @@
+"""
+    PyTorch model for the HERO (Hybrid-Estimate Radar Odometry) network
+    Authors: Keenan Burnett, David Yoon
+"""
 import torch
-import numpy as np
-import torch.nn as nn
-import torch.nn.functional as F
 from networks.unet import UNet
 from networks.keypoint import Keypoint
 from networks.softmax_ref_matcher import SoftmaxRefMatcher

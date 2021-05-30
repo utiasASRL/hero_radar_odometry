@@ -23,16 +23,22 @@ class SoftmaxRefMatcher(nn.Module):
 
     def forward(self, keypoint_scores, keypoint_desc, desc_dense, keypoint_coords):
         """
-            keypoint_scores: BWxSxN
-            keypoint_desc: BWxCxN
-            desc_dense: BWxCxHxW
+        Args:
+            keypoint_scores: (b*w,S,N)
+            keypoint_desc: (b*w,C,N)
+            desc_dense: (b*w,C,H,W)
+        Returns:
+            pseudo_coords (torch.tensor): (b*(w-1),N,2)
+            match_weights (torch.tensor): (b*(w-1),S,N)
+            tgt_ids (torch.tensor): (b*(w-1),) indices along batch dimension for target data
+            src_ids (torch.tensor): (b*(w-1),) indices along batch dimension for source data
         """
-        bsz, encoder_dim, n_points = keypoint_desc.size()
+        _, encoder_dim, n_points = keypoint_desc.size()
         src_desc_dense = desc_dense[::self.window_size]
         src_desc_unrolled = F.normalize(src_desc_dense.view(self.B, encoder_dim, -1), dim=1)  # B x C x HW
         # build pseudo_coords
         pseudo_coords = torch.zeros((self.B * (self.window_size - 1), n_points, 2),
-                                    device=self.gpuid) # B*(window - 1) x N x 2
+                                    device=self.gpuid)  # B*(window - 1) x N x 2
         tgt_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
         src_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
         # loop for each batch
@@ -45,7 +51,7 @@ class SoftmaxRefMatcher(nn.Module):
                 soft_match_vals = F.softmax(match_vals / self.softmax_temp, dim=2)  # (window - 1) x N x HW
                 pseudo_ids = torch.arange(i * (self.window_size - 1), i * (self.window_size - 1) + self.window_size - 1)
                 pseudo_coords[pseudo_ids] = torch.matmul(self.src_coords_dense.transpose(2, 1),
-                    soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (window - 1) x N x 2
+                                                         soft_match_vals.transpose(2, 1)).transpose(2, 1)  # (w-1)xNx2
                 tgt_ids[pseudo_ids] = win_ids
                 src_ids[pseudo_ids] = i * self.window_size
         else:

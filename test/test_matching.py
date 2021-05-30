@@ -35,7 +35,7 @@ class TestMatching(unittest.TestCase):
         model = SoftmaxMatcher(config)
         model.eval()
 
-        pseudo_coords, _ = model.forward(src_scores, src_desc, tgt_scores_dense, tgt_desc_dense)
+        pseudo_coords, _, _ = model.forward(src_scores, src_desc, tgt_scores_dense, tgt_desc_dense)
 
         # Now we can check whether the pseudo coordinates are the same as our known correspondences:
         outliers = 0

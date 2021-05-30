@@ -2,7 +2,7 @@ import os
 import json
 import numpy as np
 from datasets.interpolate_poses import interpolate_ins_poses, so3_to_euler
-from utils.utils import get_inverse_tf, rotationError
+from utils.utils import get_inverse_tf
 
 def parse(line):
     line = line.split(',')
@@ -16,7 +16,7 @@ if __name__ == '__main__':
     config = 'config/steam.json'
     with open(config) as f:
         config = json.load(f)
-    
+
     T_radar_imu = np.identity(4, dtype=np.float32)
     for i in range(3):
         T_radar_imu[i, 3] = config['steam']['ex_translation_vs_in_s'][i]
@@ -50,11 +50,3 @@ if __name__ == '__main__':
             phi = rpy[0, 2]
             odom = parse(odom_gt[i])
             f.write('{},{},{},{},{},{},{},{},{},{}\n'.format(odom[0], odom[1], T[0, 3], T[1, 3], 0, 0, 0, phi, odom[8], odom[9]))
-
-
-
-
-
-
-
-

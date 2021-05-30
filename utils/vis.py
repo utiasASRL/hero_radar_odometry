@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import torch
 import torchvision.utils as vutils
 from torchvision.transforms import ToTensor
-from utils.utils import get_transform2, enforce_orthog, get_inverse_tf, get_T_ba
+from utils.utils import enforce_orthog, get_inverse_tf, get_T_ba
 from utils.utils import getApproxTimeStamps, wrapto2pi
 
 def convert_plt_to_img():
@@ -67,11 +67,10 @@ def draw_matches(batch, out, config, solver):
 
     keypoint_ints = out['keypoint_ints']
     ids = torch.nonzero(keypoint_ints[0, 0] > 0, as_tuple=False).squeeze(1)
-    ids_cpu = ids.cpu()
     src = out['src_rc'][0, ids].squeeze().detach().cpu().numpy()
     tgt = out['tgt_rc'][0, ids].squeeze().detach().cpu().numpy()
     radar = batch['data'][0].squeeze().numpy()
-    fig, axs = plt.subplots(1, 3, tight_layout=True)
+    _, axs = plt.subplots(1, 3, tight_layout=True)
     # Raw locations overlayed, no transforms
     axs[0].imshow(radar, cmap='gray', extent=(0, 640, 640, 0), interpolation='none')
     axs[0].set_axis_off()
@@ -217,7 +216,7 @@ def draw_batch_steam(batch, out, config):
     p2p_img = convert_plt_to_tensor()
 
     return vutils.make_grid([dscore_img, score_img, radar_img]), vutils.make_grid([match_img, match_img2]), \
-           vutils.make_grid([p2p_img])
+        vutils.make_grid([p2p_img])
 
 def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, savePDF=False, fnames=None, flip=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
@@ -227,8 +226,8 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
         seq_indices.append(list(range(idx, idx + s - 1)))
         idx += (s - 1)
 
-    matplotlib.rcParams.update({'font.size': 16, 'xtick.labelsize' : 16, 'ytick.labelsize' : 16,
-                                'axes.linewidth' : 1.5, 'font.family' : 'serif', 'pdf.fonttype' : 42})
+    matplotlib.rcParams.update({'font.size': 16, 'xtick.labelsize': 16, 'ytick.labelsize': 16,
+                                'axes.linewidth': 1.5, 'font.family': 'serif', 'pdf.fonttype': 42})
     T_flip = np.identity(4)
     T_flip[1, 1] = -1
     T_flip[2, 2] = -1
@@ -268,7 +267,7 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
         plt.grid(color='k', which='both', linestyle='--', alpha=0.75, dashes=(8.5, 8.5))
         plt.axes().set_aspect('equal')
         plt.plot(x_gt, y_gt, 'k', linewidth=2.5, label='GT')
-        if len(x_icra) > 0 and len(y_icra) > 0:
+        if x_icra and y_icra:
             plt.plot(x_icra, y_icra, 'r', linewidth=2.5, label='MC-RANSAC')
         plt.plot(x_pred, y_pred, 'b', linewidth=2.5, label='HERO')
         plt.xlabel('x (m)', fontsize=16)

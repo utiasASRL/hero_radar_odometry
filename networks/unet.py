@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from networks.layers import DoubleConv, OutConv, Down, Up
 
@@ -36,6 +35,15 @@ class UNet(torch.nn.Module):
         self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
+        """ A U-Net style network is used to output dense detector scores, weight scores, and
+            a descriptor map with the same spatial dimensions as the input.
+        Args:
+            x (torch.tensor): (b*w,1,H,W) input 2D data
+        Returns:
+            detector_scores (torch.tensor): (b*w,1,H,W)
+            weight_scores (torch.tensor): (b*w,S,H,W)
+            descriptors (torch.tensor): (b*w,C,H,W)
+        """
         _, _, height, width = x.size()
 
         x1 = self.inc(x)
@@ -48,15 +56,15 @@ class UNet(torch.nn.Module):
         x3_up_pts = self.up2_pts(x4_up_pts, x3)
         x2_up_pts = self.up3_pts(x3_up_pts, x2)
         x1_up_pts = self.up4_pts(x2_up_pts, x1)
-        logits_pts = self.outc_pts(x1_up_pts)
+        detector_scores = self.outc_pts(x1_up_pts)
 
         x4_up_score = self.up1_score(x5, x4)
         x3_up_score = self.up2_score(x4_up_score, x3)
         x2_up_score = self.up3_score(x3_up_score, x2)
         x1_up_score = self.up4_score(x2_up_score, x1)
-        score = self.outc_score(x1_up_score)
+        weight_scores = self.outc_score(x1_up_score)
         if self.score_sigmoid:
-            score = self.sigmoid(score)
+            weight_scores = self.sigmoid(weight_scores)
 
         # Resize outputs of downsampling layers to the size of the original
         # image. Features are interpolated using bilinear interpolation to
@@ -71,4 +79,4 @@ class UNet(torch.nn.Module):
         feature_list = [f1, f2, f3, f4, f5]
         descriptors = torch.cat(feature_list, dim=1)
 
-        return logits_pts, score, descriptors
+        return detector_scores, weight_scores, descriptors

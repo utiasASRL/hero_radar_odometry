@@ -13,7 +13,7 @@ We trained and tested these networks on the [Oxford Radar Robotcar Dataset](http
 | [Under the Radar](https://arxiv.org/abs/2001.10789) | Supervised (L)    | 2.0583                  | 6.7                                          |
 | [RO Cen](https://www.robots.ox.ac.uk/~mobile/Papers/2018ICRA_cen.pdf)          | Unsupervised (HC) | 3.7168                  | 9.5                                          |
 | [MC-RANSAC](https://arxiv.org/abs/2011.03512)       | Unsupervised (HC) | 3.3204                  | 10.95                                        |
-| HERO (Ours)     | Unsupervised (L)  | 2.4076                  | 6.902                                        |
+| HERO (Ours)     | Unsupervised (L)  | 2.4005                  | 6.881                                        |
 
 ## Boreas Data-Taking Platform
 ![Boreas](figs/boreas.jpg "Boreas")
@@ -48,11 +48,30 @@ docker run --gpus all --rm -it \
     hero-image:latest
 ```
 ## Building CPP-STEAM:
-After launching the docker container, cpp code needs to be built:
+After launching the docker container, clone repo and build C++ code:
 ```
+git clone git@github.com:utiasASRL/hero_radar_odometry.git
+cd hero_radar_odometry
 mkdir cpp/build
 cd cpp/build
 cmake .. && make
+```
+
+# Getting Started
+To train a new model, we provide `train.py`, which can be used as follows:
+
+```
+python train.py --pretrain <optional_pretrained_model_path> --config <config_file_path>
+```
+
+Note that we publish training results to (tensorboard)[https://pytorch.org/docs/stable/tensorboard.html].
+
+As a convenience, we have provided pre-trained models and their associated config files which can be downloaded using `download_models.sh`.
+
+To evaluate a trained model, use `eval.py` with the following format:
+
+```
+python eval.py --pretrain <pretrained_model_path> --config <config_file_path>
 ```
 
 # Network Configuration
@@ -75,15 +94,7 @@ cmake .. && make
 
 # TODO Items
 
-- [ ] Test cleaned up code for regression
-- [ ] Add doc strings and delete unused code
-- [ ] Add input object types to functions, tensor shapes
-- [ ] Add example usage to README
+- [ ] Test the docker build instructions (add opencv)
 - [ ] Test UnderTheRadar implementation
 - [ ] Test "test" modules
-- [ ] Add script for downloading HERO odometry results
-- [ ] Add script for downloading pre-trained models
 - [ ] Train with batchsize > 2
-- [ ] Test the docker build instructions (add opencv)
-- [ ] Update docker with new deps (torch, torchvision)
-- [ ] Removed unused config options

@@ -37,7 +37,7 @@
         "use_ransac": false,
         "ransac_version": 0,
         "use_ctsteam": false,
-        "ex_translation_vs_in_s": [0, 0, 0],
+        "ex_translation_vs_in_s": [-0.26, 0, 0],
         "ex_rotation_sv": [1, 0, 0, 0, -1, 0, 0, 0, -1],
         "zero_vel_prior": false,
         "vel_prior": false

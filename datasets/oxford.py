@@ -12,7 +12,15 @@ from datasets.interpolate_poses import interpolate_ins_poses
 from utils.utils import get_inverse_tf
 
 def get_transform_oxford(x, y, theta):
-    """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
+    """Returns a 4x4 homogeneous 3D transform for given 2D parameters (x, y, theta).
+    Note: (x,y) are position of frame 2 wrt frame 1 as measured in frame 1.
+    Args:
+        x (float): x translation
+        x (float): y translation
+        theta (float): rotation
+    Returns:
+        np.ndarray: 4x4 transformation matrix from next time to current (T_1_2)
+    """
     T = np.identity(4, dtype=np.float32)
     T[0:2, 0:2] = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     T[0, 3] = x
@@ -20,19 +28,38 @@ def get_transform_oxford(x, y, theta):
     return T
 
 def get_sequences(path, prefix='2019'):
-    """Retrieves a list of all the sequences in the dataset with the given prefix."""
+    """Retrieves a list of all the sequences in the dataset with the given prefix.
+        Sequences are subfolders underneath 'path'
+    Args:
+        path (AnyStr): path to the root data folder
+        prefix (AnyStr): each sequence / subfolder must begin with this common string.
+    Returns:
+        List[AnyStr]: List of sequences / subfolder names.
+    """
     sequences = [f for f in os.listdir(path) if prefix in f]
     sequences.sort()
     return sequences
 
 def get_frames(path, extension='.png'):
-    """Retrieves all the file names within a path that match the given extension."""
+    """Retrieves all the file names within a path that match the given extension.
+    Args:
+        path (AnyStr): path to the root/sequence/sensor/ folder
+        extension (AnyStr): each data frame must end with this common string.
+    Returns:
+        List[AnyStr]: List of frames / file names.
+    """
     frames = [f for f in os.listdir(path) if extension in f]
     frames.sort()
     return frames
 
 def mean_intensity_mask(polar_data, multiplier=3.0):
-    """Tresholds on multiplier*np.mean(azimuth_data) to create a polar mask of likely target points."""
+    """Thresholds on multiplier*np.mean(azimuth_data) to create a polar mask of likely target points.
+    Args:
+        polar_data (np.ndarray): num_azimuths x num_range_bins polar data
+        multiplier (float): multiple of mean that we treshold on
+    Returns:
+        np.ndarray: binary polar mask corresponding to likely target points
+    """
     num_azimuths, range_bins = polar_data.shape
     mask = np.zeros((num_azimuths, range_bins))
     for i in range(num_azimuths):
@@ -66,7 +93,13 @@ class OxfordDataset(Dataset):
             self.frames.extend(seq_frames)
 
     def get_sequences_split(self, sequences, split):
-        """Retrieves a list of sequence names depending on train/validation/test split."""
+        """Retrieves a list of sequence names depending on train/validation/test split.
+        Args:
+            sequences (List[AnyStr]): list of all the sequences, sorted lexicographically
+            split (List[int]): indices of a specific split (train or val or test) aftering sorting sequences
+        Returns:
+            List[AnyStr]: list of sequences that belong to the specified split
+        """
         self.split = self.config['train_split']
         if split == 'validation':
             self.split = self.config['validation_split']
@@ -75,9 +108,15 @@ class OxfordDataset(Dataset):
         return [seq for i, seq in enumerate(sequences) if i in self.split]
 
     def get_frames_with_gt(self, frames, gt_path):
-        """Returns a subset of the specified file list which have ground truth."""
-        # For the Oxford Dataset we do a search from the end backwards because some
-        # of the sequences don't have GT as the end, but they all have GT at the beginning.
+        """Retrieves the subset of frames that have groundtruth
+        Note: For the Oxford Dataset we do a search from the end backwards because some
+            of the sequences don't have GT as the end, but they all have GT at the beginning.
+        Args:
+            frames (List[AnyStr]): List of file names
+            gt_path (AnyStr): path to the ground truth csv file
+        Returns:
+            List[AnyStr]: List of file names with ground truth
+        """
         def check_if_frame_has_gt(frame, gt_lines):
             for i in range(len(gt_lines) - 1, -1, -1):
                 line = gt_lines[i].split(',')
@@ -96,7 +135,15 @@ class OxfordDataset(Dataset):
         return frames_out
 
     def get_groundtruth_odometry(self, radar_time, gt_path):
-        """For a given time stamp (UNIX INT64), returns 4x4 transformation matrix from current time to next."""
+        """Retrieves the groundtruth 4x4 transform from current time to next
+        Args:
+            radar_time (int): UNIX INT64 timestamp that we want groundtruth for (also the filename for radar)
+            gt_path (AnyStr): path to the ground truth csv file
+        Returns:
+            T_2_1 (np.ndarray): 4x4 transformation matrix from current time to next
+            time1 (int): UNIX INT64 timestamp of the current frame
+            time2 (int): UNIX INT64 timestamp of the next frame
+        """
         with open(gt_path, 'r') as f:
             f.readline()
             lines = f.readlines()
@@ -108,9 +155,13 @@ class OxfordDataset(Dataset):
         assert(0), 'ground truth transform for {} not found in {}'.format(radar_time, gt_path)
 
     def get_groundruth_ins(self, time1, time2, gt_path):
-        """ For a given time stamp (UNIX INT64), returns 4x4 transformation matrix from current time to next.
-            This function extracts the ground truth transform from the INS data.
-            Returns the transform T_2_1 from current (time1) to next (time2)
+        """Extracts ground truth transform T_2_1 from INS data, from current time1 to time2
+        Args:
+            time1 (int): UNIX INT64 timestamp of the current frame
+            time2 (int): UNIX INT64 timestamp of the next frame
+            gt_path (AnyStr): path to the ground truth csv file
+        Returns:
+            T_2_1 (np.ndarray): 4x4 transformation matrix from current time to next
         """
         T = np.array(interpolate_ins_poses(gt_path, [time1], time2)[0])
         return self.T_radar_imu @ T @ get_inverse_tf(self.T_radar_imu)
@@ -119,7 +170,12 @@ class OxfordDataset(Dataset):
         return len(self.frames)
 
     def get_seq_from_idx(self, idx):
-        """Returns the name of the sequence that this idx belongs to."""
+        """Returns the name of the sequence that this idx belongs to.
+        Args:
+            idx (int): frame index in dataset
+        Returns:
+            AnyStr: name of the sequence that this idx belongs to
+        """
         for seq in self.sequences:
             if self.seq_idx_range[seq][0] <= idx and idx < self.seq_idx_range[seq][1]:
                 return seq
@@ -152,7 +208,14 @@ class OxfordDataset(Dataset):
                 'timestamps': timestamps}
 
 def get_dataloaders(config):
-    """Retrieves train, validation, and test data loaders."""
+    """Returns the dataloaders for training models in pytorch.
+    Args:
+        config (json): parsed configuration file
+    Returns:
+        train_loader (DataLoader)
+        valid_loader (DataLoader)
+        test_loader (DataLoader)
+    """
     vconfig = dict(config)
     vconfig['batch_size'] = 1
     train_dataset = OxfordDataset(config, 'train')

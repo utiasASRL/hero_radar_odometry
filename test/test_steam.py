@@ -38,13 +38,13 @@ class TestSteam(unittest.TestCase):
         p1_list = [src.T.detach().cpu().numpy()]
 
         # weights must be list of N x 3 x 3
-        w_list = [torch.eye(3).repeat(N,1,1).detach().cpu().numpy()]
+        w_list = [torch.eye(3).repeat(N, 1, 1).detach().cpu().numpy()]
 
         # poses are window_size x (num sigmapoints + 1) x 4 x 4
         # vels are window_size x 6
         # num sigmapoints is 12
         window_size = 2
-        poses = torch.eye(4).unsqueeze(0).repeat(window_size,1,1,1).detach().cpu().numpy()
+        poses = torch.eye(4).unsqueeze(0).repeat(window_size, 1, 1, 1).detach().cpu().numpy()
         vels = torch.zeros(window_size, 6).detach().cpu().numpy()
 
         # run steam
@@ -136,9 +136,9 @@ class TestSteam(unittest.TestCase):
         N = 100
         src = torch.randn((2, N), dtype=torch.float32)
         theta = np.pi / 8
-        #if flip_y:
+        # if flip_y:
         #    R_gt = torch.tensor([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]], dtype=torch.float32)
-        #else:
+        # else:
         R_gt = torch.tensor([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]], dtype=torch.float32)
         t_gt = torch.tensor([[1], [2]], dtype=torch.float32)
         out = R_gt @ src + t_gt
@@ -163,11 +163,11 @@ class TestSteam(unittest.TestCase):
         match_weights = torch.ones((1, 1, N))
 
         R_out, t_out = solver.optimize(points2, points1, match_weights, keypoint_ints,
-                                         time_tgt, time_src, t_ref_tgt, t_ref_src)
+                                       time_tgt, time_src, t_ref_tgt, t_ref_src)
 
         T = get_T_ba(R_out, t_out, 0, 1)
         if flip_y:
-            T_prime = np.array([[1, 0, 0, 0],[0, -1, 0, 0],[0, 0, -1, 0],[0,0,0,1]])
+            T_prime = np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
             T = T_prime @ T @ T_prime
         R = T[:3, :3]
         t = T[:3, 3:]
@@ -179,7 +179,7 @@ class TestSteam(unittest.TestCase):
         t_err = translationError(get_inverse_tf(T) @ T_gt)
         self.assertTrue(r_err < 1e-4, "Rotation error: {}, \n{}\n !=\n {}".format(r_err, R, R_gt))
         self.assertTrue(t_err < 1e-4, "Translation error: {}, \n{}\n !=\n {}".format(t_err, t, t_gt))
-    
+
     def test_flip(self):
         self.test_steam(flip_y=True)
 

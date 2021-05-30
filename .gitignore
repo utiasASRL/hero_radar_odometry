@@ -17,3 +17,5 @@ plot_errs.py
 plot_errs2.py
 test_kitti.py
 get_vel_sigma.py
+models/*
+*.pt

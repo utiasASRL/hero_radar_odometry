@@ -1,3 +1,7 @@
+"""
+    Data augmentation functions.
+    Authors: Keenan Burnett, David Yoon
+"""
 import numpy as np
 import cv2
 import torch
