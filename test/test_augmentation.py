@@ -22,23 +22,28 @@ class TestAugmentation(unittest.TestCase):
         cart_width = 100
         cart_res = 0.25
         img = np.zeros((cart_width, cart_width), dtype=np.float32)
+        mask = np.zeros((cart_width, cart_width), dtype=np.float32)
         src_coords = [[24, 74], [24, 24], [74, 24], [74, 74]]
         for u, v in src_coords:
             img[u, v] = 1
         torch_img = torch.from_numpy(img)
         torch_img = torch_img.expand(2, 1, cart_width, cart_width)
+        torch_mask = torch.from_numpy(mask)
+        torch_mask = torch_mask.expand(2, 1, cart_width, cart_width)
 
-        config = {'augmentation': {'rot_max': np.pi / 4}}
+        config = {'augmentation': {'rot_max': np.pi / 4}, 'batch_size': 1, 'window_size': 2}
         T = np.identity(4, dtype=np.float32).reshape(1, 4, 4)
         T2 = np.identity(4, dtype=np.float32).reshape(1, 4, 4)
         T3 = np.concatenate((T, T2), axis=0)
         T = torch.from_numpy(T3)
-        batch = {'data': torch_img, 'T_21': T}
+        batch = {'data': torch_img, 'T_21': T, 'mask': torch_mask}
 
         np.random.seed(1234)
         batch = augmentBatch(batch, config)
         out = batch['data'][1].numpy().squeeze()
-        T_out = batch['T_21'][0].numpy()
+        T_out = batch['T_21'][1].numpy()
+        print(T_out) 
+        print(T[0])
         coords = out.nonzero()
         out_coords = []
         for u, v in zip(coords[0], coords[1]):
@@ -52,14 +57,14 @@ class TestAugmentation(unittest.TestCase):
             outlier = 1
             xbar = np.array([x, y, 0, 1]).reshape(4, 1)
             xbar = np.matmul(get_inverse_tf(T_out), xbar)
-            xn = xbar[0]
-            yn = xbar[1]
+            xn = xbar[0, 0]
+            yn = xbar[1, 0]
             for xs, ys in src_metric:
                 if np.sqrt((xn - xs)**2 + (yn - ys)**2) <= cart_res * 3:
                     outlier = 0
                     break
             outliers += outlier
-        self.assertTrue(outliers == 0)
+        self.assertTrue(outliers == 0, 'outliers: {}'.format(outliers))
 
 if __name__ == '__main__':
     unittest.main()

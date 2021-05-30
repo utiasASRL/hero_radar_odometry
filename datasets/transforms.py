@@ -20,7 +20,7 @@ def augmentBatch(batch, config):
     _, C, H, W = data.shape
     for i in range(batch_size):
         rot = np.random.uniform(-rot_max, rot_max)
-        T = get_transform(0, 0, -rot)
+        T = get_transform(0, 0, rot)
         for j in range(1, window_size):
             k = j + i * window_size
             img = data[k].squeeze()

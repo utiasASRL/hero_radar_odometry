@@ -29,7 +29,7 @@ class TestMatching(unittest.TestCase):
             tgt_desc_dense[1, :, row_col[i][0], row_col[i][1]] = x
         # Now we have known correspondences: i <--> row_col
 
-        config = {'networks': {'matcher_block': {'softmax_temp': 0.01}}}
+        config = {'networks': {'matcher_block': {'softmax_temp': 0.01, 'score_comp': True}}}
         config['window_size'] = 2
         config['gpuid'] = "cpu"
         model = SoftmaxMatcher(config)

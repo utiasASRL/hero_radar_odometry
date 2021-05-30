@@ -214,10 +214,10 @@ class TestDistortion(unittest.TestCase):
         t2 = np.array(t2, dtype=np.int64).reshape((1, 400, 1))
         t1 = torch.from_numpy(t1)
         t2 = torch.from_numpy(t2)
-        t1 = 250000
-        t2 = 500000
-        t_ref_1 = torch.tensor([0, t1]).reshape(1, 1, 2)
-        t_ref_2 = torch.tensor([t1, t2]).reshape(1, 1, 2)
+        t1_ = 250000
+        t2_ = 500000
+        t_ref_1 = torch.tensor([0, t1_]).reshape(1, 1, 2)
+        t_ref_2 = torch.tensor([t1_, t2_]).reshape(1, 1, 2)
 
         with open('config/steam.json') as f:
             config = json.load(f)
