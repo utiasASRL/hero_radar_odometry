@@ -61,17 +61,17 @@ cmake .. && make
 To train a new model, we provide `train.py`, which can be used as follows:
 
 ```
-python train.py --pretrain <optional_pretrained_model_path> --config <config_file_path>
+python3 train.py --pretrain <optional_pretrained_model_path> --config <config_file_path>
 ```
 
-Note that we publish training results to (tensorboard)[https://pytorch.org/docs/stable/tensorboard.html].
+Note that we publish training results to [tensorboard](https://pytorch.org/docs/stable/tensorboard.html).
 
 As a convenience, we have provided pre-trained models and their associated config files which can be downloaded using `download_models.sh`.
 
 To evaluate a trained model, use `eval.py` with the following format:
 
 ```
-python eval.py --pretrain <pretrained_model_path> --config <config_file_path>
+python3 eval.py --pretrain <pretrained_model_path> --config <config_file_path>
 ```
 
 # Network Configuration
@@ -94,7 +94,5 @@ python eval.py --pretrain <pretrained_model_path> --config <config_file_path>
 
 # TODO Items
 
-- [ ] Test the docker build instructions (add opencv)
-- [ ] Test UnderTheRadar implementation
-- [ ] Test "test" modules
+- [ ] Test UnderTheRadar implementation for regression
 - [ ] Train with batchsize > 2
