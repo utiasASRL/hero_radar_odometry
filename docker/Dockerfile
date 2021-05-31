@@ -1,12 +1,10 @@
 #
-# This example Dockerfile illustrates a method to install
-# additional packages on top of NVIDIA's PyTorch container image.
+# This Dockerfile installs dependencies for running HERO Radar Odometry.
 #
 # To use this Dockerfile, use the `docker build` command.
 # See https://docs.docker.com/engine/reference/builder/
 # for more information.
 #
-# FROM nvcr.io/nvidia/pytorch:20.03-py3
 FROM nvcr.io/nvidia/cuda:10.1-cudnn7-runtime
 
 # python
@@ -24,6 +22,7 @@ RUN pip3 install -Iv tensorboardx==2.1 matplotlib==3.2.2 opencv-python==4.5.1.48
 RUN pip3 install numpy==1.19.4 sklearn Pillow==8.0
 
 # git and wget
+RUN apt-get udpate
 RUN apt install git wget -y --no-install-recommends
 
 # cmake
@@ -33,7 +32,7 @@ RUN apt install -y cmake
 
 # boost
 RUN cd /usr/src && \
- wget --no-verbose https://dl.bintray.com/boostorg/release/1.67.0/source/boost_1_67_0.tar.gz && \
+ wget --no-verbose https://boostorg.jfrog.io/artifactory/main/release/1.67.0/source/boost_1_67_0.tar.gz && \
  tar xzf boost_1_67_0.tar.gz && \
  cd boost_1_67_0 && \
  ./bootstrap.sh --with-python=$(which python3) && \
