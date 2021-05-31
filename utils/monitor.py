@@ -103,7 +103,7 @@ class SVDMonitor(MonitorBase):
             T_pred.append(get_transform2(R_pred_, t_pred_))
 
         results = computeMedianError(T_gt, T_pred)
-        t_err, r_err, _ = computeKittiMetrics(T_gt, T_pred, self.seq_lens)
+        t_err, r_err = computeKittiMetrics(T_gt, T_pred, self.seq_lens)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         for loss_name in aux_losses:
@@ -200,7 +200,7 @@ class SteamMonitor(MonitorBase):
                 T_pred.append(get_T_ba(out, a=0, b=1))
 
         results = computeMedianError(T_gt, T_pred)
-        t_err, r_err, _ = computeKittiMetrics(T_gt, T_pred, self.seq_lens)
+        t_err, r_err = computeKittiMetrics(T_gt, T_pred, self.seq_lens)
 
         self.writer.add_scalar('val/loss', valid_loss, self.counter)
         for loss_name in aux_losses:
