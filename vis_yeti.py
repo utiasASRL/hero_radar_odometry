@@ -53,6 +53,8 @@ def draw_match(batch, out, config, solver, inliers):
         x1 = np.array([src[i, 0], src[i, 1], 0, 1]).reshape(4, 1)
         x2 = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
         #x1 = T_tgt_src @ x1
+        x1[1, 0] *= -1
+        x2[1, 0] *= -1
         x1 = T_pix_met @ x1
         x2 = T_pix_met @ x2
         plt.plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
