@@ -152,7 +152,7 @@ if __name__ == '__main__':
         radar_time = int(batch['t_ref'][0][0][0].item() * 1e3)
         cam_img = get_closest_image(radar_time, config['data_dir'] + seq_name + '/camera/')
         # draw odom path 
-        odom_img = plot_sequences(T_gt, T_pred, [len(T_gt)], returnTensor=False, flip=False)[0]
+        odom_img = plot_sequences(T_gt, T_pred, [len(T_gt)], returnTensor=False, flip=True)[0]
         odom_img = np.array(odom_img)[:, :, :3]
         odom_img = odom_img[:, :, ::-1]
         # panel the images together, save as png file
