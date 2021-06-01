@@ -238,8 +238,8 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
         T_pred_ = np.identity(4)
         T_icra_ = np.identity(4)
         if flip:
-            T_gt_ = np.matmul(T_flip, T_gt_)
-            T_pred_ = np.matmul(T_flip, T_pred_)
+            #T_gt_ = np.matmul(T_flip, T_gt_)
+            #T_pred_ = np.matmul(T_flip, T_pred_)
             T_icra_ = np.matmul(T_flip, T_icra_)
         x_gt = []
         y_gt = []

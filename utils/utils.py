@@ -15,7 +15,7 @@ def get_inverse_tf(T):
 def get_transform(x, y, theta):
     """Returns a 4x4 homogeneous 3D transform for a given 2D (x, y, theta)."""
     T = np.identity(4, dtype=np.float32)
-    T[0:2, 0:2] = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    T[0:2, 0:2] = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     T[0, 3] = x
     T[1, 3] = y
     return T
