@@ -13,7 +13,7 @@ We trained and tested these networks on the [Oxford Radar Robotcar Dataset](http
 | [Under the Radar](https://arxiv.org/abs/2001.10789) | Supervised (L)    | 2.0583                  | 6.7                                          |
 | [RO Cen](https://www.robots.ox.ac.uk/~mobile/Papers/2018ICRA_cen.pdf)          | Unsupervised (HC) | 3.7168                  | 9.5                                          |
 | [MC-RANSAC](https://arxiv.org/abs/2011.03512)       | Unsupervised (HC) | 3.3204                  | 10.95                                        |
-| [HERO](https://arxiv.org/abs/2105.14152) (Ours)     | Unsupervised (L)  | 2.1472                  | 6.6982                                        |
+| [HERO](https://arxiv.org/abs/2105.14152) (Ours)     | Unsupervised (L)  | 2.1472                  | 6.698                                        |
 
 ## Boreas Data-Taking Platform
 ![Boreas](figs/boreas.jpg "Boreas")
