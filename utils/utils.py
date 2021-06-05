@@ -77,7 +77,7 @@ def get_transform2(R, t):
     T[0:3, 3] = t.squeeze()
     return T
 
-def enforce_orthog(T, dim=2):
+def enforce_orthog(T, dim=3):
     """Enforces the orthogonality of a 3x3 rotation matrix within a 4x4 homogeneous transformation matrix."""
     if dim == 2:
         if abs(np.linalg.det(T[0:2, 0:2]) - 1) < 1e-10:

@@ -135,7 +135,7 @@ def draw_batch_steam(batch, out, config):
            vutils.make_grid([p2p_img])
 
 def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, savePDF=False, fnames=None, mainlabel="HERO",
-                   icralabel="MC-RANSAC", icracolor='r', legend_pos="upper left", rot=0):
+                   icralabel="MC-RANSAC", icracolor='r', legend_pos="upper left", rot=0, flip=True):
     """Creates a top-down plot of the predicted odometry results vs. ground truth."""
     seq_indices = []
     idx = 0
@@ -156,6 +156,14 @@ def plot_sequences(T_gt, T_pred, seq_lens, returnTensor=True, T_icra=None, saveP
         y_pred = []
         x_icra = []
         y_icra = []
+        if flip:
+            T_flip = np.identity(4)
+            T_flip[1, 1] = -1
+            T_flip[2, 2] = -1
+            T_gt_ = T_flip @ T_gt_
+            T_pred_ = T_flip @ T_pred_
+            T_icra_ = T_flip @ T_icra_
+
         for i in indices:
             T_gt_ = np.matmul(T_gt[i], T_gt_)
             T_pred_ = np.matmul(T_pred[i], T_pred_)
