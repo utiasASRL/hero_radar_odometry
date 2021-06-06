@@ -140,6 +140,12 @@ class SteamMonitor(MonitorBase):
                 self.writer.add_scalar('train/' + loss_item[0], loss_item[1].detach().cpu().item(), self.counter)
             self.writer.add_scalar('train/step_time', self.dt, self.counter)
 
+        # keep track of qc values
+        qc = torch.exp(self.model.log_diag_qc).detach().cpu()
+        if self.config['steam']['prior_learn_const'] > 0:
+            for i in (0, 1, 5):
+                self.writer.add_scalar('train/qc_' + str(i), qc[i].item(), self.counter)
+
         if self.counter % self.config['val_rate'] == 0:
             with torch.no_grad():
                 self.model.eval()

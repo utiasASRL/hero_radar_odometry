@@ -74,9 +74,11 @@ public:
     void setMeas(const p::object& p2_list, const p::object& p1_list, const p::object& weight_list,
         const p::object& t2_list, const p::object& t1_list, const p::object& t_refs);
     void setExtrinsicTsv(const np::ndarray& T_sv);
+    void getMotionErrorOuterProd(const int& mode, np::ndarray& outer_prod);
     void setRansacVersion(const unsigned int& version) {ransac_version = uint(version);}
     void setZeroVelPriorFlag(const bool zero_vel) {zero_vel_prior_flag_ = zero_vel;}
     void setVelPriorFlag(const bool vel_prior) {vel_prior_ = vel_prior;}
+    void setWNOAPriorFlag(const bool wnoa_prior) {wnoa_prior_ = wnoa_prior;}
     void useRansac() {use_ransac = true;}
     void useCTSteam() {ct_steam = true;}
 
@@ -106,6 +108,7 @@ private:
     steam::se3::SteamTrajInterface traj;
     bool zero_vel_prior_flag_ = false;      // Apply a zero-velocity prior for dims outside SE(2)
     bool vel_prior_ = false;                // Use previously estimated velocity as another prior
+    bool wnoa_prior_ = true;                // Use WNOA motion prior
     // Tracks whether the trajectory has been initialized
     bool traj_init = false;
 };
@@ -120,6 +123,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("setQcInv", &SteamSolver::setQcInv)
         .def("setMeas", &SteamSolver::setMeas)
         .def("setExtrinsicTsv", &SteamSolver::setExtrinsicTsv)
+        .def("getMotionErrorOuterProd", &SteamSolver::getMotionErrorOuterProd)
         .def("optimize", &SteamSolver::optimize)
         .def("getPoses", &SteamSolver::getPoses)
         .def("getVelocities", &SteamSolver::getVelocities)
@@ -127,6 +131,7 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("setRansacVersion", &SteamSolver::setRansacVersion)
         .def("setZeroVelPriorFlag", &SteamSolver::setZeroVelPriorFlag)
         .def("setVelPriorFlag", &SteamSolver::setVelPriorFlag)
+        .def("setWNOAPriorFlag", &SteamSolver::setWNOAPriorFlag)
         .def("useCTSteam", &SteamSolver::useCTSteam)
         .def("getPoseBetweenTimes", &SteamSolver::getPoseBetweenTimes)
         .def("getSigmapoints2N", &SteamSolver::getSigmapoints2N);

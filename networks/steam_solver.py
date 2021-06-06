@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import cpp.build.SteamSolver as steamcpp
-from utils.utils import convert_to_weight_matrix, getApproxTimeStamps
+from utils.utils import convert_to_weight_matrix, getApproxTimeStamps, kronecker_product
 
 class SteamSolver():
     """
@@ -29,10 +29,16 @@ class SteamSolver():
         self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
         self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
                                 (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
+        # constants for prior (WNOA)
+        time_step = config['steam']['time_step']
+        dti1 = 1.0/time_step
+        dti2 = dti1*dti1
+        dti3 = dti1*dti2
+        self.Qdt_inv = torch.tensor([[12.0*dti3, -6.0*dti2], [-6.0*dti2, 4.0*dti1]], dtype=torch.float32).to(self.gpuid)
         # steam solver (c++)
-        self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
-        qc_diag = np.array(config['qc_diag']).reshape(6, 1)
-        self.solver_cpp.setQcInv(qc_diag)
+        self.solver_cpp = steamcpp.SteamSolver(time_step, self.window_size)
+        # qc_diag = np.array(config['qc_diag']).reshape(6, 1)
+        # self.solver_cpp.setQcInv(qc_diag)
         if config['steam']['use_ransac']:
             self.solver_cpp.useRansac()
             self.solver_cpp.setRansacVersion(config['steam']['ransac_version'])
@@ -49,10 +55,11 @@ class SteamSolver():
         self.solver_cpp.setExtrinsicTsv(self.T_sv)
         self.solver_cpp.setZeroVelPriorFlag(config['steam']['zero_vel_prior'])
         self.solver_cpp.setVelPriorFlag(config['steam']['vel_prior'])
+        self.solver_cpp.setWNOAPriorFlag(config['steam']['wnoa_prior'])
         self.flip_y = config['flip_y']
 
     def optimize(self, keypoint_coords, pseudo_coords, match_weights, keypoint_ints, time_tgt, time_src,
-                 t_ref_tgt, t_ref_src):
+                 t_ref_tgt, t_ref_src, log_diag_qc):
         """ Given the matched keypoints locations between the target frames (keypoint_coords) and the
             source frame (pseudo_coords), this module uses STEAM to estimate the most likely transformations and
             velocities between frames.
@@ -124,6 +131,7 @@ class SteamSolver():
             timestamps1 = getApproxTimeStamps(points1, times1, self.flip_y)
             timestamps2 = getApproxTimeStamps(points2, times2, self.flip_y)
             self.solver_cpp.setMeas(points2, points1, weights, timestamps2, timestamps1, t_refs)
+            self.solver_cpp.setQcInv(torch.exp(log_diag_qc.unsqueeze(1)).detach().cpu().numpy())
             self.solver_cpp.optimize()
             # get pose output
             self.solver_cpp.getPoses(self.poses[b])
@@ -136,3 +144,12 @@ class SteamSolver():
             t_src_tgt_in_tgt[b] = self.poses[b, :, :3, 3:4]
 
         return torch.from_numpy(R_tgt_src).to(self.gpuid), torch.from_numpy(t_src_tgt_in_tgt).to(self.gpuid)
+
+    def construct_Qk_inv(self, log_diag_qc):
+        qc_diag = torch.exp(log_diag_qc.detach())
+        # re-assign elements 0, 1, and 5 so they are differentiable (we aren't optimizing 2, 3, and 4)
+        qc_diag[0] = torch.exp(log_diag_qc[0])
+        qc_diag[1] = torch.exp(log_diag_qc[1])
+        qc_diag[5] = torch.exp(log_diag_qc[5])
+        Qc_inv = torch.diag(1.0/qc_diag)
+        return kronecker_product(self.Qdt_inv, Qc_inv)

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from utils.utils import get_indices, convert_to_weight_matrix
 
 def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config, alpha=10.0):
@@ -44,18 +45,21 @@ def unsupervised_loss(out, batch, config, solver):
     tgt_coords = out['tgt']                 # (b*(w-1),N,2) tgt keypoint locations in metric
     match_weights = out['match_weights']    # (b*(w-1),S,N) match weights S=1=scalar, S=3=matrix
     keypoint_ints = out['keypoint_ints']    # (b*w,1,N) 0==reject, 1==keep
+    log_diag_qc = out['log_diag_qc']
     batch_size = config['batch_size']
     window_size = config['window_size']
     gpuid = config['gpuid']
     mah_thres = config['steam']['mah_thres']
     expect_approx_opt = config['steam']['expect_approx_opt']
     topk_backup = config['steam']['topk_backup']
+    prior_learn_const = config['steam']['prior_learn_const']
     T_aug = []
     if 'T_aug' in batch:
         T_aug = batch['T_aug']
     point_loss = 0
     logdet_loss = 0
     unweighted_point_loss = 0
+    prior_loss = 0
     zeropad = torch.nn.ZeroPad2d((0, 1, 0, 0))
 
     # loop through each batch
@@ -118,10 +122,21 @@ def unsupervised_loss(out, batch, config, solver):
             # log det (ignore 3rd dim since it's a constant)
             logdet_loss -= torch.mean(torch.sum(weights_d[ids, 0:2], dim=1))
 
+            # motion prior
+            if prior_learn_const > 0:
+                Qk_inv = solver.construct_Qk_inv(log_diag_qc)
+                outer_prod = np.zeros((12, solver.window_size - 1), dtype=np.float32)
+                solver.solver_cpp.getMotionErrorOuterProd(0, outer_prod)
+                outer_prod = torch.from_numpy(outer_prod).to(gpuid)
+                prior_loss += torch.trace(torch.matmul(Qk_inv, outer_prod)) + 2*(log_diag_qc[0] + log_diag_qc[1] + log_diag_qc[5])
+
     # average over batches
     if bcount > 0:
         point_loss /= (bcount * (solver.window_size - 1))
         logdet_loss /= (bcount * (solver.window_size - 1))
-    total_loss = point_loss + logdet_loss
+        prior_loss /= (bcount * (solver.window_size - 1))
+    total_loss = point_loss + logdet_loss + prior_learn_const*prior_loss
     dict_loss = {'point_loss': point_loss, 'logdet_loss': logdet_loss, 'unweighted_point_loss': unweighted_point_loss}
+    if prior_learn_const > 0:
+        dict_loss['prior_loss'] = prior_loss
     return total_loss, dict_loss

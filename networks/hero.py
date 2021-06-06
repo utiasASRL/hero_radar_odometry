@@ -23,6 +23,7 @@ class HERO(torch.nn.Module):
         self.unet = UNet(config)
         self.keypoint = Keypoint(config)
         self.softmax_matcher = SoftmaxRefMatcher(config)
+        self.log_diag_qc = torch.nn.Parameter(torch.log(torch.tensor(config['qc_diag'], requires_grad=True)))
         self.solver = SteamSolver(config)
         self.patch_size = config['networks']['keypoint_block']['patch_size']
         self.patch_mean_thres = config['steam']['patch_mean_thres']
@@ -58,8 +59,8 @@ class HERO(torch.nn.Module):
         t_ref_tgt = torch.index_select(t_ref, 0, tgt_ids.cpu())
         t_ref_src = torch.index_select(t_ref, 0, src_ids.cpu())
         R_tgt_src_pred, t_tgt_src_pred = self.solver.optimize(keypoint_coords_xy, pseudo_coords_xy, match_weights,
-                                                              keypoint_ints, time_tgt, time_src, t_ref_tgt, t_ref_src)
+                                                              keypoint_ints, time_tgt, time_src, t_ref_tgt, t_ref_src, self.log_diag_qc)
 
         return {'R': R_tgt_src_pred, 't': t_tgt_src_pred, 'scores': weight_scores, 'tgt': keypoint_coords_xy,
                 'src': pseudo_coords_xy, 'match_weights': match_weights, 'keypoint_ints': keypoint_ints,
-                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords}
+                'detector_scores': detector_scores, 'tgt_rc': keypoint_coords, 'src_rc': pseudo_coords, 'log_diag_qc': self.log_diag_qc}

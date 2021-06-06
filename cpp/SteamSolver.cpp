@@ -6,6 +6,7 @@
 ///     window with a motion prior.
 //////////////////////////////////////////////////////////////////////////////////////////////
 #include <iostream>
+#include <steam/trajectory/SteamTrajPriorFactor.hpp>
 #include "SteamSolver.hpp"
 #include "P2P3ErrorEval.hpp"
 #include "SE2VelPriorEval.hpp"
@@ -75,6 +76,49 @@ void SteamSolver::setExtrinsicTsv(const np::ndarray& T_sv) {
     T_sv_ = steam::se3::FixedTransformEvaluator::MakeShared(T_sv_lg);
 }
 
+// Return an outer product result that is required for learning Qc (WNOA)
+void SteamSolver::getMotionErrorOuterProd(const int& mode, np::ndarray& outer_prod) {
+    if (outer_prod.shape(0) != 12 || outer_prod.shape(1) != window_size_ - 1)
+        throw std::runtime_error("[getMotionErrorOuterProd] Numpy ref array incorrect shape.");
+
+    // Motion prior
+    steam::se3::SteamTrajInterface traj(Qc_inv_);
+    for (uint i = 0; i < states_.size(); ++i) {
+        TrajStateVar& state = states_.at(i);
+        steam::se3::TransformStateEvaluator::Ptr temp = steam::se3::TransformStateEvaluator::MakeShared(state.pose);
+        traj.add(state.time, temp, state.velocity);
+    }  // end i
+
+//    steam::ParallelizedCostTermCollection::Ptr cost_terms(new steam::ParallelizedCostTermCollection());
+//    traj.appendPriorCostTerms(cost_terms);
+
+    if (mode == 0) {
+        // mean approximation
+        for (unsigned int k = 1; k < states_.size(); ++k) {
+            steam::se3::TransformStateEvaluator::Ptr pose1 =
+                steam::se3::TransformStateEvaluator::MakeShared(states_[k-1].pose);
+            steam::se3::TransformStateEvaluator::Ptr pose2 =
+                steam::se3::TransformStateEvaluator::MakeShared(states_[k].pose);
+
+            steam::se3::SteamTrajVar::Ptr knot1(new steam::se3::SteamTrajVar(states_[k-1].time,
+                pose1, states_[k-1].velocity));
+            steam::se3::SteamTrajVar::Ptr knot2(new steam::se3::SteamTrajVar(states_[k].time,
+                pose2, states_[k].velocity));
+
+            steam::se3::SteamTrajPriorFactor::Ptr error_eval(
+                  new steam::se3::SteamTrajPriorFactor(knot1, knot2));
+
+            Eigen::Matrix<double, 12, 1> error = error_eval->evaluate();
+            for (int r = 0; r < 12; ++r)
+                outer_prod[r][k-1] = float(error(r));
+        }
+    }
+    else {
+        // TODO: other approximations
+        throw std::runtime_error("[getMotionErrorOuterProd] Requested mode not implemented.");
+    }
+}
+
 // Run optimization
 void SteamSolver::optimize() {
     // Motion prior
@@ -95,7 +139,7 @@ void SteamSolver::optimize() {
     }
     // Cost Terms
     steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
-    if (vel_prior_) {
+    if (vel_prior_ && wnoa_prior_) {
         Eigen::Matrix<double, 6, 1> velocity = states_[0].velocity->getValue();
         // velocity[1] = 0;  // encourage lateral velocity to be close to zero
         Eigen::Matrix<double, 6, 6> vel_cov;
@@ -105,7 +149,8 @@ void SteamSolver::optimize() {
         vel_cov.diagonal() = vel_cov_diag;
         traj.addVelocityPrior(steam::Time(0.0), velocity, vel_cov);
     }
-    traj.appendPriorCostTerms(costTerms);
+    if (wnoa_prior_)
+        traj.appendPriorCostTerms(costTerms);
 
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
@@ -176,7 +221,7 @@ void SteamSolver::optimize() {
             costTerms->add(cost);
         }
     }
-    if (zero_vel_prior_flag_) {
+    if (zero_vel_prior_flag_ && wnoa_prior_) {
         Eigen::Matrix<double, 3, 3> vel_prior_noise = 1e-3 * Eigen::Matrix<double, 3, 3>::Identity();
         steam::BaseNoiseModel<3>::Ptr vel_prior_noise_model(new steam::StaticNoiseModel<3>(vel_prior_noise));
         for (uint i = 0; i < states_.size(); ++i) {
@@ -191,7 +236,8 @@ void SteamSolver::optimize() {
     for (uint i = 0; i < states_.size(); ++i) {
         const TrajStateVar& state = states_.at(i);
         problem.addStateVariable(state.pose);
-        problem.addStateVariable(state.velocity);
+        if (wnoa_prior_)   // we can only add velocities if WNOA is turned on
+            problem.addStateVariable(state.velocity);
     }
     problem.addCostTerm(costTerms);
     SolverType::Params params;

@@ -22,7 +22,8 @@
         "matcher_block": {
             "softmax_temp": 0.01,
             "sparse": false
-        }
+        },
+        "freeze_network": false
     },
     "steam": {
         "time_step": 0.25,
@@ -42,7 +43,9 @@
                            -5.62472494e-03, -9.99984181e-01, 0.0,
                            0.0,  0.0, -1.0],
         "zero_vel_prior": false,
-        "vel_prior": false
+        "vel_prior": false,
+        "wnoa_prior": true,
+        "prior_learn_const": 0
     },
     "lr": 0.00001,
     "batch_size": 1,

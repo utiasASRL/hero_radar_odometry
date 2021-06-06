@@ -76,6 +76,13 @@ if __name__ == '__main__':
 
     model.train()
 
+    # check for network freeze config
+    if config['networks']['freeze_network']:
+        print('Freezing network parameters...')
+        for param in model.parameters():
+            param.requires_grad = False
+        model.q.requires_grad = True
+
     for epoch in range(start_epoch, config['max_epochs']):
         for batchi, batch in enumerate(train_loader):
             if config['augmentation']['rot_max'] != 0:
