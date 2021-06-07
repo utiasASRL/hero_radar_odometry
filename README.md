@@ -13,7 +13,7 @@ We trained and tested these networks on the [Oxford Radar Robotcar Dataset](http
 | [Under the Radar](https://arxiv.org/abs/2001.10789) | Supervised (L)    | 2.0583                  | 6.7                                          |
 | [RO Cen](https://www.robots.ox.ac.uk/~mobile/Papers/2018ICRA_cen.pdf)          | Unsupervised (HC) | 3.7168                  | 9.5                                          |
 | [MC-RANSAC](https://arxiv.org/abs/2011.03512)       | Unsupervised (HC) | 3.3204                  | 10.95                                        |
-| [HERO](https://arxiv.org/abs/2105.14152) (Ours)     | Unsupervised (L)  | 2.0175                  | 6.497                                        |
+| [HERO](https://arxiv.org/abs/2105.14152) (Ours)     | Unsupervised (L)  | 1.9879                  | 6.524                                        |
 
 ## Boreas Data-Taking Platform
 ![Boreas](figs/boreas.jpg "Boreas")
@@ -83,11 +83,20 @@ python3 eval.py --pretrain <pretrained_model_path> --config <config_file_path>
 `train_split` : indices of the oxford sequence used for training \
 `validation_split` : index of the oxford sequence used for validation \
 `test_split` : indices of the oxford sequence used for testing \
+`networks[unet][bilinear]` : true: use bilinear intep, false: use transposed conv (EXPERIMENTAL) \
 `networks[unet][first_feature_dimension]` : depth of first CNN \
 `networks[keypoint][patch_size]` : width of spatial softmax patches in pixels \
 `networks[softmax][softmax_temp]` : softmax temp T = (1 / (this parameter)) \
 `steam[weight_matrix]` : If `true` use a 2x2 weight matrix, if `false` use a scalar weight \
+`steam[log_det_thres_flag]` : If true, treshold on log(det(W)) > param during eval \
 `steam[log_det_thres_val]` : At test time, can be used to treshold on log(det(W)) > param \
+`steam[log_det_topk]` : The minimum number of features that must be retained after filtering (use NMS) \
+`steam[use_ransac]` : true: use RANSAC to find inlier set at test time, send inliers to STEAM \
+`steam[ransac_version]` : 0: rigid RANSAC, 1: MC-RANSAC \
+`steam[use_ctsteam]` : true: uses the approx timestamp of each measurement to do motion compensation \
+`steam[ex_translation_vs_in_s]` : translation from sensor to vehicle as measured in vehicle \
+`steam[zero_vel_prior]` : zero velocity prior on dims outside of SE(2) \
+`steam[vel_prior]` : use previously esimated velocity as an additional prior \
 `lr` : learning rate \
 `window_size` : size of the sliding window esimator in frames (2 = normal frame-to-frame) \
 `augmentation[rot_max]` : Random rotation augmentation sampled from uniform[-rot_max, rot_max]
