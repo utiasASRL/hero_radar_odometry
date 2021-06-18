@@ -32,9 +32,9 @@ RUN apt install -y cmake
 
 # boost
 RUN cd /usr/src && \
- wget --no-verbose https://boostorg.jfrog.io/artifactory/main/release/1.67.0/source/boost_1_67_0.tar.gz && \
- tar xzf boost_1_67_0.tar.gz && \
- cd boost_1_67_0 && \
+ wget --no-verbose https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.tar.gz && \
+ tar xzf boost_1_76_0.tar.gz && \
+ cd boost_1_76_0 && \
  ./bootstrap.sh --with-python=$(which python3) && \
  ./b2 cxxflags="-std=gnu++17" install && \
  ldconfig && \

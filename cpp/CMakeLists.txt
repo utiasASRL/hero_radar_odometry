@@ -17,8 +17,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
 
 # packages
 find_package(PythonInterp)
-# FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX} numpy${PYTHON_VERSION_SUFFIX} system)
-find_package(Boost COMPONENTS python36 numpy36 system)
+find_package(Boost COMPONENTS
+    python${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}
+    numpy${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}
+    system
+)
 find_package(PythonInterp 3)
 find_package(PythonLibs 3 REQUIRED)
 

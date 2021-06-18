@@ -11,6 +11,7 @@ config/oxford1.json
 config/pre2160.json
 config/pre2592.json
 plot_buddies.py
+plot_buddies2.py
 vis_radar.py
 convert_to_txt.py
 plot_errs.py

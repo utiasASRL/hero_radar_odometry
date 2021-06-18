@@ -65,6 +65,7 @@ python3 train.py --pretrain <optional_pretrained_model_path> --config <config_fi
 ```
 
 Note that we publish training results to [tensorboard](https://pytorch.org/docs/stable/tensorboard.html).
+The tensorboard logs are saved to `data_dir`, as defined in the config file. Update this to your desired log folder.
 
 As a convenience, we have provided pre-trained models and their associated config files which can be downloaded using `download_models.sh`.
 
@@ -94,7 +95,7 @@ python3 eval.py --pretrain <pretrained_model_path> --config <config_file_path>
 `steam[use_ransac]` : true: use RANSAC to find inlier set at test time, send inliers to STEAM \
 `steam[ransac_version]` : 0: rigid RANSAC, 1: MC-RANSAC \
 `steam[use_ctsteam]` : true: uses the approx timestamp of each measurement to do motion compensation \
-`steam[ex_translation_vs_in_s]` : translation from sensor to vehicle as measured in vehicle \
+`steam[ex_translation_vs_in_s]` : translation from sensor to vehicle as measured in sensor \
 `steam[zero_vel_prior]` : zero velocity prior on dims outside of SE(2) \
 `steam[vel_prior]` : use previously esimated velocity as an additional prior \
 `lr` : learning rate \
