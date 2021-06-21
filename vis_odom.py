@@ -39,7 +39,7 @@ def draw_match(batch, out, config, solver):
     src = out['src'][0, ids].squeeze().detach().cpu().numpy()
     tgt = out['tgt'][0, ids].squeeze().detach().cpu().numpy()
     match_weights = out['match_weights']
-    inv_cov, d = convert_to_weight_matrix(match_weights[0, ids].T)
+    inv_cov, d = convert_to_weight_matrix(match_weights[0, :, ids].T, 0)
     # inliers = inliers[0]
     # src = src[inliers]
     # tgt = tgt[inliers]
@@ -73,7 +73,8 @@ def draw_match(batch, out, config, solver):
         flip_cov = np.array(cov)    # flip to account for mapping x & y to rows and columns of image
         flip_cov[0, 0] = cov[1, 1]
         flip_cov[1, 1] = cov[0, 0]
-        confidence_ellipse_2D(tgt[i, :2], flip_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
+        # confidence_ellipse_2D(tgt[i, :2], flip_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
+        confidence_ellipse_2D(x2[:2, 0], flip_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
 
         plt.plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
         plt.scatter(x1[0, 0], x1[1, 0], c='limegreen', s=2, zorder=3)
@@ -175,7 +176,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     with open(args.config) as f:
         config = json.load(f)
-    root = './vid/'
+    root = './vids/'
 
     if config['model'] == 'UnderTheRadar':
         model = UnderTheRadar(config).to(config['gpuid'])
