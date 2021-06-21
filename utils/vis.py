@@ -9,9 +9,9 @@ from torchvision.transforms import ToTensor
 from utils.utils import enforce_orthog, get_inverse_tf, get_T_ba
 from utils.utils import getApproxTimeStamps, wrapto2pi
 
-def convert_plt_to_img():
+def convert_plt_to_img(dpi=128):
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0)
     plt.close()
     buf.seek(0)
     return PIL.Image.open(buf)
