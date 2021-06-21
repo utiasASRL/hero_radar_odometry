@@ -64,7 +64,7 @@ def draw_match(batch, out, config, solver, inliers):
     plt.figure()
     ax = plt.gca()
     #if config['dataset'] == 'oxford':
-    radar = batch['data'][0].squeeze().numpy()
+    radar = batch['data'][1].squeeze().numpy()
     radar = cv2.resize(radar, (cart_pixel_width, cart_pixel_width))
     #else:
     #    polar = batch['polar'][0].squeeze().numpy()
@@ -93,8 +93,8 @@ def draw_match(batch, out, config, solver, inliers):
         # confidence_ellipse_2D(tgt[i, :2], flip_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
         confidence_ellipse_2D(x2[:2, 0], rot_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
 
-        plt.plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
-        plt.scatter(x1[0, 0], x1[1, 0], c='limegreen', s=2, zorder=3)
+        #plt.plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
+        #plt.scatter(x1[0, 0], x1[1, 0], c='limegreen', s=2, zorder=3)
         plt.scatter(x2[0, 0], x2[1, 0], c='r', s=2, zorder=4)
     ax.set(xlim=(0, cart_pixel_width), ylim=(cart_pixel_width, 0))
     plt.axis('off')
