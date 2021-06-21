@@ -109,6 +109,7 @@ void SteamSolver::optimize() {
 
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
+    inliers_list_.clear()
     // loop through every frame
     for (uint i = 1; i < window_size_; ++i) {
         steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
@@ -136,6 +137,7 @@ void SteamSolver::optimize() {
                 inliers.push_back(j);
             }
         }
+        inliers_list_.push_back(inliers);
         // Only run STEAM on inliers from MCRANSAC (if use_ransac == true)
         for (uint k = 0; k < inliers.size(); ++k) {
             uint j = inliers[k];
@@ -241,6 +243,19 @@ void SteamSolver::getVelocities(np::ndarray& vels) {
             vels[i][r] = float(vel(r));
         }
     }
+}
+
+void SteamSolver::getInliers(p::list &inliers) {
+    for (std::vector<int> inliers_ : inliers_list_) {
+	    p::list temp;
+        for (int idx : inliers_) {
+            temp.append(idx);
+        }
+	    inliers.append(temp);
+    }
+    //for (int idx : inliers_list[0]) {
+	//inliers.append(idx);
+    //}
 }
 
 void SteamSolver::getSigmapoints2N(np::ndarray& sigma_T) {

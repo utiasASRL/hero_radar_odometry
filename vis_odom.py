@@ -17,12 +17,12 @@ from utils.utils import computeMedianError, computeKittiMetrics, saveKittiErrors
 from utils.utils import load_icra21_results, getStats, get_inverse_tf, convert_to_weight_matrix
 from utils.vis import convert_plt_to_img, plot_sequences
 
-def draw_match(batch, out, config, solver):
+def draw_match(batch, out, config, solver, inliers):
     # Notes about plotting on images:
     # plotting maps (x, y) -> (columns, rows)
     # positive x points to right direction of image
     # positive y points to down direction of image
-    # our radar sensor frame is (usually) +x forward, +y right, +z down
+    # our radar sensor frame is (assumed to be) +x forward, +y right, +z down
     # so we need a rotation of th=pi/2 around +z to convert to image coordinates, which is
     # C_is = C_pix_met (without cart_res scale) =
     # [ c(th), s(th), 0]   [ 0, 1, 0]
@@ -51,9 +51,11 @@ def draw_match(batch, out, config, solver):
     tgt = out['tgt'][0, ids].squeeze().detach().cpu().numpy()
     match_weights = out['match_weights']
     inv_cov, d = convert_to_weight_matrix(match_weights[0, :, ids].T, 0)
-    # inliers = inliers[0]
-    # src = src[inliers]
-    # tgt = tgt[inliers]
+    inliers = inliers[0]
+    src = src[inliers]
+    tgt = tgt[inliers]
+    d = d[inliers]
+    inv_cov = inv_cov[inliers]
     # log det threshold
     ids_ld = torch.nonzero(torch.sum(d[:, 0:2], dim=1) > 0, as_tuple=False).squeeze()
     num_std = 5
@@ -63,13 +65,13 @@ def draw_match(batch, out, config, solver):
     ax = plt.gca()
     #if config['dataset'] == 'oxford':
     radar = batch['data'][0].squeeze().numpy()
-    radar = cv2.resize(radar, (1280, 1280))
+    radar = cv2.resize(radar, (cart_pixel_width, cart_pixel_width))
     #else:
     #    polar = batch['polar'][0].squeeze().numpy()
     #    azimuths = batch['azimuths'][0].squeeze().numpy()
     #    radar = radar_polar_to_cartesian(azimuths, polar, radar_resolution, cart_resolution, cart_pixel_width, navtech_version)
     #    radar = radar.squeeze()
-    plt.imshow(radar, cmap='gray', extent=(0, 1280, 1280, 0), interpolation='none')
+    plt.imshow(radar, cmap='gray', extent=(0, cart_pixel_width, cart_pixel_width, 0), interpolation='none')
     for i in ids_ld:
         x1 = np.array([src[i, 0], src[i, 1], 0, 1]).reshape(4, 1)
         x2 = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
@@ -81,7 +83,9 @@ def draw_match(batch, out, config, solver):
 
         # safe to invert to covariance this way (see block inverse formula, our off-diagonal blocks are zero)
         cov = np.linalg.inv(inv_cov[i, :2, :2].detach().cpu().numpy())
-        rot_cov = np.array(cov)    # rotating by pi/2 around +z
+        # rotating by pi/2 around +z, i.e., C_is @ Cov @ C_is^T
+        # (simplifies to swapping diagonal elements and setting off-diagonal to negative)
+        rot_cov = np.array(cov)
         rot_cov[0, 0] = cov[1, 1]
         rot_cov[1, 1] = cov[0, 0]
         rot_cov[0, 1] = -cov[0, 1]
@@ -92,6 +96,7 @@ def draw_match(batch, out, config, solver):
         plt.plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
         plt.scatter(x1[0, 0], x1[1, 0], c='limegreen', s=2, zorder=3)
         plt.scatter(x2[0, 0], x2[1, 0], c='r', s=2, zorder=4)
+    ax.set(xlim=(0, cart_pixel_width), ylim=(cart_pixel_width, 0))
     plt.axis('off')
     pil_img = convert_plt_to_img(dpi=346.4)
     cv2_img = np.array(pil_img)[:, :, :3]
@@ -231,9 +236,9 @@ if __name__ == '__main__':
         T_pred.append(get_T_ba(out, a=0, b=1))
         print('T_gt:\n{}'.format(T_gt[-1]))
         print('T_pred:\n{}'.format(T_pred[-1]))
-        # inliers = []
-        # model.solver.solver_cpp.getInliers(inliers)
-        match_img = draw_match(batch, out, config, model.solver)
+        inliers = []
+        model.solver.solver_cpp.getInliers(inliers)
+        match_img = draw_match(batch, out, config, model.solver, inliers)
         # Get closest camera image, crop it
         radar_time = int(batch['t_ref'][0][0][0].item() * 1e3)
         cam_img = get_closest_image(radar_time, config['data_dir'] + seq_name + '/camera/')

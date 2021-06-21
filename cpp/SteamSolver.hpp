@@ -79,6 +79,7 @@ public:
     void setVelPriorFlag(const bool vel_prior) {vel_prior_ = vel_prior;}
     void useRansac() {use_ransac = true;}
     void useCTSteam() {ct_steam = true;}
+    void getInliers(p::list &inliers);
 
 private:
     // Solver
@@ -108,6 +109,7 @@ private:
     bool vel_prior_ = false;                // Use previously estimated velocity as another prior
     // Tracks whether the trajectory has been initialized
     bool traj_init = false;
+    std::vector<std::vector<int>> inliers_list_;
 };
 
 // boost wrapper
@@ -129,5 +131,6 @@ BOOST_PYTHON_MODULE(SteamSolver) {
         .def("setVelPriorFlag", &SteamSolver::setVelPriorFlag)
         .def("useCTSteam", &SteamSolver::useCTSteam)
         .def("getPoseBetweenTimes", &SteamSolver::getPoseBetweenTimes)
+        .def("getInliers", &SteamSolver::getInliers)
         .def("getSigmapoints2N", &SteamSolver::getSigmapoints2N);
 }
