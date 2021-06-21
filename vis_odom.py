@@ -18,6 +18,17 @@ from utils.utils import load_icra21_results, getStats, get_inverse_tf, convert_t
 from utils.vis import convert_plt_to_img, plot_sequences
 
 def draw_match(batch, out, config, solver):
+    # Notes about plotting on images:
+    # plotting maps (x, y) -> (columns, rows)
+    # positive x points to right direction of image
+    # positive y points to down direction of image
+    # our radar sensor frame is (usually) +x forward, +y right, +z down
+    # so we need a rotation of th=pi/2 around +z to convert to image coordinates, which is
+    # C_is = C_pix_met (without cart_res scale) =
+    # [ c(th), s(th), 0]   [ 0, 1, 0]
+    # [-s(th), c(th), 0] = [-1, 0, 0]
+    # [0,      0,     1]   [ 0, 0, 1]
+
     radar_resolution = config['radar_resolution']
     navtech_version = 1
     cart_pixel_width = 1280
@@ -70,11 +81,13 @@ def draw_match(batch, out, config, solver):
 
         # safe to invert to covariance this way (see block inverse formula, our off-diagonal blocks are zero)
         cov = np.linalg.inv(inv_cov[i, :2, :2].detach().cpu().numpy())
-        flip_cov = np.array(cov)    # flip to account for mapping x & y to rows and columns of image
-        flip_cov[0, 0] = cov[1, 1]
-        flip_cov[1, 1] = cov[0, 0]
+        rot_cov = np.array(cov)    # rotating by pi/2 around +z
+        rot_cov[0, 0] = cov[1, 1]
+        rot_cov[1, 1] = cov[0, 0]
+        rot_cov[0, 1] = -cov[0, 1]
+        rot_cov[1, 0] = -cov[0, 1]
         # confidence_ellipse_2D(tgt[i, :2], flip_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
-        confidence_ellipse_2D(x2[:2, 0], flip_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
+        confidence_ellipse_2D(x2[:2, 0], rot_cov*scale_factor, ax, n_std=num_std, facecolor='y', alpha=0.6)
 
         plt.plot([x1[0, 0], x2[0, 0]], [x1[1, 0], x2[1, 0]], c='w', linewidth=1, zorder=2)
         plt.scatter(x1[0, 0], x1[1, 0], c='limegreen', s=2, zorder=3)
