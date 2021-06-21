@@ -109,7 +109,7 @@ void SteamSolver::optimize() {
 
     steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
     steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
-    inliers_list_.clear()
+    inliers_list_.clear();
     // loop through every frame
     for (uint i = 1; i < window_size_; ++i) {
         steam::se3::TransformStateEvaluator::Ptr T_k0_eval_ptr =
