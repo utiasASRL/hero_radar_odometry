@@ -50,14 +50,25 @@ def draw_match(batch, out, config, solver, inliers):
     src = out['src'][0, ids].squeeze().detach().cpu().numpy()
     tgt = out['tgt'][0, ids].squeeze().detach().cpu().numpy()
     match_weights = out['match_weights']
-    inv_cov, d = convert_to_weight_matrix(match_weights[0, :, ids].T, 0)
+    inv_cov, weights_d = convert_to_weight_matrix(match_weights[0, :, ids].T, 0)
     inliers = inliers[0]
-    src = src[inliers]
-    tgt = tgt[inliers]
-    d = d[inliers]
-    inv_cov = inv_cov[inliers]
+
     # log det threshold
-    ids_ld = torch.nonzero(torch.sum(d[:, 0:2], dim=1) > 0, as_tuple=False).squeeze()
+    # ids_ld = torch.nonzero(torch.sum(d[:, 0:2], dim=1) > 0, as_tuple=False).squeeze()
+    if config['steam']['log_det_thres_flag']:
+        ids = torch.nonzero(torch.sum(weights_d[:, 0:2], dim=1) > config['steam']['log_det_thres_val'],
+                            as_tuple=False).squeeze().detach().cpu()
+        if ids.squeeze().nelement() <= config['steam']['log_det_topk']:
+            print('Warning: Log det threshold output less than specified top k.')
+            _, ids = torch.topk(torch.sum(weights_d[:, 0:2], dim=1), config['steam']['log_det_topk'], largest=True)
+            ids = ids.squeeze().detach().cpu()
+    else:
+        ids = np.arange(inv_cov.size(0)).squeeze()
+
+    src = src[ids[inliers]]
+    tgt = tgt[ids[inliers]]
+    # weights_d = weights_d[ids[inliers]]
+    inv_cov = inv_cov[ids[inliers]]
     num_std = 5
 
     T_tgt_src = get_T_ba(out, a=0, b=1)
@@ -72,13 +83,13 @@ def draw_match(batch, out, config, solver, inliers):
     #    radar = radar_polar_to_cartesian(azimuths, polar, radar_resolution, cart_resolution, cart_pixel_width, navtech_version)
     #    radar = radar.squeeze()
     plt.imshow(radar, cmap='gray', extent=(0, cart_pixel_width, cart_pixel_width, 0), interpolation='none')
-    for i in ids_ld:
+    for i in range(src.shape[0]):
         x1 = np.array([src[i, 0], src[i, 1], 0, 1]).reshape(4, 1)
         x2 = np.array([tgt[i, 0], tgt[i, 1], 0, 1]).reshape(4, 1)
         #x1 = T_tgt_src @ x1
         #x1[1, 0] *= -1
         #x2[1, 0] *= -1
-        x1 = T_pix_met @ T_tgt_src @ x1
+        x1 = T_pix_met @ x1
         x2 = T_pix_met @ x2
 
         # safe to invert to covariance this way (see block inverse formula, our off-diagonal blocks are zero)
