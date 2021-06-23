@@ -14,14 +14,8 @@ class Keypoint(torch.nn.Module):
         self.gpuid = config['gpuid']
         self.width = config['cart_pixel_width']
         v_coords, u_coords = torch.meshgrid([torch.arange(0, self.width), torch.arange(0, self.width)])
-        v_coords = v_coords.unsqueeze(0).float()  # (1,H,W)
-        u_coords = u_coords.unsqueeze(0).float()
-        self.coords = torch.cat((u_coords, v_coords), dim=0).to(self.gpuid)  # (2,H,W)
-        BW = config['batch_size'] * config['window_size']
-        self.v_patches = F.unfold(v_coords.expand(BW, 1, self.width, self.width), kernel_size=self.patch_size,
-                                  stride=self.patch_size).to(self.gpuid)  # (b*w,patch_elems,num_patches)
-        self.u_patches = F.unfold(u_coords.expand(BW, 1, self.width, self.width), kernel_size=self.patch_size,
-                                  stride=self.patch_size).to(self.gpuid)
+        self.v_coords = v_coords.unsqueeze(0).float()  # (1,H,W)
+        self.u_coords = u_coords.unsqueeze(0).float()
 
     def forward(self, detector_scores, weight_scores, descriptors):
         """ A spatial softmax is performed for each grid cell over the detector_scores tensor to obtain 2D
@@ -37,11 +31,15 @@ class Keypoint(torch.nn.Module):
             keypoint_desc (torch.tensor): (b*w,C,num_patches)
         """
         BW, encoder_dim, _, _ = descriptors.size()
+        v_patches = F.unfold(self.v_coords.expand(BW, 1, self.width, self.width), kernel_size=self.patch_size,
+                             stride=self.patch_size).to(self.gpuid)  # (b*w,patch_elems,num_patches)
+        u_patches = F.unfold(self.u_coords.expand(BW, 1, self.width, self.width), kernel_size=self.patch_size,
+                             stride=self.patch_size).to(self.gpuid)
         score_dim = weight_scores.size(1)
         detector_patches = F.unfold(detector_scores, kernel_size=self.patch_size, stride=self.patch_size)
         softmax_attention = F.softmax(detector_patches, dim=1)  # (b*w,patch_elems,num_patches)
-        expected_v = torch.sum(self.v_patches * softmax_attention, dim=1)
-        expected_u = torch.sum(self.u_patches * softmax_attention, dim=1)
+        expected_v = torch.sum(v_patches * softmax_attention, dim=1)
+        expected_u = torch.sum(u_patches * softmax_attention, dim=1)
         keypoint_coords = torch.stack([expected_u, expected_v], dim=2)  # (b*w,num_patches,2)
         num_patches = keypoint_coords.size(1)
 

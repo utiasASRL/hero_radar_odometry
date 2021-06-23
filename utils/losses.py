@@ -14,12 +14,12 @@ def supervised_loss(R_tgt_src_pred, t_tgt_src_pred, batch, config, alpha=10.0):
         dict_loss (dict): a dictionary containing the separate loss components
     """
     T_21 = batch['T_21'].to(config['gpuid'])
+    batch_size = R_tgt_src_pred.size(0)
     # Get ground truth transforms
-    kp_inds, _ = get_indices(config['batch_size'], config['window_size'])
+    kp_inds, _ = get_indices(batch_size, config['window_size'])
     T_tgt_src = T_21[kp_inds]
     R_tgt_src = T_tgt_src[:, :3, :3]
     t_tgt_src = T_tgt_src[:, :3, 3].unsqueeze(-1)
-    batch_size = R_tgt_src.size(0)
     identity = torch.eye(3).unsqueeze(0).repeat(batch_size, 1, 1).to(config['gpuid'])
     loss_fn = torch.nn.L1Loss()
     R_loss = loss_fn(torch.matmul(R_tgt_src_pred.transpose(2, 1), R_tgt_src), identity)
@@ -43,8 +43,9 @@ def unsupervised_loss(out, batch, config, solver):
     src_coords = out['src']                 # (b*(w-1),N,2) src keypoint locations in metric
     tgt_coords = out['tgt']                 # (b*(w-1),N,2) tgt keypoint locations in metric
     match_weights = out['match_weights']    # (b*(w-1),S,N) match weights S=1=scalar, S=3=matrix
-    keypoint_ints = out['keypoint_ints']    # (b*w,1,N) 0==reject, 1==keep
-    batch_size = config['batch_size']
+    keypoint_ints = out['keypoint_ints']    # (b*(w-1),1,N) 0==reject, 1==keep
+    BW = keypoint_ints.size(0)
+    batch_size = int(BW / (self.window_size - 1))
     window_size = config['window_size']
     gpuid = config['gpuid']
     mah_thres = config['steam']['mah_thres']

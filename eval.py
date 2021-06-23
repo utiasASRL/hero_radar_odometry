@@ -10,6 +10,7 @@ from datasets.boreas import get_dataloaders_boreas
 from networks.under_the_radar import UnderTheRadar
 from networks.hero import HERO
 from utils.utils import computeMedianError, computeKittiMetrics, save_in_yeti_format, get_T_ba, load_icra21_results
+from utils.utils import get_transform2
 from utils.vis import plot_sequences, draw_matches
 
 torch.backends.cudnn.benchmark = False
@@ -70,7 +71,6 @@ if __name__ == '__main__':
         print(seq_lens)
         seq_names = test_loader.dataset.sequences
         print('Evaluating sequence: {} : {}'.format(seq_num, seq_names[0]))
-        nkpts = []
         for batchi, batch in enumerate(test_loader):
             ts = time()
             if (batchi + 1) % config['print_rate'] == 0:
@@ -78,29 +78,27 @@ if __name__ == '__main__':
             with torch.no_grad():
                 try:
                     out = model(batch)
-                    y = torch.nonzero(out['keypoint_ints'][0] > 0.5, as_tuple=False).squeeze()
-                    nkpts.append(len(y))
                 except RuntimeError as e:
                     print(e)
                     continue
-            if batchi == len(test_loader) - 1:
-                # append entire window
-                for w in range(batch['T_21'].size(0)-1):
+            if config['model'] == 'UnderTheRadar':
+                T_gt.append(batch['T_21'][0].numpy().squeeze())
+                R_pred_ = out['R'][0].detach().cpu().numpy().squeeze()
+                t_pred_ = out['t'][0].detach().cpu().numpy().squeeze()
+                T_pred.append(get_transform2(R_pred_, t_pred_))
+            elif config['model'] == 'HERO':
+                if batchi == len(test_loader) - 1:
+                    for w in range(batch['T_21'].size(0)-1):
+                        T_gt.append(batch['T_21'][w].numpy().squeeze())
+                        T_pred.append(get_T_ba(out, a=w, b=w+1))
+                        timestamps.append(batch['t_ref'][w].numpy().squeeze())
+                else:
+                    w = 0
                     T_gt.append(batch['T_21'][w].numpy().squeeze())
                     T_pred.append(get_T_ba(out, a=w, b=w+1))
                     timestamps.append(batch['t_ref'][w].numpy().squeeze())
-            else:
-                # append only the back of window
-                w = 0
-                T_gt.append(batch['T_21'][w].numpy().squeeze())
-                T_pred.append(get_T_ba(out, a=w, b=w+1))
-                #
-                # print('T_gt:\n{}'.format(T_gt[-1]))
-                # print('T_pred:\n{}'.format(T_pred[-1]))
-                timestamps.append(batch['t_ref'][w].numpy().squeeze())
-            #
-            # if batchi == 86:
-            #    draw_matches(batch, out, config, model.solver.solver_cpp)
+            # print('T_gt:\n{}'.format(T_gt[-1]))
+            # print('T_pred:\n{}'.format(T_pred[-1]))
             time_used.append(time() - ts)
         T_gt_.extend(T_gt)
         T_pred_.extend(T_pred)
@@ -123,7 +121,7 @@ if __name__ == '__main__':
     print('time_used: {}'.format(sum(time_used_) / len(time_used_)))
     results = computeMedianError(T_gt_, T_pred_)
     with open('errs.obj', 'wb') as f:
-        pickle.dump([nkpts, results[-2], results[-1]], f)
+        pickle.dump([results[-2], results[-1]], f)
     print('dt: {} sigma_dt: {} dr: {} sigma_dr: {}'.format(results[0], results[1], results[2], results[3]))
 
     t_err = np.mean(t_errs)

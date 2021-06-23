@@ -26,9 +26,9 @@ def augmentBatch(batch, config):
             img = data[k].squeeze()
             mmg = mask[k].squeeze()
             M = cv2.getRotationMatrix2D((W / 2, H / 2), rot * 180 * j / np.pi, 1.0)
-            data[i] = cv2.warpAffine(img, M, (W, H), flags=cv2.INTER_CUBIC).reshape(C, H, W)
-            mask[i] = cv2.warpAffine(mmg, M, (W, H), flags=cv2.INTER_CUBIC).reshape(1, H, W)
-            T_21[i - 1] = np.matmul(T, T_21[i - 1])
+            data[k] = cv2.warpAffine(img, M, (W, H), flags=cv2.INTER_CUBIC).reshape(C, H, W)
+            mask[k] = cv2.warpAffine(mmg, M, (W, H), flags=cv2.INTER_CUBIC).reshape(1, H, W)
+            T_21[k - 1] = np.matmul(T, T_21[k - 1])
     batch['data'] = torch.from_numpy(data)
     batch['mask'] = torch.from_numpy(mask > 0.5).type(batch['data'].dtype)    # make into a binary mask
     batch['T_21'] = torch.from_numpy(T_21)

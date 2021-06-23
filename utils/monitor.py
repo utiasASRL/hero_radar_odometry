@@ -69,7 +69,7 @@ class SVDMonitor(MonitorBase):
     def vis(self, batchi, batch, out):
         """Visualizes the output from a single batch."""
         batch_img = draw_batch(batch, out, self.config)
-        self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img)
+        self.writer.add_image('val/batch_img/{}'.format(batchi), batch_img, self.counter)
 
     def validation(self):
         """This function will compute loss, median errors, KITTI metrics, and draw visualizations."""
@@ -118,7 +118,7 @@ class SVDMonitor(MonitorBase):
 
         imgs = plot_sequences(T_gt, T_pred, self.seq_lens)
         for i, img in enumerate(imgs):
-            self.writer.add_image('val/' + self.sequences[i], img)
+            self.writer.add_image('val/' + self.sequences[i], img, self.counter)
         return t_err
 
 class SteamMonitor(MonitorBase):

@@ -12,7 +12,6 @@ class SVD(torch.nn.Module):
         super().__init__()
         self.config = config
         self.window_size = config['window_size']
-        self.batch_size = config['batch_size']
         self.gpuid = config['gpuid']
 
     def forward(self, src_coords, tgt_coords, weights, convert_from_pixels=True):
@@ -29,8 +28,8 @@ class SVD(torch.nn.Module):
         """
         if src_coords.size(0) > tgt_coords.size(0):
             BW = src_coords.size(0)
-            batch_size = int(BW / self.window_size)
-            kp_inds, _ = get_indices(batch_size, self.window_size)
+            B = int(BW / self.window_size)
+            kp_inds, _ = get_indices(B, self.window_size)
             src_coords = src_coords[kp_inds]
         assert(src_coords.size() == tgt_coords.size())
         B = src_coords.size(0)  # B x N x 2
@@ -72,4 +71,4 @@ class SVD(torch.nn.Module):
         t_tgt_src_insrc = src_centroid - torch.bmm(R_tgt_src.transpose(2, 1), tgt_centroid)  # B x 3 x 1
         t_src_tgt_intgt = -R_tgt_src.bmm(t_tgt_src_insrc)
 
-        return R_tgt_src.transpose(2, 1), t_src_tgt_intgt
+        return R_tgt_src, t_src_tgt_intgt

@@ -12,9 +12,6 @@ set(DEPEND_LIBS "boost_system")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -Wno-unused-function")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
 
-# set(Boost_NO_SYSTEM_PATHS ON)
-# set(BOOST_ROOT "/home/david/anaconda3/envs/pointcloud")
-
 # packages
 find_package(PythonInterp)
 find_package(Boost COMPONENTS

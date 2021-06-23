@@ -12,7 +12,6 @@ class SoftmaxRefMatcher(nn.Module):
         self.softmax_temp = config['networks']['matcher_block']['softmax_temp']
         self.sparse = config['networks']['matcher_block']['sparse']
         self.window_size = config['window_size']
-        self.B = config['batch_size']
         self.gpuid = config['gpuid']
         self.width = config['cart_pixel_width']
         v_coord, u_coord = torch.meshgrid([torch.arange(0, self.width), torch.arange(0, self.width)])
@@ -33,17 +32,18 @@ class SoftmaxRefMatcher(nn.Module):
             tgt_ids (torch.tensor): (b*(w-1),) indices along batch dimension for target data
             src_ids (torch.tensor): (b*(w-1),) indices along batch dimension for source data
         """
-        _, encoder_dim, n_points = keypoint_desc.size()
+        BW, encoder_dim, n_points = keypoint_desc.size()
+        B = int(BW / self.window_size)
         src_desc_dense = desc_dense[::self.window_size]
-        src_desc_unrolled = F.normalize(src_desc_dense.view(self.B, encoder_dim, -1), dim=1)  # B x C x HW
+        src_desc_unrolled = F.normalize(src_desc_dense.view(B, encoder_dim, -1), dim=1)  # B x C x HW
         # build pseudo_coords
-        pseudo_coords = torch.zeros((self.B * (self.window_size - 1), n_points, 2),
+        pseudo_coords = torch.zeros((B * (self.window_size - 1), n_points, 2),
                                     device=self.gpuid)  # B*(window - 1) x N x 2
-        tgt_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
-        src_ids = torch.zeros(self.B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
+        tgt_ids = torch.zeros(B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
+        src_ids = torch.zeros(B * (self.window_size - 1), dtype=torch.int64, device=self.gpuid)    # B*(window - 1)
         # loop for each batch
         if not self.sparse:
-            for i in range(self.B):
+            for i in range(B):
                 win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size).to(self.gpuid)
                 tgt_desc = keypoint_desc[win_ids]  # (window - 1) x C x N
                 tgt_desc = F.normalize(tgt_desc, dim=1)
@@ -55,7 +55,7 @@ class SoftmaxRefMatcher(nn.Module):
                 tgt_ids[pseudo_ids] = win_ids
                 src_ids[pseudo_ids] = i * self.window_size
         else:
-            for i in range(self.B):
+            for i in range(B):
                 win_ids = torch.arange(i * self.window_size + 1, i * self.window_size + self.window_size).to(self.gpuid)
                 tgt_desc = keypoint_desc[win_ids]
                 src_desc = keypoint_desc[i*self.window_size:i*self.window_size+1]

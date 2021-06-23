@@ -14,7 +14,6 @@ class SteamSolver():
     def __init__(self, config):
         # parameters
         self.sliding_flag = False   # should always be false during training
-        self.batch_size = config['batch_size']
         self.window_size = config['window_size']
         self.gpuid = config['gpuid']
         self.log_det_thres_flag = config['steam']['log_det_thres_flag']
@@ -23,12 +22,12 @@ class SteamSolver():
         self.dataset = config['dataset']
         self.T_aug = []
         self.debug = False
-        # state variables
+        # pose variables
         self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
-                             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
-        self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
+                             (1, self.window_size, 1, 1))  # B x W x 4 x 4
+        self.vels = np.zeros((1, self.window_size, 6), dtype=np.float32)  # B x W x 6
         self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
-                                (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
+                                (1, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         # steam solver (c++)
         self.solver_cpp = steamcpp.SteamSolver(config['steam']['time_step'], self.window_size)
         qc_diag = np.array(config['qc_diag']).reshape(6, 1)
@@ -60,7 +59,7 @@ class SteamSolver():
             keypoint_coords (torch.tensor): (b*(w-1),N,2) target keypoint locations in metric coordinates
             pseudo_coords (torch.tensor): (b*(w-1),N,2) source keypoint locations in metric coordinates
             match_weights (torch.tensor): (b*(w-1),S,N) weight associated with each src-tgt match S=score_dim (1=scalar, 3=matrix)
-            keypoint_ints (torch.tensor): (b*w,1,N) Some keypoints are masked out during inference, 1 == keep, 0 == reject
+            keypoint_ints (torch.tensor): (b*(w-1),1,N) Some keypoints are masked out during inference, 1 == keep, 0 == reject
             time_tgt (torch.tensor): (b*(w-1),400) Timestamps output by the sensor for each azimuth of the polar data
             tim_src (torch.tensor): (b*(w-1),400) Timestamps output by the sensor for each azimuth of the polar data
             t_ref_tgt (torch.tensor): (b*(w-1),1,2) Reference times for each target frame
@@ -71,20 +70,22 @@ class SteamSolver():
             R_tgt_src_pred (torch.tensor): (b, w, 3, 3) predicted rotation from src to tgt, indexed by window (0=identity)
             t_tgt_src_pred (torch.tensor): (b, w, 3, 1) predicted translation
         """
+        BW = keypoint_ints.size(0)
+        B = int(BW / (self.window_size - 1))
         self.poses = np.tile(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0),
-                             (self.batch_size, self.window_size, 1, 1))  # B x W x 4 x 4
-        self.vels = np.zeros((self.batch_size, self.window_size, 6), dtype=np.float32)  # B x W x 6
+                             (B, self.window_size, 1, 1))  # B x W x 4 x 4
+        self.vels = np.zeros((B, self.window_size, 6), dtype=np.float32)  # B x W x 6
         self.poses_sp = np.tile(np.expand_dims(np.expand_dims(np.expand_dims(np.eye(4, dtype=np.float32), 0), 0), 0),
-                                (self.batch_size, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
+                                (B, self.window_size - 1, 12, 1, 1))  # B x (W-1) x 12 x 4 x 4
         if self.sliding_flag:
             self.solver_cpp.slideTraj()
         else:
             self.solver_cpp.resetTraj()
 
-        R_tgt_src = np.zeros((self.batch_size, self.window_size, 3, 3), dtype=np.float32)
-        t_src_tgt_in_tgt = np.zeros((self.batch_size, self.window_size, 3, 1), dtype=np.float32)
+        R_tgt_src = np.zeros((B, self.window_size, 3, 3), dtype=np.float32)
+        t_src_tgt_in_tgt = np.zeros((B, self.window_size, 3, 1), dtype=np.float32)
         # loop through each batch
-        for b in range(self.batch_size):
+        for b in range(B):
             i = b * (self.window_size-1)    # first index of window
             points1 = []
             points2 = []
