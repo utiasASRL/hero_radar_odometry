@@ -67,7 +67,7 @@ python3 train.py --pretrain <optional_pretrained_model_path> --config <config_fi
 Note that we publish training results to [tensorboard](https://pytorch.org/docs/stable/tensorboard.html).
 The tensorboard logs are saved to `data_dir`, as defined in the config file. Update this to your desired log folder.
 
-As a convenience, we have provided pre-trained models and their associated config files which can be downloaded using `download_models.sh`.
+As a convenience, we have provided pre-trained models and their associated config files which can be downloaded using `download_models.sh`. Among the pre-trained models are HERO (window size 2, 4) and UnderTheRadar (window size 2). Our implementation of UnderTheRadar achieves 3.08 % translation error and 10.7 deg/1000m rotation error.
 
 To evaluate a trained model, use `eval.py` with the following format:
 
@@ -104,5 +104,4 @@ python3 eval.py --pretrain <pretrained_model_path> --config <config_file_path>
 
 # TODO Items
 
-- [ ] Test UnderTheRadar implementation for regression
 - [ ] Train with batchsize > 2
