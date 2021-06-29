@@ -41,7 +41,7 @@ class TestAugmentation(unittest.TestCase):
         np.random.seed(1234)
         batch = augmentBatch(batch, config)
         out = batch['data'][1].numpy().squeeze()
-        T_out = batch['T_21'][1].numpy()
+        T_out = batch['T_21'][0].numpy()
         print(T_out) 
         print(T[0])
         coords = out.nonzero()

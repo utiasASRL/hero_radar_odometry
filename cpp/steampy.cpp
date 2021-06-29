@@ -35,7 +35,7 @@ void run_steam(const p::object& p2_list, const p::object& p1_list, const p::obje
     std::vector<np::ndarray> weight_vec = toStdVector<np::ndarray>(weight_list);
 
     // useful variables
-    int window_size = poses.shape(0);
+    uint window_size = poses.shape(0);
 
     //
     // Setup initial conditions

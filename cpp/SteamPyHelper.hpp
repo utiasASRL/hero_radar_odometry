@@ -8,7 +8,7 @@
 #include <vector>
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
-#include <steam/steam.hpp>
+#include <steam.hpp>
 
 namespace p = boost::python;
 namespace np = boost::python::numpy;
