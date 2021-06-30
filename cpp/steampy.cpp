@@ -88,7 +88,7 @@ void run_steam(const p::object& p2_list, const p::object& p1_list, const p::obje
     for (uint i = 1; i < window_size; ++i) {
         auto T_k0_eval_ptr = traj.getInterpPoseEval(steam::Time(i * delT));
 
-        int num_meas = p2_vec[i-1].shape(0);
+        uint num_meas = p2_vec[i-1].shape(0);
         for (uint j = 0; j < num_meas; ++j) {
             Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
             for (uint r = 0; r < 3; ++r) {

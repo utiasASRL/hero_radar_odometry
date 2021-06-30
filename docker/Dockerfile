@@ -45,7 +45,6 @@ RUN apt install -y libeigen3-dev
 RUN cd /workspace && \
  git clone https://github.com/utiasASRL/lgmath.git && \
  cd lgmath && \
-# git checkout 979eb07417affc0581d3d69cecae7e3737d04e57 && \
  git checkout feature/eigen3 &&\
  mkdir build && \
  cd build && \
@@ -57,7 +56,6 @@ RUN cd /workspace && \
 RUN cd /workspace && \
  git clone https://github.com/utiasASRL/steam.git && \
  cd steam && \
-# git checkout feature/pointToPointErrorEval && \
  git checkout feature/eigen3 && \
  mkdir build && \
  cd build && \

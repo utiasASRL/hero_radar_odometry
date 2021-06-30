@@ -97,7 +97,7 @@ private:
     // Constants
     double dt_ = 0.25;                      // trajectory time step
     unsigned int window_size_ = 2;          // trajectory window size
-    Eigen::Matrix<double, 6, 6> Qc_inv_;    // Motion prior inverse Qc
+    Eigen::Matrix<double, 6, 6, Eigen::DontAlign> Qc_inv_;    // Motion prior inverse Qc
     steam::se3::TransformEvaluator::Ptr T_sv_;
     // Configuration Flags
     bool use_ransac = false;

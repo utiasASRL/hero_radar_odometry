@@ -29,14 +29,12 @@ find_package(PythonLibs 3 REQUIRED)
 # steam
 find_package(steam REQUIRED)
 
-find_package(Eigen3 REQUIRED)
-
 # opencv
 find_package(OpenCV REQUIRED)
 
 # boost python
 ENABLE_TESTING()
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${steam_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS} ${steam_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 
 # single function call version
 PYTHON_ADD_MODULE(steampy steampy.cpp P2P3ErrorEval.cpp)
