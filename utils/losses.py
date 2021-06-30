@@ -45,8 +45,8 @@ def unsupervised_loss(out, batch, config, solver):
     match_weights = out['match_weights']    # (b*(w-1),S,N) match weights S=1=scalar, S=3=matrix
     keypoint_ints = out['keypoint_ints']    # (b*(w-1),1,N) 0==reject, 1==keep
     BW = keypoint_ints.size(0)
-    batch_size = int(BW / (self.window_size - 1))
     window_size = config['window_size']
+    batch_size = int(BW / (window_size - 1))
     gpuid = config['gpuid']
     mah_thres = config['steam']['mah_thres']
     expect_approx_opt = config['steam']['expect_approx_opt']
