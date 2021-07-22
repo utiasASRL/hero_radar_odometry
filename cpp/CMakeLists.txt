@@ -44,6 +44,9 @@ target_link_libraries(steampy PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${S
 PYTHON_ADD_MODULE(SteamSolver SteamSolver.cpp P2P3ErrorEval.cpp SE2VelPriorEval.cpp mcransac.cpp)
 target_link_libraries(SteamSolver PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
 
+PYTHON_ADD_MODULE(BatchSolver BatchSolver.cpp P2P3ErrorEval.cpp mcransac.cpp)
+target_link_libraries(BatchSolver PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
+
 # dataloader
 PYTHON_ADD_MODULE(DataLoader DataLoader.cpp)
 target_link_libraries(DataLoader PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES} ${OpenCV_LIBRARIES})
