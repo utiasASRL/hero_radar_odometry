@@ -11,14 +11,6 @@ void BatchSolver::setQcInv(const np::ndarray& Qc_diag) {
     Qc_inv_.diagonal() = 1.0/temp.array();
 }
 
-
-// Set extrinsic transform Tsv
-//void BatchSolver::setExtrinsicTsv(const np::ndarray& T_sv) {
-//    Eigen::Matrix4d T_sv_eig = numpyToEigen2D(T_sv);
-//    lgmath::se3::Transformation T_sv_lg(T_sv_eig);
-//    T_s_v_ = steam::se3::FixedTransformEvaluator::MakeShared(T_sv_lg);
-//}
-
 // add new state variable at specified time
 void BatchSolver::addNewState(double time) {
     Eigen::Matrix<double, 6, 1> zero_vel;
@@ -90,12 +82,17 @@ void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
         int64_t tb_ = int64_t(p::extract<int64_t>(t2[j])) - time_ref_;
         double ta = double(ta_) / 1.0e6;
         double tb = double(tb_) / 1.0e6;
-        steam::se3::TransformStateEvaluator::Ptr Tsv = steam::se3::TransformStateEvaluator::MakeShared(T_s_v_);
+        // steam::se3::TransformStateEvaluator::Ptr Tsv = steam::se3::TransformStateEvaluator::MakeShared(T_s_v_);
+
+        steam::se3::TransformStateEvaluator::Ptr Tfl = steam::se3::TransformStateEvaluator::MakeShared(T_fl_);
+        steam::se3::TransformEvaluator::Ptr Trl = steam::se3::compose(T_rf_, Tfl);
+        steam::se3::TransformEvaluator::Ptr Trv = steam::se3::compose(Trl, T_lv_);
+
         steam::se3::TransformEvaluator::ConstPtr Ta0 = traj_.getInterpPoseEval(steam::Time(ta));
         steam::se3::TransformEvaluator::ConstPtr Tb0 = traj_.getInterpPoseEval(steam::Time(tb));
         steam::se3::TransformEvaluator::Ptr T_eval_ptr = steam::se3::composeInverse(
-            steam::se3::compose(Tsv, Tb0),
-            steam::se3::compose(Tsv, Ta0));  // Tba = Tb0 * inv(Ta0)
+            steam::se3::compose(Trv, Tb0),
+            steam::se3::compose(Trv, Ta0));  // Tba = Tb0 * inv(Ta0)
 
         // add cost
         steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
@@ -110,7 +107,7 @@ void BatchSolver::optimize() {
 
     // lock first pose
     states_[0].pose->setLock(true);
-    T_s_v_->setLock(true);  // temporary
+    T_fl_->setLock(true);  // temporary
 
     std::cout << "Getting WNOA prior terms..." << std::endl;
     steam::ParallelizedCostTermCollection::Ptr wnoa_costs(new steam::ParallelizedCostTermCollection());
@@ -125,7 +122,7 @@ void BatchSolver::optimize() {
         problem.addStateVariable(state.pose);
         problem.addStateVariable(state.velocity);
     }
-    problem.addStateVariable(T_s_v_);   // extrinsic
+    problem.addStateVariable(T_fl_);   // extrinsic
 
     std::cout << "Adding cost terms..." << std::endl;
     problem.addCostTerm(wnoa_costs);
@@ -141,11 +138,13 @@ void BatchSolver::optimize() {
 
 void BatchSolver::getPoses(np::ndarray& poses) {
     for (uint i = 0; i < states_.size(); ++i) {
-        Eigen::Matrix<double, 4, 4> Tsi =
-            T_s_v_->getValue().matrix()*states_[i].pose->getValue().matrix()*T_s_v_->getValue().inverse().matrix();
+//        Eigen::Matrix<double, 4, 4> Tsi =
+//            T_s_v_->getValue().matrix()*states_[i].pose->getValue().matrix()*T_s_v_->getValue().inverse().matrix();
+        Eigen::Matrix<double, 4, 4> Tvi = states_[i].pose->getValue().matrix();
         for (uint r = 0; r < 3; ++r) {
             for (uint c = 0; c < 4; ++c) {
-                poses[i][r][c] = float(Tsi(r, c));
+//                poses[i][r][c] = float(Tsi(r, c));
+                poses[i][r][c] = float(Tvi(r, c));
             }
         }
     }

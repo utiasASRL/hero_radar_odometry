@@ -16,10 +16,18 @@ public:
         Qc_inv_.setZero();
         Qc_inv_.diagonal() = 1.0/Qc_diag;
 
-        // Initialize extrinsic transform to identity
-//        T_sv_ = steam::se3::FixedTransformEvaluator::MakeShared(lgmath::se3::Transformation());
-//        lgmath::se3::Transformation T_v_s(T_v_s_eig);
-        T_s_v_ = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(lgmath::se3::Transformation()));
+        // Initialize extrinsic transforms
+        T_fl_ = steam::se3::TransformStateVar::Ptr(new steam::se3::TransformStateVar(lgmath::se3::Transformation()));
+        T_lv_ = steam::se3::FixedTransformEvaluator::MakeShared(lgmath::se3::Transformation());
+
+        Eigen::Matrix<double,4,4> T_rf_eig;
+        T_rf_eig << 1,  0,  0, 0,
+                    0, -1,  0, 0,
+                    0,  0, -1, 0,
+                    0,  0,  0, 1;
+        lgmath::se3::Transformation T_rf(T_rf_eig);
+        T_rf_ = steam::se3::FixedTransformEvaluator::MakeShared(T_rf);
+
 //        steam::ParallelizedCostTermCollection::Ptr costTerms(new steam::ParallelizedCostTermCollection());
         cost_terms_ = steam::ParallelizedCostTermCollection::Ptr(new steam::ParallelizedCostTermCollection());
     }
@@ -49,7 +57,15 @@ private:
 
     // States
     std::deque<TrajStateVar> states_;
-    steam::se3::TransformStateVar::Ptr T_s_v_;
+    steam::se3::TransformStateVar::Ptr T_fl_;
+
+    // Extrinsics
+    // frames: v (vehicle), l (lidar), f (flipped radar, i.e., z-up +), r (radar frame)
+    // T_rv = T_rf x T_fl x T_lv
+    // T_lv and T_rf are known constants
+//    steam::se3::TransformEvaluator::Ptr T_sv_;
+    steam::se3::TransformEvaluator::Ptr T_lv_;
+    steam::se3::TransformEvaluator::Ptr T_rf_;
 
     // Constants
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
