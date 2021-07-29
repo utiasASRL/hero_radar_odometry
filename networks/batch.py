@@ -49,6 +49,10 @@ class Batch():
                 good_matches.append(m)
         N = len(good_matches)
 
+        if N == 0:
+            print("Warning: No good matches, skipping this frame")
+            return
+
         p1 = np.zeros((N, 2))
         p2 = np.zeros((N, 2))
         p1p = np.zeros((N, 2))

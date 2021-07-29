@@ -10,7 +10,7 @@ from datasets.custom_sampler import RandomWindowBatchSampler, SequentialWindowBa
 from datasets.radar import load_radar, radar_polar_to_cartesian
 from utils.utils import get_inverse_tf, get_transform
 from datasets.oxford import OxfordDataset, mean_intensity_mask
-#import cpp.build.DataLoader as dataloadercpp
+import cpp.build.DataLoader as dataloadercpp
 
 CTS350 = 0
 CIR204 = 1    # Boreas
@@ -66,8 +66,8 @@ class BoreasDataset(OxfordDataset):
     def __init__(self, config, split='train'):
         super().__init__(config, split)
         self.navtech_version = CTS350
-        #self.dataloader = dataloadercpp.DataLoader(self.config['radar_resolution'], self.config['cart_resolution'],
-        #                                           self.config['cart_pixel_width'], self.navtech_version)
+        self.dataloader = dataloadercpp.DataLoader(self.config['radar_resolution'], self.config['cart_resolution'],
+                                                   self.config['cart_pixel_width'], self.navtech_version)
 
     def get_frames_with_gt(self, frames, gt_path):
         # Drop the last few frame
@@ -115,7 +115,7 @@ class BoreasDataset(OxfordDataset):
             range_bins = 3360
 
         # Numpy arrays need to be sized correctly before passing them to the dataloader.
-        '''timestamps = np.zeros((num_azimuths, 1), dtype=np.int64)
+        timestamps = np.zeros((num_azimuths, 1), dtype=np.int64)
         azimuths = np.zeros((num_azimuths, 1), dtype=np.float32)
         polar = np.zeros((num_azimuths, range_bins), dtype=np.float32)
         data = np.zeros((cart_pixel_width, cart_pixel_width), dtype=np.float32)
@@ -127,18 +127,19 @@ class BoreasDataset(OxfordDataset):
 
         polar_mask = mean_intensity_mask(polar)
         self.dataloader.polar_to_cartesian(azimuths, polar_mask, mask)
-        mask = np.expand_dims(mask, axis=0)'''
+        mask = np.expand_dims(mask, axis=0)
 
         # Requires that the cartesian images and masks are pre-computed and stored alongside the dataset
         ###########
-        timestamps, azimuths, _, polar = load_radar(frame)
-        data = np.expand_dims(cv2.imread(cart_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
-        mask = np.expand_dims(cv2.imread(mask_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
+        # timestamps, azimuths, _, polar = load_radar(frame)
+        # data = np.expand_dims(cv2.imread(cart_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
+        # mask = np.expand_dims(cv2.imread(mask_frame, cv2.IMREAD_GRAYSCALE).astype(np.float32), axis=0) / 255.0
         ###########
 
         # Get ground truth transform between this frame and the next
         radar_time = int(self.frames[idx].split('.')[0])
-        T_21 = self.get_groundtruth_odometry(radar_time, self.data_dir + seq + '/applanix/radar_poses.csv')
+        # T_21 = self.get_groundtruth_odometry(radar_time, self.data_dir + seq + '/applanix/radar_poses.csv')
+        T_21 = np.identity(4)
         time1 = timestamps[0, 0]
         if idx + 1 < len(self.frames):
             timestamps2, _, _, _ = load_radar(self.data_dir + seq + '/radar/' + self.frames[idx + 1])

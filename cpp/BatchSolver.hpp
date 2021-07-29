@@ -42,7 +42,11 @@ public:
     void optimize();
 
     // output
+    int getTrajLength() {
+        return states_.size();
+    }
     void getPoses(np::ndarray& poses);
+    void getPath(np::ndarray& path);
     void getVelocities(np::ndarray& vels);
     void useRansac() {use_ransac = true;}
 
@@ -70,6 +74,7 @@ private:
     // Constants
     Eigen::Matrix<double, 6, 6> Qc_inv_;  // Motion prior inverse Qc
     int64_t time_ref_ = 0;
+    double z_offset_ = 0;
 
     // RANSAC
     bool use_ransac = true;
@@ -84,6 +89,8 @@ BOOST_PYTHON_MODULE(BatchSolver) {
         .def("addFramePair", &BatchSolver::addFramePair)
         .def("optimize", &BatchSolver::optimize)
         .def("getPoses", &BatchSolver::getPoses)
+        .def("getPath", &BatchSolver::getPath)
         .def("getVelocities", &BatchSolver::getVelocities)
-        .def("useRansac", &BatchSolver::useRansac);
+        .def("useRansac", &BatchSolver::useRansac)
+        .def("getTrajLength", &BatchSolver::getTrajLength);
 }

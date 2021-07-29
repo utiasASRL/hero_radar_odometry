@@ -17,7 +17,7 @@ from utils.vis import convert_plt_to_img, plot_sequences
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/steam.json', type=str, help='config file path')
+    parser.add_argument('--config', default='config/boreas_local.json', type=str, help='config file path')
     parser.add_argument('--pretrain', default=None, type=str, help='pretrain checkpoint path')
     args = parser.parse_args()
     with open(args.config) as f:
@@ -37,13 +37,32 @@ if __name__ == '__main__':
     T_pred = []
 
     for batchi, batch in enumerate(test_loader):
-        if batchi < 50:
-            continue
         print('{} / {}'.format(batchi, len(test_loader)))
+        # if batchi < 344:
+        #     continue
+        if batchi > 560:
+            break
 
         # load next frame pair
+        # if batchi == 345:
+        # // incomplete radar scan at 345
         model.add_frame_pair(batch)
 
     # run batch solve
     model.solver.optimize()
+
+    # get path
+    path = np.zeros((model.solver.getTrajLength(), 3), dtype=np.float32)
+    model.solver.getPath(path)
+
+    # plot
+    plt.figure()
+    ax = plt.axes()
+    plt.axis('equal')
+    plt.plot(path[:, 0], path[:, 1], 'k.', label='estimated path')
+    # ax.legend()
+    ax.set_xlabel('x [m]')
+    ax.set_ylabel('y [m]')
+
+    plt.imshow()
 

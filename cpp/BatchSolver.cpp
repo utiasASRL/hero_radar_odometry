@@ -1,6 +1,7 @@
 #include <iostream>
 #include "BatchSolver.hpp"
 #include "P2P3ErrorEval.hpp"
+#include "LidarImuCalibPriorEval.hpp"
 #include "mcransac.hpp"
 
 
@@ -109,9 +110,25 @@ void BatchSolver::optimize() {
     states_[0].pose->setLock(true);
     T_fl_->setLock(true);  // temporary
 
+    // additional cost terms
+    steam::ParallelizedCostTermCollection::Ptr costs(new steam::ParallelizedCostTermCollection());
+
+    // prior on extrinsic
+    steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
+    Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
+    R(0, 0) = 0.01*0.01;    // variance of z-offset
+    R(1, 1) = 0.001*0.001;  // variance of roll-offset
+    R(2, 2) = 0.001*0.001;  // variance of elevation-offset
+    steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(R, steam::COVARIANCE));
+    steam::se3::TransformStateEvaluator::Ptr Tfl = steam::se3::TransformStateEvaluator::MakeShared(T_fl_);
+    steam::LidarImuCalibPriorEval::Ptr error(new steam::LidarImuCalibPriorEval(z_offset_, Tfl));
+    steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
+        new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncL2));
+    costs->add(cost);
+
+    // WNOA
     std::cout << "Getting WNOA prior terms..." << std::endl;
-    steam::ParallelizedCostTermCollection::Ptr wnoa_costs(new steam::ParallelizedCostTermCollection());
-    traj_.appendPriorCostTerms(wnoa_costs);
+    traj_.appendPriorCostTerms(costs);
 
     steam::OptimizationProblem problem;
 
@@ -125,7 +142,7 @@ void BatchSolver::optimize() {
     problem.addStateVariable(T_fl_);   // extrinsic
 
     std::cout << "Adding cost terms..." << std::endl;
-    problem.addCostTerm(wnoa_costs);
+    problem.addCostTerm(costs);
     problem.addCostTerm(cost_terms_);
     SolverType::Params params;
     params.verbose = true;
@@ -146,6 +163,15 @@ void BatchSolver::getPoses(np::ndarray& poses) {
 //                poses[i][r][c] = float(Tsi(r, c));
                 poses[i][r][c] = float(Tvi(r, c));
             }
+        }
+    }
+}
+
+void BatchSolver::getPath(np::ndarray& path) {
+    for (uint i = 0; i < states_.size(); ++i) {
+        Eigen::Matrix<double, 3, 1> r_vi_in_i = states_[i].pose->getValue().r_ba_ina();
+        for (uint r = 0; r < 3; ++r) {
+            path[i][r] = float(r_vi_in_i(r));
         }
     }
 }

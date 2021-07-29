@@ -44,7 +44,7 @@ target_link_libraries(steampy PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${S
 PYTHON_ADD_MODULE(SteamSolver SteamSolver.cpp P2P3ErrorEval.cpp SE2VelPriorEval.cpp mcransac.cpp)
 target_link_libraries(SteamSolver PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
 
-PYTHON_ADD_MODULE(BatchSolver BatchSolver.cpp P2P3ErrorEval.cpp mcransac.cpp)
+PYTHON_ADD_MODULE(BatchSolver BatchSolver.cpp P2P3ErrorEval.cpp mcransac.cpp LidarImuCalibPriorEval.cpp)
 target_link_libraries(BatchSolver PRIVATE ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${Steam_LIBRARIES})
 
 # dataloader
