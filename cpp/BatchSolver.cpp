@@ -1,6 +1,7 @@
 #include <iostream>
 #include "BatchSolver.hpp"
 #include "P2P3ErrorEval.hpp"
+#include "P2P2ErrorEval.hpp"
 #include "LidarImuCalibPriorEval.hpp"
 #include "mcransac.hpp"
 
@@ -10,6 +11,13 @@ void BatchSolver::setQcInv(const np::ndarray& Qc_diag) {
     Eigen::Matrix<double, 6, 1> temp = numpyToEigen2D(Qc_diag);
     Qc_inv_.setZero();
     Qc_inv_.diagonal() = 1.0/temp.array();
+}
+
+// Set the extrinsic matrix between vehicle and lidar
+void BatchSolver::setExtrinsicLidarVehicle(const np::ndarray& T_lv) {
+    Eigen::Matrix4d T_lv_eig = numpyToEigen2D(T_lv);
+    lgmath::se3::Transformation T_lv_lg(T_lv_eig);
+    T_lv_ = steam::se3::FixedTransformEvaluator::MakeShared(T_lv_lg);
 }
 
 // add new state variable at specified time
@@ -65,11 +73,10 @@ void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
     }
 
     // loop through each match pair
-    steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
+//    steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
+    steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
     for (uint k = 0; k < inliers.size(); ++k) {
         uint j = inliers[k];    // index of inlier
-        Eigen::Matrix3d R = Eigen::Matrix3d::Identity();    // set weight to identity (TODO: allow scalar tuning)
-        steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(R, steam::INFORMATION));
 
         // get measurement
         Eigen::Vector4d read;
@@ -96,10 +103,111 @@ void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
             steam::se3::compose(Trv, Ta0));  // Tba = Tb0 * inv(Ta0)
 
         // add cost
-        steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
-        steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
-            new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncGM));
-        cost_terms_->add(cost);
+        if (radar_2d_error_) {
+            Eigen::Matrix2d R = 0.5*0.5*Eigen::Matrix2d::Identity();    // set weight (TODO: allow scalar tuning)
+            steam::BaseNoiseModel<2>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<2>(R, steam::COVARIANCE));
+            steam::P2P2ErrorEval::Ptr error(new steam::P2P2ErrorEval(ref, read, T_eval_ptr));
+            steam::WeightedLeastSqCostTerm<2, 6>::Ptr cost(
+                new steam::WeightedLeastSqCostTerm<2, 6>(error, sharedNoiseModel, sharedLossFunc));
+            radar_cost_terms_->add(cost);
+        }
+        else {
+            Eigen::Matrix3d R = 0.5*0.5*Eigen::Matrix3d::Identity();    // set weight (TODO: allow scalar tuning)
+            R(2, 2) = 1.0;
+            steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(R, steam::COVARIANCE));
+            steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
+            steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
+                new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFunc));
+            radar_cost_terms_->add(cost);
+        }
+    }
+}
+
+void BatchSolver::addLidarPoses(const p::object& T_il_list, const p::object& times_list) {
+    std::vector<np::ndarray> T_il_vec = toStdVector<np::ndarray>(T_il_list);
+    std::vector<int64_t> times_vec = toStdVector<int64_t>(times_list);
+
+    Eigen::Matrix<double,6,6> cov_eig = 1e-2*Eigen::Matrix<double,6,6>::Identity();
+    cov_eig(3, 3) = 1e-4;
+    cov_eig(4, 4) = 1e-4;
+    cov_eig(5, 5) = 1e-4;   // TODO: tune through config
+    steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<6>(cov_eig));
+    steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
+
+    for (int i = 0; i < T_il_vec.size(); ++i) {
+        // skip if before first state time
+        if (times_vec[i] <= getFirstStateTime())
+            continue;
+
+        // break if after last state time
+        if (times_vec[i] >= getLastStateTime())
+            break;
+
+        // add pose measurement
+        Eigen::Matrix<double,4,4> T_il_eig = numpyToEigen2D(T_il_vec[i]);
+        lgmath::se3::Transformation T_il_meas(T_il_eig);
+        int64_t time_nano = times_vec[i] - time_ref_*1e3;
+        double time_sec = double(time_nano) / 1.0e9;
+        std::cout << "Adding lidar pose measurement (" << i << ") at: " << time_sec << " seconds" << std::endl;
+        steam::se3::TransformEvaluator::ConstPtr T_vi = traj_.getInterpPoseEval(steam::Time(time_sec));
+//        steam::TransformErrorEval::Ptr posefunc(new steam::TransformErrorEval(T_il_meas.inverse(),
+//            steam::se3::ComposeTransformEvaluator::MakeShared(T_lv_, T_vi)));
+        steam::TransformErrorEval::Ptr posefunc(new steam::TransformErrorEval(T_il_meas.inverse(), T_vi));
+        steam::WeightedLeastSqCostTerm<6,6>::Ptr cost(new steam::WeightedLeastSqCostTerm<6,6>(
+            posefunc, sharedNoiseModel, sharedLossFunc));
+        lidar_cost_terms_->add(cost);
+    }
+}
+
+void BatchSolver::addLidarPosesRel(const p::object& T_il_list, const p::object& times_list) {
+    std::vector<np::ndarray> T_il_vec = toStdVector<np::ndarray>(T_il_list);
+    std::vector<int64_t> times_vec = toStdVector<int64_t>(times_list);
+
+    Eigen::Matrix<double,6,6> cov_eig = 1e-2*Eigen::Matrix<double,6,6>::Identity();
+    cov_eig(3, 3) = 1e-4;
+    cov_eig(4, 4) = 1e-4;
+    cov_eig(5, 5) = 1e-4;   // TODO: tune through config
+    steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<6>(cov_eig));
+    steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
+
+    for (int i = 0; i < T_il_vec.size() - 1; ++i) {
+        // skip if before first state time
+        if (times_vec[i] <= getFirstStateTime())
+            continue;
+
+        // break if after last state time
+        if (times_vec[i + 1] >= getLastStateTime())
+            break;
+
+        // add relative pose measurement
+        Eigen::Matrix<double,4,4> temp = numpyToEigen2D(T_il_vec[i]);
+        lgmath::se3::Transformation T_i_l1_meas(temp);
+        int64_t time1_nano = times_vec[i] - time_ref_*1e3;
+        double time1_sec = double(time1_nano) / 1.0e9;
+
+        temp = numpyToEigen2D(T_il_vec[i+1]);
+        lgmath::se3::Transformation T_i_l2_meas(temp);
+        int64_t time2_nano = times_vec[i+1] - time_ref_*1e3;
+        double time2_sec = double(time2_nano) / 1.0e9;
+
+        std::cout << "Adding lidar relative pose measurement (" << i << ", " << i+1 << ") at: " << time1_sec << " and "
+            << time2_sec <<" seconds" << std::endl;
+
+        steam::se3::TransformEvaluator::ConstPtr T_v1_i = traj_.getInterpPoseEval(steam::Time(time1_sec));
+        steam::se3::TransformEvaluator::ConstPtr T_v2_i = traj_.getInterpPoseEval(steam::Time(time2_sec));
+
+//        steam::se3::TransformEvaluator::Ptr T_l2_l1 = steam::se3::composeInverse(
+//            steam::se3::compose(T_lv_, T_v2_i),
+//            steam::se3::compose(T_lv_, T_v1_i));  // Tba = Tb0 * inv(Ta0)
+        steam::se3::TransformEvaluator::Ptr T_l2_l1 = steam::se3::composeInverse(
+            T_v2_i,
+            T_v1_i);  // Tba = Tb0 * inv(Ta0)
+
+        steam::TransformErrorEval::Ptr posefunc(new steam::TransformErrorEval(T_i_l2_meas.inverse()*T_i_l1_meas,
+            T_l2_l1));
+        steam::WeightedLeastSqCostTerm<6,6>::Ptr cost(new steam::WeightedLeastSqCostTerm<6,6>(
+            posefunc, sharedNoiseModel, sharedLossFunc));
+        lidar_cost_terms_->add(cost);
     }
 }
 
@@ -107,24 +215,47 @@ void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
 void BatchSolver::optimize() {
 
     // lock first pose
-    states_[0].pose->setLock(true);
-    T_fl_->setLock(true);  // temporary
+    if (lock_first_pose_) {
+        states_[0].pose->setLock(true);
+//        T_fl_->setLock(true);  // not solving for extrinsic if no lidar poses
+    }
+    else {
+        states_[0].pose->setLock(false);
+    }
 
     // additional cost terms
     steam::ParallelizedCostTermCollection::Ptr costs(new steam::ParallelizedCostTermCollection());
 
     // prior on extrinsic
-    steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
-    Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
-    R(0, 0) = 0.01*0.01;    // variance of z-offset
-    R(1, 1) = 0.001*0.001;  // variance of roll-offset
-    R(2, 2) = 0.001*0.001;  // variance of elevation-offset
-    steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(R, steam::COVARIANCE));
+//    steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
+//    Eigen::Matrix3d U = Eigen::Matrix3d::Identity();
+//    U(0, 0) = 0.01*0.01;    // variance of z-offset
+//    U(1, 1) = 0.001*0.001;  // variance of roll-offset
+//    U(2, 2) = 0.001*0.001;  // variance of elevation-offset
+//    steam::BaseNoiseModel<3>::Ptr sharedNoiseModelU(new steam::StaticNoiseModel<3>(U, steam::COVARIANCE));
+//    steam::se3::TransformStateEvaluator::Ptr Tfl = steam::se3::TransformStateEvaluator::MakeShared(T_fl_);
+//    steam::LidarImuCalibPriorEval::Ptr error(new steam::LidarImuCalibPriorEval(z_offset_, Tfl));
+//    steam::WeightedLeastSqCostTerm<3, 6>::Ptr costU(
+//        new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModelU, sharedLossFuncL2));
+//    costs->add(costU);
+
     steam::se3::TransformStateEvaluator::Ptr Tfl = steam::se3::TransformStateEvaluator::MakeShared(T_fl_);
-    steam::LidarImuCalibPriorEval::Ptr error(new steam::LidarImuCalibPriorEval(z_offset_, Tfl));
-    steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
-        new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFuncL2));
-    costs->add(cost);
+    if (Tfl->isActive()) {
+        steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
+        Eigen::Matrix<double,6,6> R = Eigen::Matrix<double,6,6>::Zero();
+        Eigen::Array<double, 1, 6> R_diag;
+        R_diag << 0.0001, 0.0001, 0.0001, 8e-5, 8e-5, 2.46741264;
+        R.diagonal() = R_diag;
+        steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<6>(R, steam::COVARIANCE));
+
+        Eigen::Matrix4d Tfl_eig = Eigen::Matrix4d::Identity();
+        Tfl_eig(2, 3) = z_offset_;
+        lgmath::se3::Transformation Tfl_meas(Tfl_eig);
+        steam::TransformErrorEval::Ptr posefunc(new steam::TransformErrorEval(Tfl_meas, Tfl));
+        steam::WeightedLeastSqCostTerm<6,6>::Ptr cost(new steam::WeightedLeastSqCostTerm<6,6>(
+            posefunc, sharedNoiseModel, sharedLossFuncL2));
+        costs->add(cost);
+    }
 
     // WNOA
     std::cout << "Getting WNOA prior terms..." << std::endl;
@@ -143,7 +274,10 @@ void BatchSolver::optimize() {
 
     std::cout << "Adding cost terms..." << std::endl;
     problem.addCostTerm(costs);
-    problem.addCostTerm(cost_terms_);
+    if (use_radar_)
+        problem.addCostTerm(radar_cost_terms_);
+    if (use_lidar_)
+        problem.addCostTerm(lidar_cost_terms_);
     SolverType::Params params;
     params.verbose = true;
     solver_ = SolverBasePtr(new SolverType(&problem, params));
@@ -151,6 +285,12 @@ void BatchSolver::optimize() {
     std::cout << "Optimizing..." << std::endl;
     solver_->optimize();
     std::cout << "Complete." << std::endl;
+
+    std::cout << "T_rf:" << std::endl << T_rf_->evaluate().matrix() << std::endl << std::endl;
+    std::cout << "T_fl:" << std::endl << T_fl_->getValue().matrix() << std::endl << std::endl;
+    std::cout << "T_lv:" << std::endl << T_lv_->evaluate().matrix() << std::endl << std::endl;
+
+    std::cout << T_rf_->evaluate().matrix()*T_fl_->getValue().matrix() << std::endl << std::endl;
 }
 
 void BatchSolver::getPoses(np::ndarray& poses) {
@@ -167,12 +307,15 @@ void BatchSolver::getPoses(np::ndarray& poses) {
     }
 }
 
-void BatchSolver::getPath(np::ndarray& path) {
+void BatchSolver::getPath(np::ndarray& path, np::ndarray& times) {
     for (uint i = 0; i < states_.size(); ++i) {
         Eigen::Matrix<double, 3, 1> r_vi_in_i = states_[i].pose->getValue().r_ba_ina();
+//        Eigen::Matrix<double, 3, 1> r_vi_in_i =
+//            (states_[i].pose->getValue()*states_[0].pose->getValue().inverse()).r_ba_ina();
         for (uint r = 0; r < 3; ++r) {
             path[i][r] = float(r_vi_in_i(r));
         }
+        times[i] = float(states_[i].time.seconds());
     }
 }
 

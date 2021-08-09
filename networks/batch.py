@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 from utils.utils import convert_to_radar_frame, mask_intensity_filter
@@ -5,6 +6,9 @@ import cv2
 import cpp.build.BatchSolver as steamcpp
 from datasets.features import *
 from utils.utils import getApproxTimeStamps
+
+import matplotlib.pyplot as plt
+from datasets.oxford import get_sequences, get_frames
 
 class Batch():
     """Hand-crafted feature extraction (cen2018) and descriptors (orb)."""
@@ -19,11 +23,21 @@ class Batch():
         self.cart_resolution = config['cart_resolution']
         self.cart_pixel_width = config['cart_pixel_width']
         self.solver = steamcpp.BatchSolver()
+        self.radar_frames = [] # for plotting
 
-    def add_frame_pair(self, batch):
+        # determine directory with lidar data
+        temp = get_sequences(config['data_dir'], '')
+        self.lidar_dir = os.path.join(config['data_dir'], temp[config['test_split'][0]], 'lidar')
+        self.lidar_frames = get_frames(self.lidar_dir, extension='.bin')
+
+        # TODO
+        self.time_offset = int((9599351 - 2e5)*1e3)
+        # self.time_offset = 0
+
+    def add_frame_pair(self, batch, save_for_plotting=False):
         data = batch['data']
         timestamps = batch['timestamps']
-        t_ref = batch['t_ref']
+        # t_ref = batch['t_ref']
         tgt_ids = [1]
         src_ids = [0]
         polar = batch['polar'].numpy().squeeze()
@@ -91,4 +105,64 @@ class Batch():
         self.solver.addFramePair(points2, points1,
             timestamps2, timestamps1, np.min(timestamps1), np.max(timestamps2))
 
+        if save_for_plotting:
+            timestamps1 = getApproxTimeStamps([tgt1], [times1])[0]
+            self.radar_frames += [{'points': tgt1, 'times': timestamps1}]
+
+        # self.plot_frame(0)
         return
+
+    def find_closest_lidar_frame(self, start_time, end_time):
+        for i, file in enumerate(self.lidar_frames):
+            lidar_time = (int(file[:-4]) + self.time_offset)*1e-3  # last 4 characters should be '.bin'
+            if start_time < lidar_time < end_time:
+                return True, i, file    # found frame
+
+        # did not find appropriate frame
+        return False, -1, 'N/A'
+
+    def plot_frame(self, frame_num):
+        # radar
+        radar_points = self.radar_frames[frame_num]['points']
+        radar_times = self.radar_frames[frame_num]['times']
+
+        # get corresponding lidar frame
+        success, frame_id, filename = self.find_closest_lidar_frame(radar_times.min(), radar_times.max())
+        lidar_data = np.fromfile(os.path.join(self.lidar_dir, filename), dtype=np.float32).reshape(-1, 6)
+        # lidar_data = np.fromfile(os.path.join(self.lidar_dir, self.lidar_frames[frame_id]), dtype=np.float32).reshape(-1, 6)
+        ids = np.nonzero((-1 < lidar_data[:, 2])*(lidar_data[:, 2] < 1.5))
+        lidar_points = lidar_data[ids[0], :3]
+        lidar_times = lidar_data[ids[0], 5]
+        # if x[2, i] < -1.5 or x[2, i] > 1.5:
+
+        # C = np.array([[6.861993198242921643e-01, 7.274135642622281406e-01, 0.000000000000000000e+00],
+        #               [7.274135642622281406e-01, -6.861993198242921643e-01, 0.000000000000000000e+00],
+        #               [0.000000000000000000e+00, 0.000000000000000000e+00, -1.000000000000000000e+00]])
+        # t = np.array([[0.0], [0.0], [0.21]])
+
+        C = np.array([[0.669,     0.74,  -0.0624],
+                      [0.741,   -0.671,  -0.0114],
+                      [-0.0503,  -0.0386,   -0.998]])
+        t = np.array([[0.0191], [-0.00912], [0.222]])
+
+        # 0.635  0.728  0.259 -0.107
+        # 0.741 -0.669 0.0646 -0.186
+        #  0.22  0.151 -0.964  0.408
+        #     0      0      0      1
+
+        lidar_points = lidar_points@C.T + t.T
+
+        # undistort and transform to vehicle frame
+        # TODO
+
+        plt.figure()
+        plt.plot(lidar_points[::5, 0], lidar_points[::5, 1], '.r', label='lidar')
+
+        # plt.axis('equal')
+        #
+        # plt.figure()
+        plt.plot(radar_points[:, 0], radar_points[:, 1], '.b', label='radar')
+        plt.axis('equal')
+
+        plt.show()
+        a = 1
