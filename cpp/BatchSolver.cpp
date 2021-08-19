@@ -38,6 +38,27 @@ void BatchSolver::addNewState(double time) {
     traj_.add(state.time, tse, state.velocity);
 }
 
+// set the diagonal covariance of the extrinsic prior using a 6x1 vector
+void BatchSolver::setExtrinsicPriorCov(const np::ndarray& var_diag) {
+    Eigen::Matrix<double, 6, 1> temp = numpyToEigen2D(var_diag);
+    extrinsic_prior_cov_.setZero();
+    extrinsic_prior_cov_.diagonal() = temp.array();
+}
+
+// set the diagonal covariance of the radar keypoint evaluator using 3x1 vector
+void BatchSolver::setRadarCov(const np::ndarray& var_diag) {
+    Eigen::Matrix<double, 3, 1> temp = numpyToEigen2D(var_diag);
+    radar_cov_.setZero();
+    radar_cov_.diagonal() = temp.array();
+}
+
+// set the diagonal covariance of the lidar pose evaluator using 6x1 vector
+void BatchSolver::setLidarCov(const np::ndarray& var_diag) {
+    Eigen::Matrix<double, 6, 1> temp = numpyToEigen2D(var_diag);
+    lidar_cov_.setZero();
+    lidar_cov_.diagonal() = temp.array();
+}
+
 // input point matrices are Nx2
 void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
     const np::ndarray& t2, const np::ndarray& t1, const int64_t& earliest_time, const int64_t& latest_time) {
@@ -72,9 +93,14 @@ void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
         }
     }
 
+    // choose between L2 and GemanMcClure
+    steam::LossFunctionBase::Ptr sharedLossFunc;
+    if (use_radar_robust_cost_)
+        sharedLossFunc = steam::GemanMcClureLossFunc::Ptr(new steam::GemanMcClureLossFunc(1.0));
+    else
+        sharedLossFunc = steam::L2LossFunc::Ptr(new steam::L2LossFunc());
+
     // loop through each match pair
-//    steam::GemanMcClureLossFunc::Ptr sharedLossFuncGM(new steam::GemanMcClureLossFunc(1.0));
-    steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
     for (uint k = 0; k < inliers.size(); ++k) {
         uint j = inliers[k];    // index of inlier
 
@@ -104,7 +130,7 @@ void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
 
         // add cost
         if (radar_2d_error_) {
-            Eigen::Matrix2d R = 0.5*0.5*Eigen::Matrix2d::Identity();    // set weight (TODO: allow scalar tuning)
+            Eigen::Matrix2d R = radar_cov_.block<2, 2>(0, 0);
             steam::BaseNoiseModel<2>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<2>(R, steam::COVARIANCE));
             steam::P2P2ErrorEval::Ptr error(new steam::P2P2ErrorEval(ref, read, T_eval_ptr));
             steam::WeightedLeastSqCostTerm<2, 6>::Ptr cost(
@@ -112,9 +138,7 @@ void BatchSolver::addFramePair(const np::ndarray& p2, const np::ndarray& p1,
             radar_cost_terms_->add(cost);
         }
         else {
-            Eigen::Matrix3d R = 0.5*0.5*Eigen::Matrix3d::Identity();    // set weight (TODO: allow scalar tuning)
-            R(2, 2) = 1.0;
-            steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(R, steam::COVARIANCE));
+            steam::BaseNoiseModel<3>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<3>(radar_cov_, steam::COVARIANCE));
             steam::P2P3ErrorEval::Ptr error(new steam::P2P3ErrorEval(ref, read, T_eval_ptr));
             steam::WeightedLeastSqCostTerm<3, 6>::Ptr cost(
                 new steam::WeightedLeastSqCostTerm<3, 6>(error, sharedNoiseModel, sharedLossFunc));
@@ -127,11 +151,7 @@ void BatchSolver::addLidarPoses(const p::object& T_il_list, const p::object& tim
     std::vector<np::ndarray> T_il_vec = toStdVector<np::ndarray>(T_il_list);
     std::vector<int64_t> times_vec = toStdVector<int64_t>(times_list);
 
-    Eigen::Matrix<double,6,6> cov_eig = 1e-2*Eigen::Matrix<double,6,6>::Identity();
-    cov_eig(3, 3) = 1e-4;
-    cov_eig(4, 4) = 1e-4;
-    cov_eig(5, 5) = 1e-4;   // TODO: tune through config
-    steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<6>(cov_eig));
+    steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<6>(lidar_cov_));
     steam::L2LossFunc::Ptr sharedLossFunc(new steam::L2LossFunc());
 
     for (int i = 0; i < T_il_vec.size(); ++i) {
@@ -242,14 +262,17 @@ void BatchSolver::optimize() {
     steam::se3::TransformStateEvaluator::Ptr Tfl = steam::se3::TransformStateEvaluator::MakeShared(T_fl_);
     if (Tfl->isActive()) {
         steam::L2LossFunc::Ptr sharedLossFuncL2(new steam::L2LossFunc());
-        Eigen::Matrix<double,6,6> R = Eigen::Matrix<double,6,6>::Zero();
-        Eigen::Array<double, 1, 6> R_diag;
-        R_diag << 0.0001, 0.0001, 0.0001, 8e-5, 8e-5, 2.46741264;
-        R.diagonal() = R_diag;
-        steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(new steam::StaticNoiseModel<6>(R, steam::COVARIANCE));
+//        Eigen::Matrix<double,6,6> R = Eigen::Matrix<double,6,6>::Zero();
+//        Eigen::Array<double, 1, 6> R_diag;
+//        R_diag << 0.0001, 0.0001, 0.0001, 8e-5, 8e-5, 2.46741264;
+//        R.diagonal() = R_diag;
+        steam::BaseNoiseModel<6>::Ptr sharedNoiseModel(
+            new steam::StaticNoiseModel<6>(extrinsic_prior_cov_, steam::COVARIANCE));
 
         Eigen::Matrix4d Tfl_eig = Eigen::Matrix4d::Identity();
         Tfl_eig(2, 3) = z_offset_;
+        Tfl_eig(1, 1) = -1.0;
+        Tfl_eig(2, 2) = -1.0;
         lgmath::se3::Transformation Tfl_meas(Tfl_eig);
         steam::TransformErrorEval::Ptr posefunc(new steam::TransformErrorEval(Tfl_meas, Tfl));
         steam::WeightedLeastSqCostTerm<6,6>::Ptr cost(new steam::WeightedLeastSqCostTerm<6,6>(
@@ -319,11 +342,69 @@ void BatchSolver::getPath(np::ndarray& path, np::ndarray& times) {
     }
 }
 
+void BatchSolver::getRadarLidarExtrinsic(np::ndarray& T_rl) {
+    Eigen::Matrix4d T_rl_eig = T_rf_->evaluate().matrix()*T_fl_->getValue().matrix();
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 4; ++c) {
+            T_rl[r][c] = float(T_rl_eig(r, c));
+        }
+    }
+}
+
 void BatchSolver::getVelocities(np::ndarray& vels) {
     for (uint i = 0; i < states_.size(); ++i) {
         Eigen::Matrix<double, 6, 1> vel = states_[i].velocity->getValue();
         for (uint r = 0; r < 6; ++r) {
             vels[i][r] = float(vel(r));
+        }
+    }
+}
+
+void BatchSolver::undistortPointcloud(np::ndarray& points, const np::ndarray& times,
+        const int64_t& ref_time, const np::ndarray& Trl_np, const int& mode) {
+    // get vehicle pose at ref_time
+    double t_ref_sec = double(ref_time - time_ref_) / 1.0e6;
+    steam::se3::TransformEvaluator::ConstPtr T_ref_i = traj_.getInterpPoseEval(steam::Time(t_ref_sec));
+
+    // get extrinsic
+    steam::se3::TransformEvaluator::Ptr Tsv;
+    if (mode == 0) {    // radar
+        steam::se3::TransformStateEvaluator::Ptr Tfl = steam::se3::TransformStateEvaluator::MakeShared(T_fl_);
+        steam::se3::TransformEvaluator::Ptr Trl = steam::se3::compose(T_rf_, Tfl);
+        Tsv = steam::se3::compose(Trl, T_lv_);
+    }
+    else if (mode == 1) {   // radar but with given extrinsic
+        Eigen::Matrix4d Trl_eig = numpyToEigen2D(Trl_np);
+        steam::se3::TransformEvaluator::Ptr Trl =
+            steam::se3::FixedTransformEvaluator::MakeShared(lgmath::se3::Transformation(Trl_eig));
+        Tsv = steam::se3::compose(Trl, T_lv_);
+    }
+    else {  // lidar
+        Tsv = T_lv_;
+    }
+
+    // loop through every point
+    for (int i = 0; i < points.shape(0); ++i) {
+        // interpolate for pose
+        int64_t ta_ = int64_t(p::extract<int64_t>(times[i])) - time_ref_;
+        double ta = double(ta_) / 1.0e6;
+        steam::se3::TransformEvaluator::ConstPtr T_a_i = traj_.getInterpPoseEval(steam::Time(ta));
+
+        // transform to ref
+        Eigen::Vector4d point;
+        if (mode == 0 || mode == 1) { // radar
+            point << double(p::extract<float>(points[i][0])), double(p::extract<float>(points[i][1])), 0.0, 1.0;
+        }
+        else {  // lidar
+            point << double(p::extract<float>(points[i][0])), double(p::extract<float>(points[i][1])),
+                     double(p::extract<float>(points[i][2])), 1.0;
+        }
+        Eigen::Vector4d point_ref = T_ref_i->evaluate().matrix() * T_a_i->evaluate().inverse().matrix()
+            * Tsv->evaluate().inverse().matrix() * point;
+
+        // write out
+        for (uint r = 0; r < points.shape(1); ++r) {
+            points[i][r] = float(point_ref(r));
         }
     }
 }

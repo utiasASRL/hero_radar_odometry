@@ -9,6 +9,7 @@ from utils.utils import getApproxTimeStamps
 
 import matplotlib.pyplot as plt
 from datasets.oxford import get_sequences, get_frames
+from utils.time_utils import sync_ntp_to_ros_time, get_ros_gps_times, get_gps_time_from_utc_stamp
 
 class Batch():
     """Hand-crafted feature extraction (cen2018) and descriptors (orb)."""
@@ -24,20 +25,34 @@ class Batch():
         self.cart_pixel_width = config['cart_pixel_width']
         self.solver = steamcpp.BatchSolver()
         self.radar_frames = [] # for plotting
+        self.lidar_z_lim = config['plot']['lidar_z_lim']
+        self.plot_dir = config['plot']['dir']
+        self.frame_counter = 0
+
+        # set solver parameters
+        self.solver.setExtrinsicPriorCov(np.array(config['steam']['ex_prior_var']).reshape(6, 1))
+        self.solver.setRadarCov(np.array(config['steam']['radar_var']).reshape(3, 1))
+        self.solver.setLidarCov(np.array(config['steam']['lidar_var']).reshape(6, 1))
+        self.solver.setRadarRobustCost(config['steam']['robust_radar_cost'])
 
         # determine directory with lidar data
         temp = get_sequences(config['data_dir'], '')
-        self.lidar_dir = os.path.join(config['data_dir'], temp[config['test_split'][0]], 'lidar')
+        root = os.path.join(config['data_dir'], temp[config['test_split'][0]])
+        self.lidar_dir = os.path.join(root, 'lidar')
         self.lidar_frames = get_frames(self.lidar_dir, extension='.bin')
 
         # TODO
-        self.time_offset = int((9599351 - 2e5)*1e3)
-        # self.time_offset = 0
+        # self.time_offset = int((9599351 - 2e5)*1e3)
+        self.time_offset = 0
+        applanix_time_file = os.path.join(root, 'applanix/ros_and_gps_time.csv')
+        self.appl_ros_times, self.appl_gps_times = get_ros_gps_times(applanix_time_file)
+        self.sync_params = sync_ntp_to_ros_time(root)
 
     def add_frame_pair(self, batch, save_for_plotting=False):
         data = batch['data']
         timestamps = batch['timestamps']
         # t_ref = batch['t_ref']
+
         tgt_ids = [1]
         src_ids = [0]
         polar = batch['polar'].numpy().squeeze()
@@ -63,6 +78,7 @@ class Batch():
                 good_matches.append(m)
         N = len(good_matches)
 
+        self.frame_counter += 1
         if N == 0:
             print("Warning: No good matches, skipping this frame")
             return
@@ -98,6 +114,11 @@ class Batch():
         points2 = keypoint_coords_xy[0].detach().cpu().numpy()
         times1 = time_src[0].cpu().numpy().squeeze()
         times2 = time_tgt[0].cpu().numpy().squeeze()
+
+        # convert times1 and times2 to UTC?
+        times1 = (self.convert_ntp_to_utc(times1)*1e6).astype(np.int64)
+        times2 = (self.convert_ntp_to_utc(times2)*1e6).astype(np.int64)
+
         timestamps1 = getApproxTimeStamps([points1], [times1])[0]
         timestamps2 = getApproxTimeStamps([points2], [times2])[0]
 
@@ -107,62 +128,76 @@ class Batch():
 
         if save_for_plotting:
             timestamps1 = getApproxTimeStamps([tgt1], [times1])[0]
-            self.radar_frames += [{'points': tgt1, 'times': timestamps1}]
+            self.radar_frames += [{'points': tgt1, 'times': timestamps1, 'frame_id': self.frame_counter}]
 
-        # self.plot_frame(0)
         return
+
+    def convert_ntp_to_utc(self, ntptimes):
+        # ntptime = ntptimes[0] / 1.0e6
+        # rostime = ntptime
+        # if self.sync_params is not None:
+        #     rostime = ntptime - (self.sync_params[0] + self.sync_params[1] * ntptime)
+        # gpstime = get_gps_time_from_utc_stamp(rostime, self.appl_ros_times, self.appl_gps_times)
+        return ntptimes*1e-6 - (self.sync_params[0] + self.sync_params[1] * ntptimes*1e-6)
+
 
     def find_closest_lidar_frame(self, start_time, end_time):
         for i, file in enumerate(self.lidar_frames):
             lidar_time = (int(file[:-4]) + self.time_offset)*1e-3  # last 4 characters should be '.bin'
             if start_time < lidar_time < end_time:
-                return True, i, file    # found frame
+                return True, i, file, lidar_time*1e3    # found frame
 
         # did not find appropriate frame
-        return False, -1, 'N/A'
+        return False, -1, 'N/A', 0
 
-    def plot_frame(self, frame_num):
+    def plot_frames(self):
+        if not os.path.exists(self.plot_dir):
+            os.makedirs(self.plot_dir)
+
+        for i in range(len(self.radar_frames)):
+            self.plot_frame(i)
+
+    def plot_frame(self, i):
         # radar
-        radar_points = self.radar_frames[frame_num]['points']
-        radar_times = self.radar_frames[frame_num]['times']
+        radar_points = self.radar_frames[i]['points']
+        radar_times = self.radar_frames[i]['times']
+        frame_id = self.radar_frames[i]['frame_id']
 
         # get corresponding lidar frame
-        success, frame_id, filename = self.find_closest_lidar_frame(radar_times.min(), radar_times.max())
+        success, _, filename, lidar_start_time = self.find_closest_lidar_frame(radar_times.min(), radar_times.max())
         lidar_data = np.fromfile(os.path.join(self.lidar_dir, filename), dtype=np.float32).reshape(-1, 6)
-        # lidar_data = np.fromfile(os.path.join(self.lidar_dir, self.lidar_frames[frame_id]), dtype=np.float32).reshape(-1, 6)
-        ids = np.nonzero((-1 < lidar_data[:, 2])*(lidar_data[:, 2] < 1.5))
+
+        # filter by height to remove ground
+        ids = np.nonzero((self.lidar_z_lim[0] < lidar_data[:, 2])*(lidar_data[:, 2] < self.lidar_z_lim[1]))
         lidar_points = lidar_data[ids[0], :3]
-        lidar_times = lidar_data[ids[0], 5]
-        # if x[2, i] < -1.5 or x[2, i] > 1.5:
+        lidar_times = lidar_data[ids[0], 5].astype(np.float64)
 
-        # C = np.array([[6.861993198242921643e-01, 7.274135642622281406e-01, 0.000000000000000000e+00],
-        #               [7.274135642622281406e-01, -6.861993198242921643e-01, 0.000000000000000000e+00],
-        #               [0.000000000000000000e+00, 0.000000000000000000e+00, -1.000000000000000000e+00]])
-        # t = np.array([[0.0], [0.0], [0.21]])
+        # correct lidar times (TODO: need to account for wrap around 1 hour)
+        start_hour_sec = (lidar_start_time - int(lidar_start_time % (3600 * 1e9))) / 1e9
+        lidar_times = ((lidar_times + start_hour_sec)*1e6).astype(np.int64)    # microseconds
 
-        C = np.array([[0.669,     0.74,  -0.0624],
-                      [0.741,   -0.671,  -0.0114],
-                      [-0.0503,  -0.0386,   -0.998]])
-        t = np.array([[0.0191], [-0.00912], [0.222]])
-
-        # 0.635  0.728  0.259 -0.107
-        # 0.741 -0.669 0.0646 -0.186
-        #  0.22  0.151 -0.964  0.408
-        #     0      0      0      1
-
-        lidar_points = lidar_points@C.T + t.T
+        # also plot using known transform from other calibration method
+        radar_points_known = radar_points.copy()
+        T_rl = np.array([[6.861993198242921643e-01, 7.274135642622281406e-01, 0.0, 0.0],
+                         [7.274135642622281406e-01, -6.861993198242921643e-01, 0.0, 0.0],
+                         [0.0, 0.0, -1.0, 0.21],
+                         [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
 
         # undistort and transform to vehicle frame
-        # TODO
+        self.solver.undistortPointcloud(radar_points, radar_times, int(lidar_start_time*1e-3), T_rl, 0)
+        self.solver.undistortPointcloud(radar_points_known, radar_times, int(lidar_start_time*1e-3), T_rl, 1)
+        self.solver.undistortPointcloud(lidar_points, lidar_times, int(lidar_start_time*1e-3), T_rl, 2)
 
-        plt.figure()
-        plt.plot(lidar_points[::5, 0], lidar_points[::5, 1], '.r', label='lidar')
-
-        # plt.axis('equal')
-        #
-        # plt.figure()
-        plt.plot(radar_points[:, 0], radar_points[:, 1], '.b', label='radar')
+        plt.figure(figsize=(12, 12))
+        plt.plot(lidar_points[::5, 0], lidar_points[::5, 1], '.r',
+                 label='lidar z = (' + str(self.lidar_z_lim[0]) + 'm, ' + str(self.lidar_z_lim[1]) + 'm)')
+        plt.plot(radar_points_known[:, 0], radar_points_known[:, 1], '.g', label='radar (given)')
+        plt.plot(radar_points[:, 0], radar_points[:, 1], '.b', label='radar (estimated)')
+        plt.xlabel('x [m]')
+        plt.ylabel('y [m]')
         plt.axis('equal')
-
-        plt.show()
-        a = 1
+        plt.xlim((-75, 75))
+        plt.ylim((-75, 75))
+        plt.legend(loc="upper right")
+        plt.savefig(os.path.join(self.plot_dir, 'frame_' + str(frame_id) + '.pdf'), bbox_inches='tight')
+        plt.close()

@@ -43,6 +43,7 @@ if __name__ == '__main__':
         _, _, test_loader = get_dataloaders_boreas(config)
 
     # load lidar / vehicle (robot) calibration
+    # NOTE: make sure to set this BEFORE adding lidar poses measurements
     T_applanix_lidar = np.loadtxt('comparison/T_applanix_lidar.txt', dtype=np.float32)
     yfwd2xfwd = np.array([
         [0, 1, 0, 0],
@@ -54,19 +55,19 @@ if __name__ == '__main__':
     T_lidar_robot = np.linalg.inv(T_robot_lidar)
     model.solver.setExtrinsicLidarVehicle(T_lidar_robot)
 
-    seq_name = test_loader.dataset.sequences[0]
-
+    # 2D (true) or 3D (false) radar evaluator (third coordinate will always be 0)
     model.solver.setRadar2DFlag(True)
+
+    seq_name = test_loader.dataset.sequences[0]
+    vis = np.linspace(0, config['early_terminate'] - 1, config['plot']['vis_num'] + 1).astype(np.int32)
     for batchi, batch in enumerate(test_loader):
         print('{} / {}'.format(batchi, len(test_loader)))
-        # if batchi < 50:
-        #     continue
         # if batchi > 560:
         # if batchi > 345:
-        if batchi > 150:
+        if batchi > config['early_terminate']:
             break
 
-        if batchi == 0:
+        if batchi in vis[1:]:
             save_for_plotting = True
         else:
             save_for_plotting = False
@@ -76,7 +77,6 @@ if __name__ == '__main__':
         # // incomplete radar scan at 345
         model.add_frame_pair(batch, save_for_plotting)
 
-    # model.plot_frame(0)
     # load and apply lidar poses
     file = "comparison/odometry_result-boreas-2021-07-12-15-05.txt"
     with open(file, 'r') as f:
@@ -123,17 +123,24 @@ if __name__ == '__main__':
     path = np.zeros((model.solver.getTrajLength(), 3), dtype=np.float32)
     times = np.zeros((model.solver.getTrajLength()), dtype=np.float32)
     model.solver.getPath(path, times)
+    T_rl_est = np.identity(4, dtype=np.float32)
+    model.solver.getRadarLidarExtrinsic(T_rl_est)
 
     # plot
-    plt.figure()
+    model.plot_frames()
+
+    plt.figure(figsize=(12, 12))
     ax = plt.axes()
     plt.axis('equal')
     # plt.plot(radar_path[:, 0], radar_path[:, 1], 'b.', label='radar path')
     # plt.plot(lidar_path[:, 0], lidar_path[:, 1], 'k.', label='lidar path')
-    plt.plot(path[:, 0], path[:, 1], 'k.', label='path')
+    plt.plot(path[:, 0], path[:, 1], 'k', label='path')
     # ax.legend()
     ax.set_xlabel('x [m]')
     ax.set_ylabel('y [m]')
+    plt.savefig(os.path.join(model.plot_dir, 'path.pdf'), bbox_inches='tight')
+    plt.close()
 
-    plt.show()
+    # write out estimated extrinsic
+    np.savetxt(os.path.join(model.plot_dir, 'T_radar_lidar.txt'), T_rl_est, delimiter=',')
 

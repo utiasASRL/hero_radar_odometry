@@ -1,0 +1,31 @@
+{
+    "model": "BATCH",
+    "dataset": "boreas",
+    "data_dir": "/home/david/aws/sequence/",
+    "log_dir": "/workspace/Documents/logs/2021-03-04/boreas1_aug026_cnn8_window3_res2240_width640/",
+    "gpuid": "cuda:0",
+    "radar_resolution": 0.0596,
+    "cart_resolution": 0.2384,
+    "cart_pixel_width": 640,
+    "train_split": [0],
+    "validation_split": [0],
+    "test_split": [0],
+    "steam": {
+        "ex_translation_vs_in_s": [-0.21, 0, 0],
+        "ex_prior_var": [1.0e-4, 1.0e-4, 1.0e-4, 3.0e-4, 3.0e-4, 2.46741264],
+        "radar_var": [0.25, 0.25, 1.0],
+        "lidar_var": [1.0e-2, 1.0e-2, 1.0e-2, 1.0e-4, 1.0e-4, 1.0e-4],
+        "robust_radar_cost": true
+    },
+    "early_terminate": 1120,
+    "skip": 0,
+    "batch_size": 1,
+    "window_size": 2,
+    "num_workers": 8,
+    "qc_diag": [0.3679, 0.0431, 0.1307, 0.0073, 0.0076, 0.0021],
+    "plot": {
+        "dir": "calib_plot/run_1120f_3",
+        "lidar_z_lim": [0.0, 0.5],
+        "vis_num": 6
+    }
+}
