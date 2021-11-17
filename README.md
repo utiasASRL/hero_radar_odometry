@@ -15,6 +15,17 @@ We trained and tested these networks on the [Oxford Radar Robotcar Dataset](http
 | [MC-RANSAC](https://arxiv.org/abs/2011.03512)       | Unsupervised (HC) | 3.3204                  | 10.95                                        |
 | [HERO](https://arxiv.org/abs/2105.14152) (Ours)     | Unsupervised (L)  | 1.9879                  | 6.524                                        |
 
+[Radar Odometry Combining Probabilistic Estimation and Unsupervised Feature Learning](https://arxiv.org/pdf/2105.14152.pdf) 
+
+```
+@INPROCEEDINGS{burnett_rss21,
+    title={Radar Odometry Combining Probabilistic Estimation and Unsupervised Feature Learning},
+    author={Burnett, Keenan and Yoon, David J and Schoellig, Angela P and Barfoot, Timothy D},
+    booktitle={Robotics: Science and Systems},
+    year={2021}
+}
+```
+
 ## Boreas Data-Taking Platform
 ![Boreas](figs/boreas.jpg "Boreas")
 
