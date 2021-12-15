@@ -2,6 +2,12 @@
 
 HERO (Hybrid-Estimate Radar Odometry) combines probabilistic state estimation and deep learned features. The network is trained in an unsupervised fashion. Deep learning is leveraged to process rich sensor data while classic state estimation is used to handle probabilities and out-of-distribution samples through outlier rejection schemes. To our knowledge, this is the first example of a totally unsupervised radar odometry pipeline. Our pipeline aproaches the performance of the current state of the art in point-based radar odometry, [Under the Radar](https://arxiv.org/abs/2001.10789), while being unsupervised.
 
+## Updates
+
+**(2021-12-14): [Boreas: A Multi-Season Autonomous Driving Dataset](https://boreas.utias.utoronto.ca): We have made our dataset publicly available along with a development kit, [pyboreas](https://github.com/utiasASRL/pyboreas), and public leaderboards for odometry, localization, and object detection.**
+
+---
+
 Our implementation uses PyTorch for the deep network, and C++/[STEAM](https://github.com/utiasASRL/steam) for the state estimation back-end. We use a sliding window of length 4 to obtain the best results. Note that we train using a fixed seed (0) in order to make our training results more reproducible.
 
 This repository also provides an implementation of Dan Barnes' [Under the Radar](https://arxiv.org/abs/2001.10789).
